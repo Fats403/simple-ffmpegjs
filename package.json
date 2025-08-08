@@ -1,0 +1,17 @@
+{
+  "name": "simple-ffmpeg",
+  "version": "1.0.0",
+  "main": "index.js",
+  "types": "types/index.d.ts",
+  "files": [
+    "/src",
+    "/types"
+  ],
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "fats403",
+  "license": "MIT",
+  "description": "Simple Node.js helper around ffmpeg for video composition, transitions, audio mixing, and text rendering."
+}
