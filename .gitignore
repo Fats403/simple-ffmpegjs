@@ -3,3 +3,4 @@ test/
 *.test.js
 .git/
 node_modules/
+.vscode/
