@@ -1,31 +1,47 @@
-# simple-ffmpeg (SIMPLEFFMPEG)
+# simple-ffmpeg 🎬
 
-A small Node.js helper around ffmpeg to make simple video compositions easy:
+Simple Node.js helper around FFmpeg for quick video composition, transitions, audio mixing, and animated text overlays.
 
-- Concatenate video clips with optional transitions (xfade)
-- Combine clip audio and standalone audio
-- Add background music that isn’t affected by transition audio fades
-- Render text overlays (static, word-by-word replacement, cumulative), with opt-in animations: fade-in, pop, pop-bounce
+## 🙌 Credits
 
-This library builds a single ffmpeg command using a filter graph under the hood and executes it for you.
+Huge shoutout to the original inspiration for this library:
 
-## Requirements
+- John Chen (coldshower): https://github.com/coldshower
+- ezffmpeg: https://github.com/ezffmpeg/ezffmpeg
 
-- ffmpeg and ffprobe on PATH
-- For text rendering via `drawtext`:
-  - ffmpeg built with libfreetype + fontconfig
-  - A system font installed so `font=Sans` resolves, or provide `fontFile`
-  - Minimal containers (e.g., Alpine) usually need fonts installed:
-    - Debian/Ubuntu: `apt-get update && apt-get install -y fontconfig fonts-dejavu-core`
-    - Alpine: `apk add --no-cache fontconfig ttf-dejavu`
+This project builds on those ideas and extends them with a few opinionated defaults and features to make common video tasks easier.
 
-## Install
+## ✨ Why this project
+
+- ✅ Simple API for building FFmpeg filter graphs
+- 🎞️ Concatenate clips with optional transitions (xfade)
+- 🔊 Mix multiple audio sources and add background music (not affected by transition fades)
+- 📝 Text overlays (static, word-by-word, cumulative) with opt-in animations (fade-in, pop, pop-bounce)
+- 🧰 Safe defaults + guardrails (basic validation, media bounds clamping)
+- 🧱 Scales to long scripts via optional multi-pass text batching
+- 🧩 Ships TypeScript definitions without requiring TS
+- 🧑‍💻 Actively maintained; PRs and issues welcome
+
+## 📦 Install
 
 ```bash
 npm install simple-ffmpeg
 ```
 
-## Quick start
+## ⚙️ Requirements
+
+- ffmpeg and ffprobe available on PATH
+- For text rendering via `drawtext`:
+  - ffmpeg built with libfreetype + fontconfig
+  - A system font so `font=Sans` resolves, or provide `fontFile`
+  - Minimal containers typically need fonts installed
+
+Examples:
+
+- Debian/Ubuntu: `apt-get update && apt-get install -y ffmpeg fontconfig fonts-dejavu-core`
+- Alpine: `apk add --no-cache ffmpeg fontconfig ttf-dejavu`
+
+## 🚀 Quick start
 
 ```js
 const SIMPLEFFMPEG = require("simple-ffmpeg");
@@ -56,141 +72,9 @@ const SIMPLEFFMPEG = require("simple-ffmpeg");
 })();
 ```
 
-## API
+## 📚 Examples
 
-### Constructor
-
-```js
-new SIMPLEFFMPEG({
-  fps?: number = 30,
-  width?: number = 1920,
-  height?: number = 1080,
-  validationMode?: 'warn' | 'strict' = 'warn',
-});
-```
-
-### project.load(clips: Clip[])
-
-Loads and validates media/text clips. Returns a Promise that resolves when everything is ready.
-
-### project.export({ outputPath?: string, ... })
-
-Builds the ffmpeg filter graph and writes the output file. Returns a Promise with the `outputPath`.
-
-## Clips
-
-All clips have a `type` field.
-
-### Video clip
-
-```ts
-{
-  type: 'video',
-  url: string,
-  position: number,     // timeline start (seconds)
-  end: number,          // timeline end (seconds)
-  cutFrom?: number,     // source offset (seconds); default 0
-  transition?: { type: string, duration: number },
-}
-```
-
-### Audio clip (standalone)
-
-```ts
-{
-  type: 'audio',
-  url: string,
-  position: number,
-  end: number,
-  cutFrom?: number,
-  volume?: number,      // default 1
-}
-```
-
-### Background music clip
-
-```ts
-{
-  type: 'music' | 'backgroundAudio',
-  url: string,
-  position?: number,    // default 0
-  end?: number,         // defaults to project duration (video timeline)
-  cutFrom?: number,     // default 0
-  volume?: number,      // default 0.2
-}
-```
-
-### Text clip
-
-```ts
-{
-  type: 'text',
-  text?: string,              // used for static and for auto-split modes
-  position: number,
-  end: number,
-
-  // Modes
-  mode?: 'static' | 'word-replace' | 'word-sequential',
-
-  // Per-word explicit timing (either use words[] OR wordTimestamps[])
-  words?: Array<{ text: string, start: number, end: number }>,
-  wordTimestamps?: number[],   // N or N+1 entries; split on whitespace in `text`
-
-  // Font
-  fontFile?: string;           // overrides fontFamily
-  fontFamily?: string;         // default 'Sans' (fontconfig)
-  fontSize?: number;           // default 48
-  fontColor?: string;          // default '#FFFFFF'
-
-  // Position
-  centerX?: number; centerY?: number; // centered defaults
-  x?: number; y?: number;
-
-  // Styling
-  borderColor?: string; borderWidth?: number;
-  shadowColor?: string; shadowX?: number; shadowY?: number;
-  backgroundColor?: string; backgroundOpacity?: number; padding?: number;
-
-  // Animation (opt-in)
-  animation?: { type: 'none' | 'fade-in' | 'pop' | 'pop-bounce'; in?: number };
-}
-```
-
-## Timeline semantics
-
-- Video timeline is defined by each clip’s `[position, end)`.
-- Transitions use overlap (xfade): each transition reduces the total output duration by its duration.
-- Background music is mixed after transition audio; its level is not affected by acrossfades.
-
-## Safeguards (validation)
-
-- Basic pre-validation on `load`:
-  - type must be one of: video, audio, text, music, backgroundAudio
-  - position ≥ 0; end > position
-  - media clips require `url`
-  - cutFrom ≥ 0
-  - volume ≥ 0 for audio/music
-  - text: validate `words[]` and `wordTimestamps[]` shapes
-  - fontFile existence warning (falls back to `fontFamily`)
-- Media duration checks (via ffprobe) on load:
-  - `0 ≤ cutFrom < duration` (strict)
-  - requested segment `end - position` is clamped to `duration - cutFrom` (warns)
-- Export-time:
-  - text windows are clamped to the project duration
-  - optional batching of text overlays to avoid massive filter graphs; audio is copied during passes
-
-`validationMode: 'warn' | 'strict'`
-
-- warn (default): logs warnings, throws on hard errors
-- strict: same errors; treat additional questionable conditions as errors (future use)
-
-## Animations
-
-- fade-in: alpha 0 → 1 over `in` seconds (default ~0.25)
-- pop: font size 70% → 100% over `in` seconds
-- pop-bounce: font size 70% → 110% during `in`, then settles to 100%
-
-## Examples
+- 🎞️ Two clips + fade transition + background music
 
 ```js
 await project.load([
@@ -200,26 +84,256 @@ await project.load([
     url: "./b.mp4",
     position: 5,
     end: 10,
-    transition: { type: "fade", duration: 0.5 },
+    transition: { type: "fade", duration: 0.4 },
   },
-  { type: "music", url: "./bgm.wav", volume: 0.2 },
+  { type: "music", url: "./bgm.wav", volume: 0.18 },
+]);
+```
+
+- 📝 Static text (centered by default)
+
+```js
+await project.load([
+  { type: "video", url: "./clip.mp4", position: 0, end: 5 },
   {
     type: "text",
-    text: "Hello world",
-    position: 1,
-    end: 3,
+    text: "Static Title",
+    position: 0.5,
+    end: 2.5,
     fontColor: "white",
-    animation: { type: "fade-in", in: 0.4 },
   },
 ]);
 ```
 
-## Gotchas
+- 🔤 Word-by-word replacement with fade-in
 
-- Fonts in containers: install fonts or provide `fontFile` if `font=Sans` cannot be resolved
-- Very long scripts produce many filters: batching is automatic; consider subtitles/ASS in a future release
-- Keep transition durations ≤ adjacent clip durations
+```js
+await project.load([
+  {
+    type: "text",
+    mode: "word-replace",
+    position: 2.0,
+    end: 4.0,
+    fontColor: "#00ffff",
+    centerX: 0,
+    centerY: -350,
+    animation: { type: "fade-in", in: 0.4 },
+    words: [
+      { text: "One", start: 2.0, end: 2.5 },
+      { text: "Two", start: 2.5, end: 3.0 },
+      { text: "Three", start: 3.0, end: 3.5 },
+      { text: "Four", start: 3.5, end: 4.0 },
+    ],
+  },
+]);
+```
 
-## License
+- 🔠 Word-by-word (auto) with pop-bounce
+
+```js
+await project.load([
+  {
+    type: "text",
+    mode: "word-replace",
+    text: "Alpha Beta Gamma Delta",
+    position: 4.0,
+    end: 6.0,
+    fontSize: 64,
+    fontColor: "yellow",
+    centerX: 0,
+    centerY: -100,
+    animation: { type: "pop-bounce", in: 0.3 },
+    wordTimestamps: [4.0, 4.5, 5.0, 5.5, 6.0],
+  },
+]);
+```
+
+- 🎧 Standalone audio overlay
+
+```js
+await project.load([
+  { type: "audio", url: "./vo.mp3", position: 0, end: 10, volume: 1 },
+]);
+```
+
+## 🧠 Behavior (in short)
+
+- Timeline uses clip `[position, end)`; transitions are overlaps that reduce total duration by their length
+- Background music is mixed after other audio, so transition acrossfades don’t attenuate it
+- Text animations are opt-in (none by default)
+- For big scripts, text rendering can be batched into multiple passes automatically
+
+## 🔌 API (at a glance)
+
+- `new SIMPLEFFMPEG({ width?, height?, fps?, validationMode? })`
+- `await project.load([...clips])` — video/audio/text/music descriptors
+- `await project.export({ outputPath?, textMaxNodesPerPass?, intermediate*? })`
+
+That’s it—keep it simple. See the examples above for common cases.
+
+## 🤝 Contributing
+
+- PRs and issues welcome
+- Actively maintained; we’ll review new contributions and iterate
+
+## 📜 License
 
 MIT
+
+## 🔬 API Details
+
+### Constructor
+
+```ts
+new SIMPLEFFMPEG(options?: {
+  fps?: number;           // default 30
+  width?: number;         // default 1920
+  height?: number;        // default 1080
+  validationMode?: 'warn' | 'strict'; // default 'warn'
+});
+```
+
+### project.load(clips)
+
+Loads and pre-validates clips. Accepts an array of clip descriptors (video, audio, background music, text). Returns a Promise that resolves when inputs are prepared (e.g., metadata read, rotation handled later at export).
+
+```ts
+await project.load(clips: Clip[]);
+```
+
+#### Clip union
+
+```ts
+type Clip = VideoClip | AudioClip | BackgroundMusicClip | TextClip;
+```
+
+#### Video clip
+
+```ts
+interface VideoClip {
+  type: "video";
+  url: string; // input video file path/URL
+  position: number; // timeline start (seconds)
+  end: number; // timeline end (seconds)
+  cutFrom?: number; // source offset (seconds), default 0
+  volume?: number; // if the source has audio, default 1
+  transition?: {
+    // optional transition at the boundary before this clip
+    type: string; // e.g., 'fade', 'wipeleft', etc. (xfade transitions)
+    duration: number; // in seconds
+  };
+}
+```
+
+Notes:
+
+- Each transition reduces total output duration by its duration (overlap semantics).
+- Rotation metadata is handled automatically before export.
+
+#### Audio clip (standalone)
+
+```ts
+interface AudioClip {
+  type: "audio";
+  url: string;
+  position: number; // timeline start
+  end: number; // timeline end
+  cutFrom?: number; // default 0
+  volume?: number; // default 1
+}
+```
+
+#### Background music clip
+
+```ts
+interface BackgroundMusicClip {
+  type: "music" | "backgroundAudio";
+  url: string;
+  position?: number; // default 0
+  end?: number; // default project duration (video timeline)
+  cutFrom?: number; // default 0
+  volume?: number; // default 0.2
+}
+```
+
+Notes:
+
+- Mixed after other audio and after acrossfades, so transition fades do not attenuate BGM.
+- If no videos exist, `end` defaults to the max provided among BGM clips.
+
+#### Text clip
+
+```ts
+interface TextClip {
+  type: "text";
+  // Time window
+  position: number; // start on timeline
+  end: number; // end on timeline
+
+  // Content & modes
+  text?: string; // used for 'static' and as source when auto-splitting words
+  mode?: "static" | "word-replace" | "word-sequential";
+
+  // Word timing (choose one form)
+  words?: Array<{ text: string; start: number; end: number }>; // explicit per-word timing (absolute seconds)
+  wordTimestamps?: number[]; // timestamps to split `text` by whitespace; N or N+1 entries
+
+  // Font & styling
+  fontFile?: string; // overrides fontFamily
+  fontFamily?: string; // default 'Sans' (fontconfig)
+  fontSize?: number; // default 48
+  fontColor?: string; // default '#FFFFFF'
+
+  // Positioning (center by default)
+  centerX?: number; // pixel offset from center (x)
+  centerY?: number; // pixel offset from center (y)
+  x?: number; // absolute x (left)
+  y?: number; // absolute y (top)
+
+  // Animation (opt-in)
+  animation?: {
+    type: "none" | "fade-in" | "pop" | "pop-bounce"; // default 'none'
+    in?: number; // seconds for intro phase (e.g., fade-in duration)
+  };
+}
+```
+
+Notes:
+
+- If both `words` and `wordTimestamps` are provided, `words` takes precedence.
+- For `wordTimestamps` with a single array: provide either per-word start times (end inferred by next start), or N+1 edge times; whitespace in `text` defines words.
+- Defaults to centered placement if no explicit `x/y` or `centerX/centerY` provided.
+
+### project.export(options)
+
+Builds and runs the FFmpeg command. Returns the final `outputPath`.
+
+```ts
+await project.export(options?: {
+  outputPath?: string;          // default './output.mp4'
+  textMaxNodesPerPass?: number; // default 75 (batch size for multi-pass text)
+  intermediateVideoCodec?: string; // default 'libx264' (for text passes)
+  intermediateCrf?: number;     // default 18 (for text passes)
+  intermediatePreset?: string;  // default 'veryfast' (for text passes)
+}): Promise<string>;
+```
+
+Behavior:
+
+- If text overlay count exceeds `textMaxNodesPerPass`, text is rendered in multiple passes using temporary files; audio is copied between passes; final output is fast-start.
+- Mapping: final video/audio streams are mapped based on what exists; if only audio or only video is present, mapping adapts accordingly.
+
+### Timeline semantics
+
+- Each clip contributes `[position, end)` to the timeline.
+- For transitions, the overlap reduces the final output duration by the transition duration.
+- Background music defaults to the project duration (sum of clip durations minus overlaps) and is mixed after other audio and acrossfades.
+
+### Animations
+
+- `none` (default): plain text, no animation
+- `fade-in`: alpha 0 → 1 over `in` seconds (e.g., 0.25–0.4)
+- `pop`: font size scales from ~70% → 100% over `in` seconds
+- `pop-bounce`: scales ~70% → 110% during `in`, then settles to 100%
+
+Tip: small `in` values (0.2–0.4s) feel snappy for word-by-word displays.

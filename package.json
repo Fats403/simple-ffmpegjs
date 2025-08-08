@@ -4,14 +4,38 @@
   "main": "index.js",
   "types": "types/index.d.ts",
   "files": [
-    "/src",
-    "/types"
+    "src",
+    "types",
+    "index.js"
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
-  "author": "fats403",
+  "keywords": [
+    "ffmpeg",
+    "video",
+    "video-editing",
+    "video-processing",
+    "drawtext",
+    "xfade",
+    "acrossfade",
+    "amix",
+    "overlay",
+    "animation",
+    "nodejs",
+    "npm",
+    "text"
+  ],
+  "author": "Brayden Blackwell <braydenblackwell21@gmail.com> (https://github.com/Fats403)",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fats403/simple-ffmpeg.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Fats403/simple-ffmpeg/issues",
+    "email": "braydenblackwell21@gmail.com"
+  },
+  "homepage": "https://github.com/Fats403/simple-ffmpeg#readme",
   "description": "Simple Node.js helper around ffmpeg for video composition, transitions, audio mixing, and text rendering."
 }
