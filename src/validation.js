@@ -7,6 +7,7 @@ function validateClips(clips, validationMode = "warn") {
     "text",
     "music",
     "backgroundAudio",
+    "image",
   ]);
   const errors = [];
   const warnings = [];
@@ -18,7 +19,10 @@ function validateClips(clips, validationMode = "warn") {
     }
 
     const requiresTimeline =
-      clip.type === "video" || clip.type === "audio" || clip.type === "text";
+      clip.type === "video" ||
+      clip.type === "audio" ||
+      clip.type === "text" ||
+      clip.type === "image";
     if (requiresTimeline) {
       if (typeof clip.position !== "number" || typeof clip.end !== "number") {
         errors.push(`clip[${idx}]: 'position' and 'end' must be numbers`);
@@ -47,7 +51,8 @@ function validateClips(clips, validationMode = "warn") {
       clip.type === "video" ||
       clip.type === "audio" ||
       clip.type === "music" ||
-      clip.type === "backgroundAudio"
+      clip.type === "backgroundAudio" ||
+      clip.type === "image"
     ) {
       if (typeof clip.url !== "string" || clip.url.length === 0) {
         errors.push(`clip[${idx}]: media 'url' is required`);
@@ -119,6 +124,31 @@ function validateClips(clips, validationMode = "warn") {
       if (clip.fontFile && !fs.existsSync(clip.fontFile)) {
         warnings.push(
           `clip[${idx}]: fontFile '${clip.fontFile}' not found; falling back to fontFamily`
+        );
+      }
+    }
+
+    if (clip.type === "image" && clip.kenBurns) {
+      const kb = clip.kenBurns;
+      const allowedKB = new Set([
+        "zoom-in",
+        "zoom-out",
+        "pan-left",
+        "pan-right",
+        "pan-up",
+        "pan-down",
+      ]);
+      if (!allowedKB.has(kb.type)) {
+        errors.push(`clip[${idx}]: kenBurns.type '${kb.type}' invalid`);
+      }
+      if (
+        kb.strength != null &&
+        (typeof kb.strength !== "number" ||
+          kb.strength < 0 ||
+          kb.strength > 0.5)
+      ) {
+        warnings.push(
+          `clip[${idx}]: kenBurns.strength should be between 0 and 0.5 (got ${kb.strength})`
         );
       }
     }

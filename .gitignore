@@ -4,3 +4,5 @@ test/
 .git/
 node_modules/
 .vscode/
+test-files/
+test-local.js

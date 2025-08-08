@@ -1,6 +1,6 @@
 # simple-ffmpeg 🎬
 
-Simple Node.js helper around FFmpeg for quick video composition, transitions, audio mixing, and animated text overlays.
+Simple lightweight Node.js helper around FFmpeg for quick video composition, transitions, audio mixing, and animated text overlays.
 
 ## 🙌 Credits
 
@@ -13,6 +13,8 @@ This project builds on those ideas and extends them with a few opinionated defau
 
 ## ✨ Why this project
 
+Built for data pipelines: a tiny helper around FFmpeg that makes common edits trivial—clip concatenation with transitions, flexible text overlays, images with Ken Burns effects, and reliable audio mixing—without hiding FFmpeg. It favors safe defaults, scales to long scripts, and stays dependency‑free.
+
 - ✅ Simple API for building FFmpeg filter graphs
 - 🎞️ Concatenate clips with optional transitions (xfade)
 - 🔊 Mix multiple audio sources and add background music (not affected by transition fades)
@@ -20,7 +22,9 @@ This project builds on those ideas and extends them with a few opinionated defau
 - 🧰 Safe defaults + guardrails (basic validation, media bounds clamping)
 - 🧱 Scales to long scripts via optional multi-pass text batching
 - 🧩 Ships TypeScript definitions without requiring TS
+- 🪶 No external libraries (other than FFmpeg), no bundled fonts; extremely lightweight
 - 🧑‍💻 Actively maintained; PRs and issues welcome
+- 🖼️ Image support with Ken Burns (zoom-in/out, pan-left/right/up/down)
 
 ## 📦 Install
 
@@ -30,16 +34,29 @@ npm install simple-ffmpeg
 
 ## ⚙️ Requirements
 
-- ffmpeg and ffprobe available on PATH
-- For text rendering via `drawtext`:
-  - ffmpeg built with libfreetype + fontconfig
-  - A system font so `font=Sans` resolves, or provide `fontFile`
-  - Minimal containers typically need fonts installed
+Make sure you have ffmpeg installed on your system:
 
-Examples:
+**Mac**: brew install ffmpeg
+**Ubuntu/Debian**: apt-get install ffmpeg
+**Windows**: Download from ffmpeg.org
 
-- Debian/Ubuntu: `apt-get update && apt-get install -y ffmpeg fontconfig fonts-dejavu-core`
-- Alpine: `apk add --no-cache ffmpeg fontconfig ttf-dejavu`
+Ensure `ffmpeg` and `ffprobe` are installed and available on your PATH.
+
+For text overlays with `drawtext`, use an FFmpeg build that includes libfreetype and fontconfig. Make sure a system font is present so `font=Sans` resolves, or provide `fontFile`. Minimal containers often lack fonts, so install one explicitly.
+
+### Examples:
+
+Debian/Ubuntu:
+
+```bash
+apt-get update && apt-get install -y ffmpeg fontconfig fonts-dejavu-core
+```
+
+Alpine:
+
+```bash
+apk add --no-cache ffmpeg fontconfig ttf-dejavu
+```
 
 ## 🚀 Quick start
 
@@ -156,10 +173,34 @@ await project.load([
 ]);
 ```
 
+- 🖼️ Images with Ken Burns (zoom + pan)
+
+```js
+await project.load([
+  // Zoom-in image (2s)
+  {
+    type: "image",
+    url: "./img.png",
+    position: 10,
+    end: 12,
+    kenBurns: { type: "zoom-in", strength: 0.12 },
+  },
+  // Pan-right image (2s)
+  {
+    type: "image",
+    url: "./img.png",
+    position: 12,
+    end: 14,
+    kenBurns: { type: "pan-right", strength: 0.2 },
+  },
+]);
+```
+
 ## 🧠 Behavior (in short)
 
 - Timeline uses clip `[position, end)`; transitions are overlaps that reduce total duration by their length
 - Background music is mixed after other audio, so transition acrossfades don’t attenuate it
+- Clip audio is timeline-aligned (absolute position) and mixed once; avoids early starts and gaps around transitions
 - Text animations are opt-in (none by default)
 - For big scripts, text rendering can be batched into multiple passes automatically
 
@@ -167,18 +208,9 @@ await project.load([
 
 - `new SIMPLEFFMPEG({ width?, height?, fps?, validationMode? })`
 - `await project.load([...clips])` — video/audio/text/music descriptors
-- `await project.export({ outputPath?, textMaxNodesPerPass?, intermediate*? })`
+- `await project.export({ outputPath?, textMaxNodesPerPass? })`
 
 That’s it—keep it simple. See the examples above for common cases.
-
-## 🤝 Contributing
-
-- PRs and issues welcome
-- Actively maintained; we’ll review new contributions and iterate
-
-## 📜 License
-
-MIT
 
 ## 🔬 API Details
 
@@ -204,7 +236,7 @@ await project.load(clips: Clip[]);
 #### Clip union
 
 ```ts
-type Clip = VideoClip | AudioClip | BackgroundMusicClip | TextClip;
+type Clip = VideoClip | AudioClip | BackgroundMusicClip | ImageClip | TextClip;
 ```
 
 #### Video clip
@@ -227,6 +259,7 @@ interface VideoClip {
 
 Notes:
 
+- All xfade transitions are supported you can see a list of them [here](https://trac.ffmpeg.org/wiki/Xfade)
 - Each transition reduces total output duration by its duration (overlap semantics).
 - Rotation metadata is handled automatically before export.
 
@@ -258,7 +291,7 @@ interface BackgroundMusicClip {
 
 Notes:
 
-- Mixed after other audio and after acrossfades, so transition fades do not attenuate BGM.
+- Mixed after other audio and after acrossfades, so transition fades do not attenuate the background music.
 - If no videos exist, `end` defaults to the max provided among BGM clips.
 
 #### Text clip
@@ -304,6 +337,32 @@ Notes:
 - For `wordTimestamps` with a single array: provide either per-word start times (end inferred by next start), or N+1 edge times; whitespace in `text` defines words.
 - Defaults to centered placement if no explicit `x/y` or `centerX/centerY` provided.
 
+#### Image clip
+
+```ts
+interface ImageClip {
+  type: "image";
+  url: string;
+  position: number; // timeline start
+  end: number; // timeline end
+  kenBurns?: {
+    type:
+      | "zoom-in"
+      | "zoom-out"
+      | "pan-left"
+      | "pan-right"
+      | "pan-up"
+      | "pan-down";
+    strength?: number; // 0..0.5 approx; zoom amount or pan distance
+  };
+}
+```
+
+Notes:
+
+- Images are treated as video streams. Ken Burns uses `zoompan` internally with the correct frame count.
+- For pan-only moves, a small base zoom is applied so there’s room to pan across.
+
 ### project.export(options)
 
 Builds and runs the FFmpeg command. Returns the final `outputPath`.
@@ -327,7 +386,7 @@ Behavior:
 
 - Each clip contributes `[position, end)` to the timeline.
 - For transitions, the overlap reduces the final output duration by the transition duration.
-- Background music defaults to the project duration (sum of clip durations minus overlaps) and is mixed after other audio and acrossfades.
+- Background music defaults to the visual timeline end (max `end` across video/image clips) and is mixed after other audio and acrossfades.
 
 ### Animations
 
@@ -337,3 +396,12 @@ Behavior:
 - `pop-bounce`: scales ~70% → 110% during `in`, then settles to 100%
 
 Tip: small `in` values (0.2–0.4s) feel snappy for word-by-word displays.
+
+## 🤝 Contributing
+
+- PRs and issues welcome
+- Actively maintained; I’ll review new contributions and iterate
+
+## 📜 License
+
+MIT

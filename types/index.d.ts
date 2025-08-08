@@ -1,4 +1,10 @@
-export type ClipType = "video" | "audio" | "text" | "music" | "backgroundAudio";
+export type ClipType =
+  | "video"
+  | "audio"
+  | "text"
+  | "music"
+  | "backgroundAudio"
+  | "image";
 
 export interface BaseClip {
   type: ClipType;
@@ -26,6 +32,21 @@ export interface BackgroundMusicClip extends BaseClip {
   url: string;
   cutFrom?: number;
   volume?: number;
+}
+
+export interface ImageClip extends BaseClip {
+  type: "image";
+  url: string;
+  kenBurns?: {
+    type:
+      | "zoom-in"
+      | "zoom-out"
+      | "pan-left"
+      | "pan-right"
+      | "pan-up"
+      | "pan-down";
+    strength?: number; // 0..0.5 (approx), controls zoom amount or pan distance
+  };
 }
 
 export type TextMode = "static" | "word-replace" | "word-sequential";
@@ -75,7 +96,12 @@ export interface TextClip {
   };
 }
 
-export type Clip = VideoClip | AudioClip | BackgroundMusicClip | TextClip;
+export type Clip =
+  | VideoClip
+  | AudioClip
+  | BackgroundMusicClip
+  | ImageClip
+  | TextClip;
 
 export interface SIMPLEFFMPEGOptions {
   fps?: number;

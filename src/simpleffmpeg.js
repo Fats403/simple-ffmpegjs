@@ -24,6 +24,10 @@ class SIMPLEFFMPEG {
   _getInputStreams() {
     return this.videoOrAudioClips
       .map((clip) => {
+        if (clip.type === "image") {
+          const duration = Math.max(0, clip.end - clip.position || 0);
+          return `-loop 1 -t ${duration} -i "${clip.url}"`;
+        }
         return `-i "${clip.url}"`;
       })
       .join(" ");
@@ -236,6 +240,16 @@ class SIMPLEFFMPEG {
     this.textClips.push(clip);
   }
 
+  _loadImage(clipObj) {
+    // Images treated as video streams with no audio
+    const clip = {
+      ...clipObj,
+      hasAudio: false,
+      cutFrom: 0,
+    };
+    this.videoOrAudioClips.push(clip);
+  }
+
   // Loader for background music clips
   async _loadBackgroundAudio(clipObj) {
     const durationSec = await this._getMediaDuration(clipObj.url);
@@ -329,6 +343,9 @@ class SIMPLEFFMPEG {
         if (clipObj.type === "text") {
           return this._loadText(clipObj);
         }
+        if (clipObj.type === "image") {
+          return this._loadImage(clipObj);
+        }
         // Background music support (aliases: music, backgroundAudio)
         if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
           return this._loadBackgroundAudio(clipObj);
@@ -359,7 +376,56 @@ class SIMPLEFFMPEG {
         0,
         Math.min(requestedDuration, maxAvailable)
       );
-      filterComplex += `[${inputIndex}:v]trim=start=${clip.cutFrom}:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${this.options.fps},scale=${this.options.width}:${this.options.height}:force_original_aspect_ratio=decrease,pad=${this.options.width}:${this.options.height}:(ow-iw)/2:(oh-ih)/2${scaledLabel};`;
+      if (clip.type === "image" && clip.kenBurns) {
+        const frames = Math.max(1, Math.round(clipDuration * this.options.fps));
+        const s = `${this.options.width}x${this.options.height}`;
+        const strength =
+          typeof clip.kenBurns.strength === "number"
+            ? clip.kenBurns.strength
+            : 0.1;
+        // targetZoom = 1 + strength
+        const zStep = strength / frames;
+        let zoomExpr = `1`;
+        let xExpr = `(iw-ow)/2`;
+        let yExpr = `(ih-oh)/2`;
+        const panBaseZoom = strength && strength > 0 ? strength : 0.1; // ensure crop area exists for pans
+        switch (clip.kenBurns.type) {
+          case "zoom-in":
+            zoomExpr = `1+${zStep}*on`;
+            break;
+          case "zoom-out":
+            zoomExpr = `1+${strength} - ${zStep}*on`;
+            break;
+          case "pan-left":
+            zoomExpr = `1+${panBaseZoom}`;
+            xExpr = `(iw-ow) - (iw-ow)*on/${frames}`;
+            break;
+          case "pan-right":
+            zoomExpr = `1+${panBaseZoom}`;
+            xExpr = `(iw-ow)*on/${frames}`;
+            break;
+          case "pan-up":
+            zoomExpr = `1+${panBaseZoom}`;
+            yExpr = `(ih-oh) - (ih-oh)*on/${frames}`;
+            break;
+          case "pan-down":
+            zoomExpr = `1+${panBaseZoom}`;
+            yExpr = `(ih-oh)*on/${frames}`;
+            break;
+        }
+        // Feed a single input frame to zoompan so d=frames yields the correct total duration
+        filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${this.options.fps}${scaledLabel};`;
+      } else {
+        filterComplex += `[${inputIndex}:v]trim=start=${
+          clip.cutFrom || 0
+        }:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${
+          this.options.fps
+        },scale=${this.options.width}:${
+          this.options.height
+        }:force_original_aspect_ratio=decrease,pad=${this.options.width}:${
+          this.options.height
+        }:(ow-iw)/2:(oh-ih)/2${scaledLabel};`;
+      }
 
       scaledStreams.push({
         label: scaledLabel,
@@ -376,18 +442,22 @@ class SIMPLEFFMPEG {
     );
 
     if (!hasTransitions) {
-      // No transitions - use simple concatenation
+      // No transitions - use simple concatenation for video
       const videoLabels = scaledStreams.map((s) => s.label);
       filterComplex +=
         videoLabels.join("") + `concat=n=${videoLabels.length}:v=1:a=0[outv];`;
 
-      // Handle audio
+      // Handle audio: align by absolute timeline using adelay, then amix
       let audioLabels = [];
-      scaledStreams.forEach((stream) => {
+      const overlapBefore = new Array(scaledStreams.length).fill(0);
+      scaledStreams.forEach((stream, i) => {
         if (stream.clip.hasAudio) {
           const inputIndex = this.videoOrAudioClips.indexOf(stream.clip);
           const clipDuration = stream.duration;
-          audioString += `[${inputIndex}:a]atrim=start=${stream.clip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS[a${stream.index}];`;
+          const adelayMs = Math.round(
+            Math.max(0, stream.clip.position || 0) * 1000
+          );
+          audioString += `[${inputIndex}:a]atrim=start=${stream.clip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS,adelay=${adelayMs}|${adelayMs}[a${stream.index}];`;
           audioLabels.push(`[a${stream.index}]`);
         }
       });
@@ -395,7 +465,7 @@ class SIMPLEFFMPEG {
       if (audioLabels.length > 0) {
         audioString +=
           audioLabels.join("") +
-          `concat=n=${audioLabels.length}:v=0:a=1[outa];`;
+          `amix=inputs=${audioLabels.length}:duration=longest[outa];`;
       }
 
       return {
@@ -407,17 +477,34 @@ class SIMPLEFFMPEG {
       };
     }
 
-    // Apply transitions
+    // Apply transitions for video; build audio as delayed amix to align timeline
     let currentVideo = scaledStreams[0].label;
-    let currentAudio = null;
 
-    // Set up first audio stream
-    if (scaledStreams[0].clip.hasAudio) {
-      const inputIndex = this.videoOrAudioClips.indexOf(scaledStreams[0].clip);
-      const clipDuration = scaledStreams[0].duration;
-      audioString += `[${inputIndex}:a]atrim=start=${scaledStreams[0].clip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS[a0];`;
-      currentAudio = "[a0]";
+    // Prepare audio segments aligned by absolute position; then amix
+    const alignedAudioLabels = [];
+    // Compute cumulative overlap before each clip based on transitions attached to current clips
+    const overlapBefore = new Array(scaledStreams.length).fill(0);
+    let cumOverlap = 0;
+    for (let i = 0; i < scaledStreams.length; i++) {
+      overlapBefore[i] = cumOverlap;
+      if (i + 1 < scaledStreams.length) {
+        const nextTrans = scaledStreams[i + 1].clip.transition;
+        if (nextTrans && typeof nextTrans.duration === "number") {
+          cumOverlap += nextTrans.duration;
+        }
+      }
     }
+    scaledStreams.forEach((stream, i) => {
+      if (stream.clip.hasAudio) {
+        const inputIndex = this.videoOrAudioClips.indexOf(stream.clip);
+        const clipDuration = stream.duration;
+        const adelayMs = Math.round(
+          Math.max(0, stream.clip.position || 0) * 1000
+        );
+        audioString += `[${inputIndex}:a]atrim=start=${stream.clip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS,adelay=${adelayMs}|${adelayMs}[aa${stream.index}];`;
+        alignedAudioLabels.push(`[aa${stream.index}]`);
+      }
+    });
 
     for (let i = 1; i < scaledStreams.length; i++) {
       const currentClip = scaledStreams[i].clip;
@@ -437,7 +524,7 @@ class SIMPLEFFMPEG {
         // Video transition
         filterComplex += `${currentVideo}${nextVideoLabel}xfade=transition=${transitionType}:duration=${duration}:offset=${offset}${transitionedVideoLabel};`;
 
-        // Audio transition
+        // Audio transition (handled by absolute-time amix instead)
         if (currentClip.hasAudio) {
           const inputIndex = this.videoOrAudioClips.indexOf(currentClip);
           const clipDuration = scaledStreams[i].duration;
@@ -453,35 +540,26 @@ class SIMPLEFFMPEG {
 
         currentVideo = transitionedVideoLabel;
       } else {
-        // No transition for this boundary: concatenate video (and audio if present)
+        // No transition at this boundary: concatenate video
         const concatenatedVideoLabel = `[vcat${i}]`;
         filterComplex += `${currentVideo}${nextVideoLabel}concat=n=2:v=1:a=0${concatenatedVideoLabel};`;
         currentVideo = concatenatedVideoLabel;
-
-        // Prepare audio for this clip if it has audio
-        if (currentClip.hasAudio) {
-          const inputIndex = this.videoOrAudioClips.indexOf(currentClip);
-          const clipDuration = scaledStreams[i].duration;
-          audioString += `[${inputIndex}:a]atrim=start=${currentClip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS[a${i}];`;
-
-          if (currentAudio) {
-            const concatenatedAudioLabel = `[acat${i}]`;
-            audioString += `${currentAudio}[a${i}]concat=n=2:v=0:a=1${concatenatedAudioLabel};`;
-            currentAudio = concatenatedAudioLabel;
-          } else {
-            currentAudio = `[a${i}]`;
-          }
-        }
-        // If current clip has no audio and we already have an audio chain, keep it as-is (video-only extension)
+        // Audio handled via aligned amix
       }
+    }
+
+    if (alignedAudioLabels.length > 0) {
+      audioString +=
+        alignedAudioLabels.join("") +
+        `amix=inputs=${alignedAudioLabels.length}:duration=longest[outa];`;
     }
 
     return {
       filterComplex: filterComplex + audioString,
       finalVideoLabel: currentVideo,
-      finalAudioLabel: currentAudio,
+      finalAudioLabel: alignedAudioLabels.length > 0 ? "[outa]" : null,
       hasVideo: true,
-      hasAudio: currentAudio !== null,
+      hasAudio: alignedAudioLabels.length > 0,
     };
   }
 
@@ -521,7 +599,7 @@ class SIMPLEFFMPEG {
       );
 
       const videoClips = this.videoOrAudioClips.filter(
-        (clip) => clip.type === "video"
+        (clip) => clip.type === "video" || clip.type === "image"
       );
       const audioClips = this.videoOrAudioClips.filter(
         (clip) => clip.type === "audio"
@@ -553,6 +631,8 @@ class SIMPLEFFMPEG {
         }, 0);
         return Math.max(0, baseSum - transitionsOverlap);
       })();
+      const finalVisualEnd =
+        videoClips.length > 0 ? Math.max(...videoClips.map((c) => c.end)) : 0;
 
       // Handle video clips with transitions
       if (videoClips.length > 0) {
@@ -597,10 +677,10 @@ class SIMPLEFFMPEG {
 
       // Handle background music clips (mix AFTER other audio so fades don't affect BGM)
       if (backgroundClips.length > 0) {
-        // Prefer video timeline duration; if no video, fall back to max explicit BG ends
+        // Prefer full visual timeline end (max end across video/image clips)
         const projectDuration =
           videoClips.length > 0
-            ? totalVideoDuration
+            ? Math.max(...videoClips.map((c) => c.end))
             : Math.max(
                 0,
                 ...backgroundClips.map((c) =>
@@ -646,6 +726,14 @@ class SIMPLEFFMPEG {
             hasAudio = true;
           }
         }
+      }
+
+      // Pad final audio to prevent early cutoff; container will align to video length
+      if (hasAudio && finalAudioLabel) {
+        const trimEnd =
+          finalVisualEnd > 0 ? finalVisualEnd : totalVideoDuration;
+        filterComplex += `${finalAudioLabel}apad,atrim=end=${trimEnd}[audfit];`;
+        finalAudioLabel = "[audfit]";
       }
 
       // Handle text overlays
@@ -695,6 +783,9 @@ class SIMPLEFFMPEG {
 
       if (hasAudio) {
         ffmpegCmd += `-c:a aac -b:a 192k `;
+      }
+      if (hasVideo && hasAudio) {
+        ffmpegCmd += `-shortest `;
       }
 
       ffmpegCmd += `-movflags +faststart "${exportOptions.outputPath}"`;
