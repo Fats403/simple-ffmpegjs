@@ -154,6 +154,38 @@ function validateClips(clips, validationMode = "warn") {
     }
   });
 
+  // Visual timeline gap checks (video/image)
+  const visual = clips
+    .map((c, i) => ({ c, i }))
+    .filter(({ c }) => c.type === "video" || c.type === "image")
+    .sort((a, b) => (a.c.position || 0) - (b.c.position || 0));
+
+  if (visual.length > 0) {
+    const eps = 1e-3;
+    // Leading gap
+    if ((visual[0].c.position || 0) > eps) {
+      const start = 0;
+      const end = visual[0].c.position;
+      const msg = `visual gap [${start.toFixed(3)}, ${end.toFixed(
+        3
+      )}) — no video/image content at start`;
+      errors.push(msg);
+    }
+    // Middle gaps
+    for (let i = 1; i < visual.length; i++) {
+      const prev = visual[i - 1].c;
+      const cur = visual[i].c;
+      if ((cur.position || 0) - (prev.end || 0) > eps) {
+        const start = prev.end || 0;
+        const end = cur.position || 0;
+        const msg = `visual gap [${start.toFixed(3)}, ${end.toFixed(
+          3
+        )}) — no video/image content between clips`;
+        errors.push(msg);
+      }
+    }
+  }
+
   if (errors.length > 0) {
     const msg = `Validation failed:\n - ` + errors.join(`\n - `);
     throw new Error(msg);

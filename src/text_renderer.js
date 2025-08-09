@@ -20,10 +20,11 @@ function baseYExpression(baseClip, canvasHeight) {
 
 function buildYParamAnimated(baseClip, canvasHeight, start, end) {
   const baseY = baseYExpression(baseClip, canvasHeight);
+  // No y animation for simplified set (fade/pop only)
   return `:y=${baseY}`;
 }
 
-function buildAlphaParam(baseClip, start) {
+function buildAlphaParam(baseClip, start, end) {
   const anim = baseClip.animation || {};
   const type = anim.type || "none";
   if (type === "fade-in") {
@@ -32,6 +33,16 @@ function buildAlphaParam(baseClip, start) {
     return `:alpha=if(lt(t\\,${start})\\,0\\,if(lt(t\\,${
       start + entry
     })\\,(t-${start})/${entry}\\,1))`;
+  }
+  if (type === "fade-in-out" || type === "fade") {
+    // fade in at start, fade out near end
+    const entry = typeof anim.in === "number" ? anim.in : 0.25;
+    const exit = typeof anim.out === "number" ? anim.out : entry;
+    const fadeOutStart = Math.max(start, end - exit);
+    // 0 before start; ramp up over entry; hold 1; ramp down over last exit; 0 after end
+    return `:alpha=if(lt(t\\,${start})\\,0\\,if(lt(t\\,${
+      start + entry
+    })\\,(t-${start})/${entry}\\,if(lt(t\\,${fadeOutStart})\\,1\\,if(lt(t\\,${end})\\,((${end}-t)/${exit})\\,0))))`;
   }
   return "";
 }
@@ -89,8 +100,8 @@ function buildDrawtextParams(
   params += buildXParam(baseClip, canvasWidth);
   params += buildYParamAnimated(baseClip, canvasHeight, start, end);
 
-  // fade-in alpha if specified
-  params += buildAlphaParam(baseClip, start);
+  // fade-in/out alpha if specified
+  params += buildAlphaParam(baseClip, start, end);
 
   if (baseClip.borderColor) {
     params += `:bordercolor=${baseClip.borderColor}`;

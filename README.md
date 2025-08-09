@@ -37,7 +37,9 @@ npm install simple-ffmpeg
 Make sure you have ffmpeg installed on your system:
 
 **Mac**: brew install ffmpeg
+
 **Ubuntu/Debian**: apt-get install ffmpeg
+
 **Windows**: Download from ffmpeg.org
 
 Ensure `ffmpeg` and `ffprobe` are installed and available on your PATH.
@@ -73,7 +75,7 @@ const SIMPLEFFMPEG = require("simple-ffmpeg");
       url: "./vids/b.mp4",
       position: 5,
       end: 10,
-      transition: { type: "fade", duration: 0.5 },
+      transition: { type: "fade-in", duration: 0.5 },
     },
     { type: "music", url: "./audio/bgm.wav", volume: 0.2 },
     {
@@ -101,7 +103,7 @@ await project.load([
     url: "./b.mp4",
     position: 5,
     end: 10,
-    transition: { type: "fade", duration: 0.4 },
+    transition: { type: "fade-in", duration: 0.4 },
   },
   { type: "music", url: "./bgm.wav", volume: 0.18 },
 ]);
@@ -134,7 +136,7 @@ await project.load([
     fontColor: "#00ffff",
     centerX: 0,
     centerY: -350,
-    animation: { type: "fade-in", in: 0.4 },
+    animation: { type: "fade-in-out", in: 0.4, out: 0.4 },
     words: [
       { text: "One", start: 2.0, end: 2.5 },
       { text: "Two", start: 2.5, end: 3.0 },
@@ -159,7 +161,7 @@ await project.load([
     fontColor: "yellow",
     centerX: 0,
     centerY: -100,
-    animation: { type: "pop-bounce", in: 0.3 },
+    animation: { type: "fade-in-out", in: 0.4, out: 0.4 },
     wordTimestamps: [4.0, 4.5, 5.0, 5.5, 6.0],
   },
 ]);
@@ -203,6 +205,7 @@ await project.load([
 - Clip audio is timeline-aligned (absolute position) and mixed once; avoids early starts and gaps around transitions
 - Text animations are opt-in (none by default)
 - For big scripts, text rendering can be batched into multiple passes automatically
+- Visual gaps are not allowed: if there’s any gap with no video/image between clips (or at the very start), validation throws
 
 ## 🔌 API (at a glance)
 
@@ -325,7 +328,7 @@ interface TextClip {
 
   // Animation (opt-in)
   animation?: {
-    type: "none" | "fade-in" | "pop" | "pop-bounce"; // default 'none'
+    type: "none" | "fade-in" | "fade-in-out" | "pop" | "pop-bounce"; // default 'none'
     in?: number; // seconds for intro phase (e.g., fade-in duration)
   };
 }
@@ -392,6 +395,7 @@ Behavior:
 
 - `none` (default): plain text, no animation
 - `fade-in`: alpha 0 → 1 over `in` seconds (e.g., 0.25–0.4)
+- `fade-in-out`: alpha 0 → 1 over `in` seconds, then 1 → 0 over `out` seconds approaching the end
 - `pop`: font size scales from ~70% → 100% over `in` seconds
 - `pop-bounce`: scales ~70% → 110% during `in`, then settles to 100%
 
@@ -400,7 +404,17 @@ Tip: small `in` values (0.2–0.4s) feel snappy for word-by-word displays.
 ## 🤝 Contributing
 
 - PRs and issues welcome
-- Actively maintained; I’ll review new contributions and iterate
+- Actively being worked on; I’ll review new contributions and iterate
+
+## 🗺️ Roadmap
+
+- Visual gap handling (opt-in fillers): optional `fillVisualGaps: 'none' | 'black'` if requested
+- Additional text effects (typewriter, word-by-word fade-out variants, outlines/shadows presets)
+- Image effects presets (Ken Burns paths presets, ease functions)
+- Export options for different containers/codecs (HEVC, VP9/AV1, audio-only)
+- Better error reporting with command dump helpers
+- CLI wrapper for quick local use
+- Performance: smarter batching and parallel intermediate renders
 
 ## 📜 License
 

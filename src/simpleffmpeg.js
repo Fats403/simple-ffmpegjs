@@ -506,36 +506,32 @@ class SIMPLEFFMPEG {
       }
     });
 
+    // Track the duration of the current composite (for xfade offset)
+    let currentVideoDuration = scaledStreams[0].duration;
     for (let i = 1; i < scaledStreams.length; i++) {
       const currentClip = scaledStreams[i].clip;
       const nextVideoLabel = scaledStreams[i].label;
 
       const transitionedVideoLabel = `[vtrans${i}]`;
-      const transitionedAudioLabel = `[atrans${i}]`;
 
       if (currentClip.transition) {
         const transitionType = currentClip.transition.type;
         const duration = currentClip.transition.duration;
 
-        // For xfade, offset is relative to the duration of the first input
-        const prevDuration = scaledStreams[i - 1].duration;
-        const offset = prevDuration - duration;
+        // For xfade, offset is relative to the duration of the first input (the current composite)
+        const offset = Math.max(0, currentVideoDuration - duration);
 
         // Video transition
         filterComplex += `${currentVideo}${nextVideoLabel}xfade=transition=${transitionType}:duration=${duration}:offset=${offset}${transitionedVideoLabel};`;
+        // Update composite duration after xfade
+        currentVideoDuration =
+          currentVideoDuration + scaledStreams[i].duration - duration;
 
         // Audio transition (handled by absolute-time amix instead)
         if (currentClip.hasAudio) {
           const inputIndex = this.videoOrAudioClips.indexOf(currentClip);
           const clipDuration = scaledStreams[i].duration;
           audioString += `[${inputIndex}:a]atrim=start=${currentClip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS[a${i}];`;
-
-          if (currentAudio) {
-            audioString += `${currentAudio}[a${i}]acrossfade=d=${duration}${transitionedAudioLabel};`;
-            currentAudio = transitionedAudioLabel;
-          } else {
-            currentAudio = `[a${i}]`;
-          }
         }
 
         currentVideo = transitionedVideoLabel;
@@ -544,6 +540,7 @@ class SIMPLEFFMPEG {
         const concatenatedVideoLabel = `[vcat${i}]`;
         filterComplex += `${currentVideo}${nextVideoLabel}concat=n=2:v=1:a=0${concatenatedVideoLabel};`;
         currentVideo = concatenatedVideoLabel;
+        currentVideoDuration = currentVideoDuration + scaledStreams[i].duration;
         // Audio handled via aligned amix
       }
     }
