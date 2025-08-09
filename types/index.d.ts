@@ -50,7 +50,12 @@ export interface ImageClip extends BaseClip {
 }
 
 export type TextMode = "static" | "word-replace" | "word-sequential";
-export type TextAnimationType = "none" | "fade-in" | "pop" | "pop-bounce";
+export type TextAnimationType =
+  | "none"
+  | "fade-in"
+  | "fade-in-out"
+  | "pop"
+  | "pop-bounce";
 
 export interface TextWordWindow {
   text: string;
@@ -93,6 +98,7 @@ export interface TextClip {
   animation?: {
     type: TextAnimationType;
     in?: number; // seconds
+    out?: number; // seconds
   };
 }
 
