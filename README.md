@@ -29,7 +29,7 @@ Built for data pipelines: a tiny helper around FFmpeg that makes common edits tr
 ## 📦 Install
 
 ```bash
-npm install simple-ffmpeg
+npm install simple-ffmpegjs
 ```
 
 ## ⚙️ Requirements
@@ -63,7 +63,7 @@ apk add --no-cache ffmpeg fontconfig ttf-dejavu
 ## 🚀 Quick start
 
 ```js
-const SIMPLEFFMPEG = require("simple-ffmpeg");
+const SIMPLEFFMPEG = require("simple-ffmpegjs");
 
 (async () => {
   const project = new SIMPLEFFMPEG({ width: 1080, height: 1920, fps: 30 });
