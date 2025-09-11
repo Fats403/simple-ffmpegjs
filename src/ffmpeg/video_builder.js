@@ -23,41 +23,50 @@ function buildVideoFilter(project, videoClips) {
 
     if (clip.type === "image" && clip.kenBurns) {
       const frames = Math.max(1, Math.round(clipDuration * fps));
+      const framesMinusOne = Math.max(1, frames - 1);
       const s = `${width}x${height}`;
-      const strength =
-        typeof clip.kenBurns.strength === "number"
-          ? clip.kenBurns.strength
-          : 0.1;
-      const zStep = strength / frames;
+
+      // Use overscan pre-scale + center crop, then zoompan with center-based x/y
+      const overscanW = Math.max(width * 3, 4000);
+      const kb = clip.kenBurns;
+      const type = typeof kb === "string" ? kb : kb.type;
+      // Simplified fixed-intensity zoom. API no longer exposes strength.
+      const zoomAmount = 0.15;
+
       let zoomExpr = `1`;
-      let xExpr = `(iw-ow)/2`;
-      let yExpr = `(ih-oh)/2`;
-      const panBaseZoom = strength && strength > 0 ? strength : 0.1;
-      switch (clip.kenBurns.type) {
-        case "zoom-in":
-          zoomExpr = `1+${zStep}*on`;
-          break;
-        case "zoom-out":
-          zoomExpr = `1+${strength} - ${zStep}*on`;
-          break;
-        case "pan-left":
-          zoomExpr = `1+${panBaseZoom}`;
-          xExpr = `(iw-ow) - (iw-ow)*on/${frames}`;
-          break;
-        case "pan-right":
-          zoomExpr = `1+${panBaseZoom}`;
-          xExpr = `(iw-ow)*on/${frames}`;
-          break;
-        case "pan-up":
-          zoomExpr = `1+${panBaseZoom}`;
-          yExpr = `(ih-oh) - (ih-oh)*on/${frames}`;
-          break;
-        case "pan-down":
-          zoomExpr = `1+${panBaseZoom}`;
-          yExpr = `(ih-oh)*on/${frames}`;
-          break;
+      let xExpr = `round(iw/2 - (iw/zoom)/2)`;
+      let yExpr = `round(ih/2 - (ih/zoom)/2)`;
+
+      if (type === "zoom-in") {
+        const inc = (zoomAmount / framesMinusOne).toFixed(6);
+        // Ensure first frame starts exactly at base zoom=1 (on==0)
+        zoomExpr = `if(eq(on\\,0)\\,1\\,zoom+${inc})`;
+      } else if (type === "zoom-out") {
+        const start = (1 + zoomAmount).toFixed(4);
+        const dec = (zoomAmount / framesMinusOne).toFixed(6);
+        // Start pre-zoomed on first frame to avoid jump
+        zoomExpr = `if(eq(on\\,0)\\,${start}\\,zoom-${dec})`;
+      } else {
+        const panZoom = 1.12;
+        zoomExpr = `${panZoom}`;
+        const dx = `(iw - iw/${panZoom})`;
+        const dy = `(ih - ih/${panZoom})`;
+        if (type === "pan-left") {
+          xExpr = `${dx} - ${dx}*on/${framesMinusOne}`;
+          yExpr = `(ih - ih/zoom)/2`;
+        } else if (type === "pan-right") {
+          xExpr = `${dx}*on/${framesMinusOne}`;
+          yExpr = `(ih - ih/zoom)/2`;
+        } else if (type === "pan-up") {
+          xExpr = `(iw - iw/zoom)/2`;
+          yExpr = `${dy} - ${dy}*on/${framesMinusOne}`;
+        } else if (type === "pan-down") {
+          xExpr = `(iw - iw/zoom)/2`;
+          yExpr = `${dy}*on/${framesMinusOne}`;
+        }
       }
-      filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
+
+      filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,scale=${width}:-2,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
     } else {
       filterComplex += `[${inputIndex}:v]trim=start=${
         clip.cutFrom || 0

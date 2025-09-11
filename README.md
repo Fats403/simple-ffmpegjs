@@ -185,7 +185,7 @@ await project.load([
     url: "./img.png",
     position: 10,
     end: 12,
-    kenBurns: { type: "zoom-in", strength: 0.12 },
+    kenBurns: "zoom-in",
   },
   // Pan-right image (2s)
   {
@@ -193,7 +193,7 @@ await project.load([
     url: "./img.png",
     position: 12,
     end: 14,
-    kenBurns: { type: "pan-right", strength: 0.2 },
+    kenBurns: "pan-right",
   },
 ]);
 ```
@@ -348,16 +348,13 @@ interface ImageClip {
   url: string;
   position: number; // timeline start
   end: number; // timeline end
-  kenBurns?: {
-    type:
-      | "zoom-in"
-      | "zoom-out"
-      | "pan-left"
-      | "pan-right"
-      | "pan-up"
-      | "pan-down";
-    strength?: number; // 0..0.5 approx; zoom amount or pan distance
-  };
+  kenBurns?:
+    | "zoom-in"
+    | "zoom-out"
+    | "pan-left"
+    | "pan-right"
+    | "pan-up"
+    | "pan-down";
 }
 ```
 
@@ -411,6 +408,8 @@ Tip: small `in` values (0.2–0.4s) feel snappy for word-by-word displays.
 - Visual gap handling (opt-in fillers): optional `fillVisualGaps: 'none' | 'black'` if requested
 - Additional text effects (typewriter, word-by-word fade-out variants, outlines/shadows presets)
 - Image effects presets (Ken Burns paths presets, ease functions)
+- Ken Burns upgrades: strength parameter, custom positioning, additional ease curves
+- Optional audio transition coupling: tie clip audio fades to xfade boundaries
 - Export options for different containers/codecs (HEVC, VP9/AV1, audio-only)
 - Better error reporting with command dump helpers
 - CLI wrapper for quick local use

@@ -138,19 +138,9 @@ function validateClips(clips, validationMode = "warn") {
         "pan-up",
         "pan-down",
       ]);
-      if (!allowedKB.has(kb.type)) {
-        errors.push(`clip[${idx}]: kenBurns.type '${kb.type}' invalid`);
-      }
-      if (
-        kb.strength != null &&
-        (typeof kb.strength !== "number" ||
-          kb.strength < 0 ||
-          kb.strength > 0.5)
-      ) {
-        warnings.push(
-          `clip[${idx}]: kenBurns.strength should be between 0 and 0.5 (got ${kb.strength})`
-        );
-      }
+      const type = typeof kb === "string" ? kb : kb.type;
+      if (!allowedKB.has(type))
+        errors.push(`clip[${idx}]: kenBurns '${type}' invalid`);
     }
   });
 

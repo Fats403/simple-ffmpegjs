@@ -37,16 +37,13 @@ export interface BackgroundMusicClip extends BaseClip {
 export interface ImageClip extends BaseClip {
   type: "image";
   url: string;
-  kenBurns?: {
-    type:
-      | "zoom-in"
-      | "zoom-out"
-      | "pan-left"
-      | "pan-right"
-      | "pan-up"
-      | "pan-down";
-    strength?: number; // 0..0.5 (approx), controls zoom amount or pan distance
-  };
+  kenBurns?:
+    | "zoom-in"
+    | "zoom-out"
+    | "pan-left"
+    | "pan-right"
+    | "pan-up"
+    | "pan-down";
 }
 
 export type TextMode = "static" | "word-replace" | "word-sequential";
