@@ -23,8 +23,8 @@ Built for data pipelines: a tiny helper around FFmpeg that makes common edits tr
 - 🧱 Scales to long scripts via optional multi-pass text batching
 - 🧩 Ships TypeScript definitions without requiring TS
 - 🪶 No external libraries (other than FFmpeg), no bundled fonts; extremely lightweight
-- 🧑‍💻 Actively maintained; PRs and issues welcome
 - 🖼️ Image support with Ken Burns (zoom-in/out, pan-left/right/up/down)
+- 🧑‍💻 Actively maintained; PRs and issues welcome
 
 ## 📦 Install
 
@@ -32,13 +32,25 @@ Built for data pipelines: a tiny helper around FFmpeg that makes common edits tr
 npm install simple-ffmpegjs
 ```
 
+### Import syntax
+
+```js
+// CommonJS
+const SIMPLEFFMPEG = require("simple-ffmpegjs");
+```
+
+```js
+// ESM
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+```
+
 ## ⚙️ Requirements
 
 Make sure you have ffmpeg installed on your system:
 
-**Mac**: brew install ffmpeg
+**Mac**: `brew install ffmpeg`
 
-**Ubuntu/Debian**: apt-get install ffmpeg
+**Ubuntu/Debian**: `apt-get install ffmpeg`
 
 **Windows**: Download from ffmpeg.org
 

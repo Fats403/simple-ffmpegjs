@@ -1,12 +1,24 @@
 {
   "name": "simple-ffmpegjs",
-  "version": "0.1.0",
-  "main": "index.js",
+  "version": "0.1.1",
+  "main": "index.cjs",
+  "module": "index.mjs",
   "types": "types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./types/index.d.mts",
+        "require": "./types/index.d.ts"
+      },
+      "import": "./index.mjs",
+      "require": "./index.cjs"
+    }
+  },
   "files": [
     "src",
     "types",
-    "index.js"
+    "index.cjs",
+    "index.mjs"
   ],
   "keywords": [
     "ffmpeg",
@@ -33,5 +45,8 @@
     "email": "braydenblackwell21@gmail.com"
   },
   "homepage": "https://github.com/Fats403/simple-ffmpeg#readme",
-  "description": "Simple Node.js helper around ffmpeg for video composition, transitions, audio mixing, and text rendering."
+  "description": "Simple Node.js helper around ffmpeg for video composition, transitions, audio mixing, and text rendering.",
+  "engines": {
+    "node": ">=16"
+  }
 }

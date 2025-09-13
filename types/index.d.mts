@@ -72,9 +72,9 @@ declare namespace SIMPLEFFMPEG {
 
     // Font
     fontFile?: string;
-    fontFamily?: string; // defaults to 'Sans' via fontconfig
-    fontSize?: number; // default 48
-    fontColor?: string; // default '#FFFFFF'
+    fontFamily?: string;
+    fontSize?: number;
+    fontColor?: string;
 
     // Position
     centerX?: number;
@@ -95,8 +95,8 @@ declare namespace SIMPLEFFMPEG {
     // Animation
     animation?: {
       type: TextAnimationType;
-      in?: number; // seconds
-      out?: number; // seconds
+      in?: number;
+      out?: number;
     };
   }
 
@@ -129,11 +129,4 @@ declare class SIMPLEFFMPEG {
   export(options: SIMPLEFFMPEG.ExportOptions): Promise<string>;
 }
 
-/**
- * Synthetic default export type for ESM default-import IntelliSense
- */
-declare namespace _defaultExportType {
-  export { SIMPLEFFMPEG as default };
-}
-
-export = SIMPLEFFMPEG;
+export default SIMPLEFFMPEG;
