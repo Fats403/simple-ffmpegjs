@@ -118,12 +118,12 @@ function loadText(project, clipObj) {
     fontSize: clipObj.fontSize || C.DEFAULT_FONT_SIZE,
     fontColor: clipObj.fontColor || C.DEFAULT_FONT_COLOR,
   };
-  if (typeof clipObj.centerX === "number") clip.centerX = clipObj.centerX;
+  if (typeof clipObj.xPercent === "number") clip.xPercent = clipObj.xPercent;
   else if (typeof clipObj.x === "number") clip.x = clipObj.x;
-  else clip.centerX = 0;
-  if (typeof clipObj.centerY === "number") clip.centerY = clipObj.centerY;
+  else clip.xPercent = 0.5; // Default to centered
+  if (typeof clipObj.yPercent === "number") clip.yPercent = clipObj.yPercent;
   else if (typeof clipObj.y === "number") clip.y = clipObj.y;
-  else clip.centerY = 0;
+  else clip.yPercent = 0.5; // Default to centered
   project.textClips.push(clip);
 }
 

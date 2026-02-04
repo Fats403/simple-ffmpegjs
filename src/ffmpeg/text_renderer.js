@@ -2,8 +2,11 @@ const Strings = require("./strings");
 const C = require("../core/constants");
 
 function buildXParam(baseClip, canvasWidth) {
-  if (typeof baseClip.centerX === "number") {
-    return `:x=(${canvasWidth} - text_w)/2 + ${baseClip.centerX}`;
+  if (typeof baseClip.xPercent === "number") {
+    // xPercent is a percentage (0-1) where 0.5 = centered
+    // Convert to pixel position: xPercent * canvasWidth - text_w/2
+    const xPos = baseClip.xPercent * canvasWidth;
+    return `:x=${xPos}-text_w/2`;
   } else if (typeof baseClip.x === "number") {
     return `:x=${baseClip.x}`;
   }
@@ -11,8 +14,11 @@ function buildXParam(baseClip, canvasWidth) {
 }
 
 function baseYExpression(baseClip, canvasHeight) {
-  if (typeof baseClip.centerY === "number") {
-    return `(${canvasHeight} - text_h)/2 + ${baseClip.centerY}`;
+  if (typeof baseClip.yPercent === "number") {
+    // yPercent is a percentage (0-1) where 0.5 = centered
+    // Convert to pixel position: yPercent * canvasHeight - text_h/2
+    const yPos = baseClip.yPercent * canvasHeight;
+    return `${yPos}-text_h/2`;
   } else if (typeof baseClip.y === "number") {
     return `${baseClip.y}`;
   }

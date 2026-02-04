@@ -1,20 +1,65 @@
+const { detectVisualGaps } = require("../core/gaps");
+
+/**
+ * Create synthetic black clips to fill visual gaps
+ */
+function createBlackClipsForGaps(gaps, fps, width, height) {
+  return gaps.map((gap, index) => ({
+    type: "_black",
+    position: gap.start,
+    end: gap.end,
+    _gapIndex: index,
+    _isBlackFill: true,
+  }));
+}
+
 function buildVideoFilter(project, videoClips) {
   let filterComplex = "";
   let videoIndex = 0;
+  let blackGapIndex = 0;
   const fps = project.options.fps;
   const width = project.options.width;
   const height = project.options.height;
+  const fillGaps = project.options.fillGaps || "none";
+
+  // Detect and fill gaps if fillGaps is enabled
+  let allVisualClips = [...videoClips];
+  if (fillGaps === "black") {
+    const gaps = detectVisualGaps(videoClips);
+    if (gaps.length > 0) {
+      const blackClips = createBlackClipsForGaps(gaps, fps, width, height);
+      allVisualClips = [...videoClips, ...blackClips].sort(
+        (a, b) => (a.position || 0) - (b.position || 0)
+      );
+    }
+  }
 
   // Build scaled streams
   const scaledStreams = [];
-  videoClips.forEach((clip) => {
-    const inputIndex = project.videoOrAudioClips.indexOf(clip);
+  allVisualClips.forEach((clip) => {
     const scaledLabel = `[scaled${videoIndex}]`;
 
     const requestedDuration = Math.max(
       0,
       (clip.end || 0) - (clip.position || 0)
     );
+
+    // Handle synthetic black fill clips
+    if (clip._isBlackFill) {
+      // Generate a black color source for the gap duration
+      filterComplex += `color=c=black:s=${width}x${height}:d=${requestedDuration},fps=${fps},settb=1/${fps}${scaledLabel};`;
+      scaledStreams.push({
+        label: scaledLabel,
+        clip,
+        index: videoIndex,
+        duration: requestedDuration,
+      });
+      videoIndex++;
+      blackGapIndex++;
+      return;
+    }
+
+    const inputIndex = project.videoOrAudioClips.indexOf(clip);
     const maxAvailable =
       typeof clip.mediaDuration === "number" && typeof clip.cutFrom === "number"
         ? Math.max(0, clip.mediaDuration - clip.cutFrom)

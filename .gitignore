@@ -1,9 +1,19 @@
-examples/
-test/
-*.test.js
-.git/
+# macOS
+.DS_Store
+
+# Dependencies & IDE
 node_modules/
 .vscode/
+
+# Test & dev files
+examples/
+test/
 test-files/
 test-local.js
 *.tgz
+
+# Test generated fixtures (keep generate-fixtures.js)
+tests/fixtures/*.mp4
+tests/fixtures/*.mp3
+tests/fixtures/*.png
+tests/output/

@@ -1,113 +1,346 @@
-# simple-ffmpeg 🎬
+# simple-ffmpeg
 
-Simple lightweight Node.js helper around FFmpeg for quick video composition, transitions, audio mixing, and animated text overlays.
+[![npm version](https://img.shields.io/npm/v/simple-ffmpegjs.svg)](https://www.npmjs.com/package/simple-ffmpegjs)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D16-brightgreen.svg)](https://nodejs.org)
 
-## 🙌 Credits
+A lightweight Node.js library for programmatic video composition using FFmpeg. Designed for data pipelines and automation workflows that need reliable video assembly without the complexity of a full editing suite.
 
-Huge shoutout to the original inspiration for this library:
+## Example Output
 
-- John Chen (coldshower): https://github.com/coldshower
-- ezffmpeg: https://github.com/ezffmpeg/ezffmpeg
+<p align="center">
+  <a href="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/wonders-of-the-world.mp4">
+    <img src="assets/example-thumbnail.jpg" alt="Example video - click to watch" width="640">
+  </a>
+</p>
 
-This project builds on those ideas and extends them with a few opinionated defaults and features to make common video tasks easier.
+_Click to watch a "Wonders of the World" video created with simple-ffmpeg — combining multiple video clips with crossfade transitions, animated text overlays, and background music._
 
-## ✨ Why this project
+## Features
 
-Built for data pipelines: a tiny helper around FFmpeg that makes common edits trivial—clip concatenation with transitions, flexible text overlays, images with Ken Burns effects, and reliable audio mixing—without hiding FFmpeg. It favors safe defaults, scales to long scripts, and stays dependency‑free.
+- **Video Concatenation** — Join multiple clips with optional xfade transitions
+- **Audio Mixing** — Layer audio tracks, voiceovers, and background music
+- **Text Overlays** — Static, word-by-word, and cumulative text with animations
+- **Image Support** — Ken Burns effects (zoom, pan) for static images
+- **Progress Tracking** — Real-time export progress callbacks
+- **Cancellation** — AbortController support for stopping exports
+- **Gap Handling** — Optional black frame fill for timeline gaps
+- **TypeScript Ready** — Full type definitions included
+- **Zero Dependencies** — Only requires FFmpeg on your system
 
-- ✅ Simple API for building FFmpeg filter graphs
-- 🎞️ Concatenate clips with optional transitions (xfade)
-- 🔊 Mix multiple audio sources and add background music (not affected by transition fades)
-- 📝 Text overlays (static, word-by-word, cumulative) with opt-in animations (fade-in, pop, pop-bounce)
-- 🧰 Safe defaults + guardrails (basic validation, media bounds clamping)
-- 🧱 Scales to long scripts via optional multi-pass text batching
-- 🧩 Ships TypeScript definitions without requiring TS
-- 🪶 No external libraries (other than FFmpeg), no bundled fonts; extremely lightweight
-- 🖼️ Image support with Ken Burns (zoom-in/out, pan-left/right/up/down)
-- 🧑‍💻 Actively maintained; PRs and issues welcome
-
-## 📦 Install
+## Installation
 
 ```bash
 npm install simple-ffmpegjs
 ```
 
-### Import syntax
+### Prerequisites
 
-```js
-// CommonJS
-const SIMPLEFFMPEG = require("simple-ffmpegjs");
-```
-
-```js
-// ESM
-import SIMPLEFFMPEG from "simple-ffmpegjs";
-```
-
-## ⚙️ Requirements
-
-Make sure you have ffmpeg installed on your system:
-
-**Mac**: `brew install ffmpeg`
-
-**Ubuntu/Debian**: `apt-get install ffmpeg`
-
-**Windows**: Download from ffmpeg.org
-
-Ensure `ffmpeg` and `ffprobe` are installed and available on your PATH.
-
-For text overlays with `drawtext`, use an FFmpeg build that includes libfreetype and fontconfig. Make sure a system font is present so `font=Sans` resolves, or provide `fontFile`. Minimal containers often lack fonts, so install one explicitly.
-
-### Examples:
-
-Debian/Ubuntu:
+FFmpeg must be installed and available in your PATH:
 
 ```bash
-apt-get update && apt-get install -y ffmpeg fontconfig fonts-dejavu-core
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+apt-get install ffmpeg
+
+# Windows
+# Download from https://ffmpeg.org/download.html
 ```
 
-Alpine:
+For text overlays, ensure your FFmpeg build includes `libfreetype` and `fontconfig`. On minimal systems (Docker, Alpine), install a font package:
 
 ```bash
+# Alpine
 apk add --no-cache ffmpeg fontconfig ttf-dejavu
+
+# Debian/Ubuntu
+apt-get install -y ffmpeg fontconfig fonts-dejavu-core
 ```
 
-## 🚀 Quick start
+## Quick Start
 
 ```js
-const SIMPLEFFMPEG = require("simple-ffmpegjs");
+import SIMPLEFFMPEG from "simple-ffmpegjs";
 
-(async () => {
-  const project = new SIMPLEFFMPEG({ width: 1080, height: 1920, fps: 30 });
+const project = new SIMPLEFFMPEG({
+  width: 1920,
+  height: 1080,
+  fps: 30,
+});
 
-  await project.load([
-    { type: "video", url: "./vids/a.mp4", position: 0, end: 5 },
-    {
-      type: "video",
-      url: "./vids/b.mp4",
-      position: 5,
-      end: 10,
-      transition: { type: "fade-in", duration: 0.5 },
-    },
-    { type: "music", url: "./audio/bgm.wav", volume: 0.2 },
-    {
-      type: "text",
-      text: "Hello world",
-      position: 1,
-      end: 3,
-      fontColor: "white",
-    },
-  ]);
+await project.load([
+  { type: "video", url: "./intro.mp4", position: 0, end: 5 },
+  {
+    type: "video",
+    url: "./main.mp4",
+    position: 5,
+    end: 15,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  { type: "music", url: "./bgm.mp3", volume: 0.2 },
+  {
+    type: "text",
+    text: "Hello World",
+    position: 1,
+    end: 4,
+    fontColor: "white",
+    fontSize: 64,
+  },
+]);
 
-  await project.export({ outputPath: "./output.mp4" });
-})();
+await project.export({
+  outputPath: "./output.mp4",
+  onProgress: ({ percent }) => console.log(`${percent}% complete`),
+});
 ```
 
-## 📚 Examples
+## API Reference
 
-- 🎞️ Two clips + fade transition + background music
+### Constructor
 
-```js
+```ts
+new SIMPLEFFMPEG(options?: {
+  width?: number;           // Output width (default: 1920)
+  height?: number;          // Output height (default: 1080)
+  fps?: number;             // Frame rate (default: 30)
+  validationMode?: 'warn' | 'strict';  // Validation behavior (default: 'warn')
+  fillGaps?: 'none' | 'black';         // Gap handling (default: 'none')
+})
+```
+
+### Methods
+
+#### `project.load(clips)`
+
+Load clip descriptors into the project. Validates the timeline and reads media metadata.
+
+```ts
+await project.load(clips: Clip[]): Promise<void[]>
+```
+
+#### `project.export(options)`
+
+Build and execute the FFmpeg command to render the final video.
+
+```ts
+await project.export(options?: ExportOptions): Promise<string>
+```
+
+**Export Options:**
+
+| Option             | Type          | Default          | Description                                                                      |
+| ------------------ | ------------- | ---------------- | -------------------------------------------------------------------------------- |
+| `outputPath`       | `string`      | `'./output.mp4'` | Output file path                                                                 |
+| `videoCodec`       | `string`      | `'libx264'`      | Video codec (`libx264`, `libx265`, `libvpx-vp9`, `prores_ks`, hardware encoders) |
+| `crf`              | `number`      | `23`             | Quality level (0-51, lower = better)                                             |
+| `preset`           | `string`      | `'medium'`       | Encoding preset (`ultrafast` to `veryslow`)                                      |
+| `videoBitrate`     | `string`      | -                | Target bitrate (e.g., `'5M'`). Overrides CRF.                                    |
+| `audioCodec`       | `string`      | `'aac'`          | Audio codec (`aac`, `libmp3lame`, `libopus`, `flac`, `copy`)                     |
+| `audioBitrate`     | `string`      | `'192k'`         | Audio bitrate                                                                    |
+| `audioSampleRate`  | `number`      | `48000`          | Audio sample rate in Hz                                                          |
+| `hwaccel`          | `string`      | `'none'`         | Hardware acceleration (`auto`, `videotoolbox`, `nvenc`, `vaapi`, `qsv`)          |
+| `outputWidth`      | `number`      | -                | Scale output width                                                               |
+| `outputHeight`     | `number`      | -                | Scale output height                                                              |
+| `outputResolution` | `string`      | -                | Resolution preset (`'720p'`, `'1080p'`, `'4k'`)                                  |
+| `audioOnly`        | `boolean`     | `false`          | Export audio only (no video)                                                     |
+| `twoPass`          | `boolean`     | `false`          | Two-pass encoding for better quality                                             |
+| `metadata`         | `object`      | -                | Embed metadata (title, artist, etc.)                                             |
+| `thumbnail`        | `object`      | -                | Generate thumbnail image                                                         |
+| `verbose`          | `boolean`     | `false`          | Enable verbose logging                                                           |
+| `saveCommand`      | `string`      | -                | Save FFmpeg command to file                                                      |
+| `onProgress`       | `function`    | -                | Progress callback                                                                |
+| `signal`           | `AbortSignal` | -                | Cancellation signal                                                              |
+
+#### `project.preview(options)`
+
+Get the FFmpeg command without executing it. Useful for debugging or dry runs.
+
+```ts
+await project.preview(options?: ExportOptions): Promise<{
+  command: string;        // Full FFmpeg command
+  filterComplex: string;  // Filter graph
+  totalDuration: number;  // Expected output duration
+}>
+```
+
+### Clip Types
+
+#### Video Clip
+
+```ts
+{
+  type: "video";
+  url: string;              // File path
+  position: number;         // Timeline start (seconds)
+  end: number;              // Timeline end (seconds)
+  cutFrom?: number;         // Source offset (default: 0)
+  volume?: number;          // Audio volume (default: 1)
+  transition?: {
+    type: string;           // Any xfade transition (e.g., 'fade', 'wipeleft', 'dissolve')
+    duration: number;       // Transition duration in seconds
+  };
+}
+```
+
+All [xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
+
+#### Audio Clip
+
+```ts
+{
+  type: "audio";
+  url: string;
+  position: number;
+  end: number;
+  cutFrom?: number;
+  volume?: number;
+}
+```
+
+#### Background Music
+
+```ts
+{
+  type: "music";            // or "backgroundAudio"
+  url: string;
+  position?: number;        // default: 0
+  end?: number;             // default: project duration
+  cutFrom?: number;
+  volume?: number;          // default: 0.2
+}
+```
+
+Background music is mixed after transitions, so video crossfades won't affect its volume.
+
+#### Image Clip
+
+```ts
+{
+  type: "image";
+  url: string;
+  position: number;
+  end: number;
+  kenBurns?: "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down";
+}
+```
+
+#### Text Clip
+
+```ts
+{
+  type: "text";
+  position: number;
+  end: number;
+
+  // Content
+  text?: string;
+  mode?: "static" | "word-replace" | "word-sequential";
+  words?: Array<{ text: string; start: number; end: number }>;
+  wordTimestamps?: number[];
+
+  // Styling
+  fontFile?: string;        // Custom font file path
+  fontFamily?: string;      // System font (default: 'Sans')
+  fontSize?: number;        // default: 48
+  fontColor?: string;       // default: '#FFFFFF'
+  borderColor?: string;
+  borderWidth?: number;
+  shadowColor?: string;
+  shadowX?: number;
+  shadowY?: number;
+
+  // Positioning
+  xPercent?: number;        // Horizontal position as % (0 = left, 0.5 = center, 1 = right)
+  yPercent?: number;        // Vertical position as % (0 = top, 0.5 = center, 1 = bottom)
+  x?: number;               // Absolute X position in pixels
+  y?: number;               // Absolute Y position in pixels
+
+  // Animation
+  animation?: {
+    type: "none" | "fade-in" | "fade-in-out" | "pop" | "pop-bounce";
+    in?: number;            // Intro duration (seconds)
+    out?: number;           // Outro duration (seconds)
+  };
+}
+```
+
+### Progress Information
+
+The `onProgress` callback receives:
+
+```ts
+{
+  percent?: number;         // 0-100
+  timeProcessed?: number;   // Seconds processed
+  frame?: number;           // Current frame
+  fps?: number;             // Processing speed
+  speed?: number;           // Multiplier (e.g., 2.0 = 2x realtime)
+}
+```
+
+### Error Handling
+
+The library exports custom error classes for better error handling:
+
+```ts
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+try {
+  await project.export({ outputPath: "./out.mp4" });
+} catch (error) {
+  if (error.name === "ValidationError") {
+    console.error("Invalid clips:", error.errors);
+  } else if (error.name === "FFmpegError") {
+    console.error("FFmpeg failed:", error.stderr);
+  } else if (error.name === "ExportCancelledError") {
+    console.log("Export was cancelled");
+  }
+}
+```
+
+### Cancellation
+
+Use an `AbortController` to cancel an export in progress:
+
+```ts
+const controller = new AbortController();
+
+// Cancel after 5 seconds
+setTimeout(() => controller.abort(), 5000);
+
+try {
+  await project.export({
+    outputPath: "./out.mp4",
+    signal: controller.signal,
+  });
+} catch (error) {
+  if (error.name === "ExportCancelledError") {
+    console.log("Cancelled");
+  }
+}
+```
+
+### Gap Handling
+
+By default, timeline gaps (periods with no video/image content) throw a validation error. Enable automatic black frame fill:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  fillGaps: "black", // Fill gaps with black frames
+});
+
+await project.load([
+  { type: "video", url: "./clip.mp4", position: 2, end: 5 }, // Gap from 0-2s filled with black
+]);
+```
+
+## Examples
+
+### Two Clips with Transition
+
+```ts
 await project.load([
   { type: "video", url: "./a.mp4", position: 0, end: 5 },
   {
@@ -115,318 +348,231 @@ await project.load([
     url: "./b.mp4",
     position: 5,
     end: 10,
-    transition: { type: "fade-in", duration: 0.4 },
+    transition: { type: "fade", duration: 0.5 },
   },
-  { type: "music", url: "./bgm.wav", volume: 0.18 },
 ]);
 ```
 
-- 📝 Static text (centered by default)
+### Word-by-Word Text Animation
 
-```js
+```ts
 await project.load([
-  { type: "video", url: "./clip.mp4", position: 0, end: 5 },
+  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
   {
     type: "text",
-    text: "Static Title",
-    position: 0.5,
-    end: 2.5,
+    mode: "word-replace",
+    text: "One Two Three Four",
+    position: 2,
+    end: 6,
+    wordTimestamps: [2, 3, 4, 5, 6],
+    animation: { type: "fade-in", in: 0.2 },
+    fontSize: 72,
     fontColor: "white",
   },
 ]);
 ```
 
-- 🔤 Word-by-word replacement with fade-in
-
-```js
-await project.load([
-  {
-    type: "text",
-    mode: "word-replace",
-    position: 2.0,
-    end: 4.0,
-    fontColor: "#00ffff",
-    centerX: 0,
-    centerY: -350,
-    animation: { type: "fade-in-out", in: 0.4, out: 0.4 },
-    words: [
-      { text: "One", start: 2.0, end: 2.5 },
-      { text: "Two", start: 2.5, end: 3.0 },
-      { text: "Three", start: 3.0, end: 3.5 },
-      { text: "Four", start: 3.5, end: 4.0 },
-    ],
-  },
-]);
-```
-
-- 🔠 Word-by-word (auto) with pop-bounce
-
-```js
-await project.load([
-  {
-    type: "text",
-    mode: "word-replace",
-    text: "Alpha Beta Gamma Delta",
-    position: 4.0,
-    end: 6.0,
-    fontSize: 64,
-    fontColor: "yellow",
-    centerX: 0,
-    centerY: -100,
-    animation: { type: "fade-in-out", in: 0.4, out: 0.4 },
-    wordTimestamps: [4.0, 4.5, 5.0, 5.5, 6.0],
-  },
-]);
-```
-
-- 🎧 Standalone audio overlay
-
-```js
-await project.load([
-  { type: "audio", url: "./vo.mp3", position: 0, end: 10, volume: 1 },
-]);
-```
-
-- 🖼️ Images with Ken Burns (zoom + pan)
-
-```js
-await project.load([
-  // Zoom-in image (2s)
-  {
-    type: "image",
-    url: "./img.png",
-    position: 10,
-    end: 12,
-    kenBurns: "zoom-in",
-  },
-  // Pan-right image (2s)
-  {
-    type: "image",
-    url: "./img.png",
-    position: 12,
-    end: 14,
-    kenBurns: "pan-right",
-  },
-]);
-```
-
-## 🧠 Behavior (in short)
-
-- Timeline uses clip `[position, end)`; transitions are overlaps that reduce total duration by their length
-- Background music is mixed after other audio, so transition acrossfades don’t attenuate it
-- Clip audio is timeline-aligned (absolute position) and mixed once; avoids early starts and gaps around transitions
-- Text animations are opt-in (none by default)
-- For big scripts, text rendering can be batched into multiple passes automatically
-- Visual gaps are not allowed: if there’s any gap with no video/image between clips (or at the very start), validation throws
-
-## 🔌 API (at a glance)
-
-- `new SIMPLEFFMPEG({ width?, height?, fps?, validationMode? })`
-- `await project.load([...clips])` — video/audio/text/music descriptors
-- `await project.export({ outputPath?, textMaxNodesPerPass? })`
-
-That’s it—keep it simple. See the examples above for common cases.
-
-## 🔬 API Details
-
-### Constructor
+### Image Slideshow with Ken Burns
 
 ```ts
-new SIMPLEFFMPEG(options?: {
-  fps?: number;           // default 30
-  width?: number;         // default 1920
-  height?: number;        // default 1080
-  validationMode?: 'warn' | 'strict'; // default 'warn'
+await project.load([
+  {
+    type: "image",
+    url: "./photo1.jpg",
+    position: 0,
+    end: 3,
+    kenBurns: "zoom-in",
+  },
+  {
+    type: "image",
+    url: "./photo2.jpg",
+    position: 3,
+    end: 6,
+    kenBurns: "pan-right",
+  },
+  {
+    type: "image",
+    url: "./photo3.jpg",
+    position: 6,
+    end: 9,
+    kenBurns: "zoom-out",
+  },
+  { type: "music", url: "./music.mp3", volume: 0.3 },
+]);
+```
+
+### Export with Progress Tracking
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  onProgress: ({ percent, fps, speed }) => {
+    process.stdout.write(`\rRendering: ${percent}% (${fps} fps, ${speed}x)`);
+  },
 });
 ```
 
-### project.load(clips)
-
-Loads and pre-validates clips. Accepts an array of clip descriptors (video, audio, background music, text). Returns a Promise that resolves when inputs are prepared (e.g., metadata read, rotation handled later at export).
+### High-Quality Export with Custom Settings
 
 ```ts
-await project.load(clips: Clip[]);
+await project.export({
+  outputPath: "./output.mp4",
+  videoCodec: "libx265",
+  crf: 18, // Higher quality
+  preset: "slow", // Better compression
+  audioCodec: "libopus",
+  audioBitrate: "256k",
+  metadata: {
+    title: "My Video",
+    artist: "My Name",
+    date: "2024",
+  },
+});
 ```
 
-#### Clip union
+### Hardware-Accelerated Export (macOS)
 
 ```ts
-type Clip = VideoClip | AudioClip | BackgroundMusicClip | ImageClip | TextClip;
+await project.export({
+  outputPath: "./output.mp4",
+  hwaccel: "videotoolbox",
+  videoCodec: "h264_videotoolbox",
+  crf: 23,
+});
 ```
 
-#### Video clip
+### Two-Pass Encoding for Target File Size
 
 ```ts
-interface VideoClip {
-  type: "video";
-  url: string; // input video file path/URL
-  position: number; // timeline start (seconds)
-  end: number; // timeline end (seconds)
-  cutFrom?: number; // source offset (seconds), default 0
-  volume?: number; // if the source has audio, default 1
-  transition?: {
-    // optional transition at the boundary before this clip
-    type: string; // e.g., 'fade', 'wipeleft', etc. (xfade transitions)
-    duration: number; // in seconds
-  };
-}
+await project.export({
+  outputPath: "./output.mp4",
+  twoPass: true,
+  videoBitrate: "5M", // Target bitrate
+  preset: "slow",
+});
 ```
 
-Notes:
-
-- All xfade transitions are supported you can see a list of them [here](https://trac.ffmpeg.org/wiki/Xfade)
-- Each transition reduces total output duration by its duration (overlap semantics).
-- Rotation metadata is handled automatically before export.
-
-#### Audio clip (standalone)
+### Scale Output Resolution
 
 ```ts
-interface AudioClip {
-  type: "audio";
-  url: string;
-  position: number; // timeline start
-  end: number; // timeline end
-  cutFrom?: number; // default 0
-  volume?: number; // default 1
-}
+// Use resolution preset
+await project.export({
+  outputPath: "./output-720p.mp4",
+  outputResolution: "720p",
+});
+
+// Or specify exact dimensions
+await project.export({
+  outputPath: "./output-custom.mp4",
+  outputWidth: 1280,
+  outputHeight: 720,
+});
 ```
 
-#### Background music clip
+### Audio-Only Export
 
 ```ts
-interface BackgroundMusicClip {
-  type: "music" | "backgroundAudio";
-  url: string;
-  position?: number; // default 0
-  end?: number; // default project duration (video timeline)
-  cutFrom?: number; // default 0
-  volume?: number; // default 0.2
-}
+await project.export({
+  outputPath: "./audio.mp3",
+  audioOnly: true,
+  audioCodec: "libmp3lame",
+  audioBitrate: "320k",
+});
 ```
 
-Notes:
-
-- Mixed after other audio and after acrossfades, so transition fades do not attenuate the background music.
-- If no videos exist, `end` defaults to the max provided among BGM clips.
-
-#### Text clip
+### Generate Thumbnail
 
 ```ts
-interface TextClip {
-  type: "text";
-  // Time window
-  position: number; // start on timeline
-  end: number; // end on timeline
-
-  // Content & modes
-  text?: string; // used for 'static' and as source when auto-splitting words
-  mode?: "static" | "word-replace" | "word-sequential";
-
-  // Word timing (choose one form)
-  words?: Array<{ text: string; start: number; end: number }>; // explicit per-word timing (absolute seconds)
-  wordTimestamps?: number[]; // timestamps to split `text` by whitespace; N or N+1 entries
-
-  // Font & styling
-  fontFile?: string; // overrides fontFamily
-  fontFamily?: string; // default 'Sans' (fontconfig)
-  fontSize?: number; // default 48
-  fontColor?: string; // default '#FFFFFF'
-
-  // Positioning (center by default)
-  centerX?: number; // pixel offset from center (x)
-  centerY?: number; // pixel offset from center (y)
-  x?: number; // absolute x (left)
-  y?: number; // absolute y (top)
-
-  // Animation (opt-in)
-  animation?: {
-    type: "none" | "fade-in" | "fade-in-out" | "pop" | "pop-bounce"; // default 'none'
-    in?: number; // seconds for intro phase (e.g., fade-in duration)
-  };
-}
+await project.export({
+  outputPath: "./output.mp4",
+  thumbnail: {
+    outputPath: "./thumbnail.jpg",
+    time: 5, // Capture at 5 seconds
+    width: 640,
+  },
+});
 ```
 
-Notes:
-
-- If both `words` and `wordTimestamps` are provided, `words` takes precedence.
-- For `wordTimestamps` with a single array: provide either per-word start times (end inferred by next start), or N+1 edge times; whitespace in `text` defines words.
-- Defaults to centered placement if no explicit `x/y` or `centerX/centerY` provided.
-
-#### Image clip
+### Debug Export Command
 
 ```ts
-interface ImageClip {
-  type: "image";
-  url: string;
-  position: number; // timeline start
-  end: number; // timeline end
-  kenBurns?:
-    | "zoom-in"
-    | "zoom-out"
-    | "pan-left"
-    | "pan-right"
-    | "pan-up"
-    | "pan-down";
-}
+await project.export({
+  outputPath: "./output.mp4",
+  verbose: true, // Log export options
+  saveCommand: "./ffmpeg-command.txt", // Save command to file
+});
 ```
 
-Notes:
+## Timeline Behavior
 
-- Images are treated as video streams. Ken Burns uses `zoompan` internally with the correct frame count.
-- For pan-only moves, a small base zoom is applied so there’s room to pan across.
+- Clip timing uses `[position, end)` intervals in seconds
+- Transitions create overlaps that reduce total duration
+- Background music is mixed after video transitions (unaffected by crossfades)
+- Text with many nodes is automatically batched across multiple FFmpeg passes
 
-### project.export(options)
+## Testing
 
-Builds and runs the FFmpeg command. Returns the final `outputPath`.
+### Automated Tests
 
-```ts
-await project.export(options?: {
-  outputPath?: string;          // default './output.mp4'
-  textMaxNodesPerPass?: number; // default 75 (batch size for multi-pass text)
-  intermediateVideoCodec?: string; // default 'libx264' (for text passes)
-  intermediateCrf?: number;     // default 18 (for text passes)
-  intermediatePreset?: string;  // default 'veryfast' (for text passes)
-}): Promise<string>;
+The library includes comprehensive unit and integration tests using Vitest:
+
+```bash
+# Run all tests
+npm test
+
+# Run unit tests only
+npm run test:unit
+
+# Run integration tests only
+npm run test:integration
+
+# Run with watch mode
+npm run test:watch
 ```
 
-Behavior:
+### Manual Verification
 
-- If text overlay count exceeds `textMaxNodesPerPass`, text is rendered in multiple passes using temporary files; audio is copied between passes; final output is fast-start.
-- Mapping: final video/audio streams are mapped based on what exists; if only audio or only video is present, mapping adapts accordingly.
+For visual verification of output quality, run the examples script which generates test media and demonstrates all major features:
 
-### Timeline semantics
+```bash
+node examples/run-examples.js
+```
 
-- Each clip contributes `[position, end)` to the timeline.
-- For transitions, the overlap reduces the final output duration by the transition duration.
-- Background music defaults to the visual timeline end (max `end` across video/image clips) and is mixed after other audio and acrossfades.
+This creates 12 example videos in `examples/output/` covering:
 
-### Animations
+- Basic video concatenation
+- Crossfade transitions
+- Text overlays with animations
+- Background music mixing
+- Ken Burns effects on images
+- Gap filling with black frames
+- Quality settings (CRF, preset)
+- Resolution scaling
+- Metadata embedding
+- Thumbnail generation
+- Complex multi-track compositions
 
-- `none` (default): plain text, no animation
-- `fade-in`: alpha 0 → 1 over `in` seconds (e.g., 0.25–0.4)
-- `fade-in-out`: alpha 0 → 1 over `in` seconds, then 1 → 0 over `out` seconds approaching the end
-- `pop`: font size scales from ~70% → 100% over `in` seconds
-- `pop-bounce`: scales ~70% → 110% during `in`, then settles to 100%
+View the outputs to confirm everything renders correctly:
 
-Tip: small `in` values (0.2–0.4s) feel snappy for word-by-word displays.
+```bash
+open examples/output/   # macOS
+xdg-open examples/output/   # Linux
+```
 
-## 🤝 Contributing
+## Contributing
 
-- PRs and issues welcome
-- Actively being worked on; I’ll review new contributions and iterate
+Contributions are welcome. Please open an issue to discuss significant changes before submitting a pull request.
 
-## 🗺️ Roadmap
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-feature`)
+3. Write tests for new functionality
+4. Ensure all tests pass (`npm test`)
+5. Submit a pull request
 
-- Visual gap handling (opt-in fillers): optional `fillVisualGaps: 'none' | 'black'` if requested
-- Additional text effects (typewriter, word-by-word fade-out variants, outlines/shadows presets)
-- Image effects presets (Ken Burns paths presets, ease functions)
-- Ken Burns upgrades: strength parameter, custom positioning, additional ease curves
-- Optional audio transition coupling: tie clip audio fades to xfade boundaries
-- Export options for different containers/codecs (HEVC, VP9/AV1, audio-only)
-- Better error reporting with command dump helpers
-- CLI wrapper for quick local use
-- Performance: smarter batching and parallel intermediate renders
+## Credits
 
-## 📜 License
+Inspired by [ezffmpeg](https://github.com/ezffmpeg/ezffmpeg) by John Chen.
+
+## License
 
 MIT

@@ -1,6 +1,17 @@
 {
   "name": "simple-ffmpegjs",
-  "version": "0.1.1",
+  "version": "0.2.0",
+  "description": "Lightweight Node.js library for programmatic video composition using FFmpeg. Concatenate clips, add transitions, mix audio, overlay text, and more.",
+  "author": "Brayden Blackwell <braydenblackwell21@gmail.com> (https://github.com/Fats403)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fats403/simple-ffmpeg.git"
+  },
+  "homepage": "https://github.com/Fats403/simple-ffmpeg#readme",
+  "bugs": {
+    "url": "https://github.com/Fats403/simple-ffmpeg/issues"
+  },
   "main": "index.cjs",
   "module": "index.mjs",
   "types": "types/index.d.ts",
@@ -18,35 +29,51 @@
     "src",
     "types",
     "index.cjs",
-    "index.mjs"
+    "index.mjs",
+    "assets"
   ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=16"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration"
+  },
   "keywords": [
     "ffmpeg",
     "video",
     "video-editing",
     "video-processing",
-    "drawtext",
+    "video-composition",
+    "video-generation",
+    "audio",
+    "audio-mixing",
+    "transitions",
+    "crossfade",
     "xfade",
-    "acrossfade",
-    "amix",
-    "overlay",
-    "animation",
-    "nodejs",
-    "text"
+    "text-overlay",
+    "drawtext",
+    "subtitles",
+    "ken-burns",
+    "slideshow",
+    "concat",
+    "merge",
+    "splice",
+    "trim",
+    "thumbnail",
+    "encoder",
+    "media",
+    "multimedia",
+    "automation",
+    "pipeline",
+    "cli",
+    "node",
+    "nodejs"
   ],
-  "author": "Brayden Blackwell <braydenblackwell21@gmail.com> (https://github.com/Fats403)",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Fats403/simple-ffmpeg.git"
-  },
-  "bugs": {
-    "url": "https://github.com/Fats403/simple-ffmpeg/issues",
-    "email": "braydenblackwell21@gmail.com"
-  },
-  "homepage": "https://github.com/Fats403/simple-ffmpeg#readme",
-  "description": "Simple Node.js helper around ffmpeg for video composition, transitions, audio mixing, and text rendering.",
-  "engines": {
-    "node": ">=16"
+  "devDependencies": {
+    "vitest": "^3.0.0"
   }
 }

@@ -1,6 +1,8 @@
 const fs = require("fs");
+const { ValidationError } = require("./errors");
 
-function validateClips(clips, validationMode = "warn") {
+function validateClips(clips, validationMode = "warn", options = {}) {
+  const { fillGaps = "none" } = options;
   const allowedTypes = new Set([
     "video",
     "audio",
@@ -144,41 +146,43 @@ function validateClips(clips, validationMode = "warn") {
     }
   });
 
-  // Visual timeline gap checks (video/image)
-  const visual = clips
-    .map((c, i) => ({ c, i }))
-    .filter(({ c }) => c.type === "video" || c.type === "image")
-    .sort((a, b) => (a.c.position || 0) - (b.c.position || 0));
+  // Visual timeline gap checks (video/image) - skip if fillGaps is enabled
+  if (fillGaps === "none") {
+    const visual = clips
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.type === "video" || c.type === "image")
+      .sort((a, b) => (a.c.position || 0) - (b.c.position || 0));
 
-  if (visual.length > 0) {
-    const eps = 1e-3;
-    // Leading gap
-    if ((visual[0].c.position || 0) > eps) {
-      const start = 0;
-      const end = visual[0].c.position;
-      const msg = `visual gap [${start.toFixed(3)}, ${end.toFixed(
-        3
-      )}) — no video/image content at start`;
-      errors.push(msg);
-    }
-    // Middle gaps
-    for (let i = 1; i < visual.length; i++) {
-      const prev = visual[i - 1].c;
-      const cur = visual[i].c;
-      if ((cur.position || 0) - (prev.end || 0) > eps) {
-        const start = prev.end || 0;
-        const end = cur.position || 0;
+    if (visual.length > 0) {
+      const eps = 1e-3;
+      // Leading gap
+      if ((visual[0].c.position || 0) > eps) {
+        const start = 0;
+        const end = visual[0].c.position;
         const msg = `visual gap [${start.toFixed(3)}, ${end.toFixed(
           3
-        )}) — no video/image content between clips`;
+        )}) — no video/image content at start`;
         errors.push(msg);
+      }
+      // Middle gaps
+      for (let i = 1; i < visual.length; i++) {
+        const prev = visual[i - 1].c;
+        const cur = visual[i].c;
+        if ((cur.position || 0) - (prev.end || 0) > eps) {
+          const start = prev.end || 0;
+          const end = cur.position || 0;
+          const msg = `visual gap [${start.toFixed(3)}, ${end.toFixed(
+            3
+          )}) — no video/image content between clips`;
+          errors.push(msg);
+        }
       }
     }
   }
 
   if (errors.length > 0) {
     const msg = `Validation failed:\n - ` + errors.join(`\n - `);
-    throw new Error(msg);
+    throw new ValidationError(msg, { errors, warnings });
   }
   if (validationMode === "warn" && warnings.length > 0) {
     warnings.forEach((w) => console.warn(w));
