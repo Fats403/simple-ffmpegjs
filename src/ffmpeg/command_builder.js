@@ -75,6 +75,11 @@ function buildMainCommand({
   if (hasVideo && !audioOnly) {
     cmd += `-c:v ${videoCodec} `;
 
+    // Cross-browser compatibility flags for libx264 (Firefox, Safari, older devices)
+    if (videoCodec === "libx264") {
+      cmd += `-profile:v main -pix_fmt yuv420p `;
+    }
+
     // Preset (for software encoders)
     if (
       videoPreset &&
@@ -174,14 +179,25 @@ function buildTextBatchCommand({
   intermediateCrf,
   outputPath,
 }) {
-  return `ffmpeg -y -i "${escapeFilePath(inputPath)}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} -preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(outputPath)}"`;
+  // Add compatibility flags for libx264
+  const compatFlags =
+    intermediateVideoCodec === "libx264"
+      ? "-profile:v main -pix_fmt yuv420p "
+      : "";
+  return `ffmpeg -y -i "${escapeFilePath(
+    inputPath
+  )}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} ${compatFlags}-preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(
+    outputPath
+  )}"`;
 }
 
 /**
  * Build command to generate a thumbnail
  */
 function buildThumbnailCommand({ inputPath, outputPath, time, width, height }) {
-  let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(inputPath)}" -vframes 1 `;
+  let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(
+    inputPath
+  )}" -vframes 1 `;
 
   if (width || height) {
     const w = width || -1;

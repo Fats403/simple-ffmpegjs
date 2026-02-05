@@ -1,6 +1,6 @@
 {
   "name": "simple-ffmpegjs",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Lightweight Node.js library for programmatic video composition using FFmpeg. Concatenate clips, add transitions, mix audio, overlay text, and more.",
   "author": "Brayden Blackwell <braydenblackwell21@gmail.com> (https://github.com/Fats403)",
   "license": "MIT",

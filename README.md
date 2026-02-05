@@ -48,8 +48,8 @@ The library handles FFmpeg's complexity internally while exposing a clean interf
 ## Example Output
 
 <p align="center">
-  <a href="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/wonders-showcase.mp4">
-    <img src="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/wonders-thumbnail.jpg" alt="Example video - click to watch" width="640">
+  <a href="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/wonders-showcase-1.mp4">
+    <img src="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/simple-ffmpeg/wonders-thumbnail-1.jpg" alt="Example video - click to watch" width="640">
   </a>
 </p>
 

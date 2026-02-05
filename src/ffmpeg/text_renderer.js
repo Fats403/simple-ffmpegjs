@@ -88,11 +88,22 @@ function buildFontsizeParam(baseClip, start, end) {
   if (type === "pop-bounce") {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
-    return `:fontsize=if(lt(t\\,${start + entry})\\,${(baseSize * 0.7).toFixed(
-      3
-    )}+${(baseSize * 0.4).toFixed(
-      3
-    )}*sin(PI/2*(t-${start})/${entry})\\,${baseSize})`;
+    // Two-phase bounce: grow with overshoot, then settle smoothly
+    const growEnd = start + entry * 0.6;
+    const minSize = (baseSize * 0.7).toFixed(3);
+    const overshoot = (baseSize * 1.1).toFixed(3);
+    const growAmount = (baseSize * 0.4).toFixed(3);
+    const settleAmount = (baseSize * 0.1).toFixed(3);
+    const phase1Duration = (entry * 0.6).toFixed(4);
+    const phase2Duration = (entry * 0.4).toFixed(4);
+    // Phase 1: 0.7 -> 1.1 (ease-out), Phase 2: 1.1 -> 1.0 (ease-in-out)
+    return `:fontsize=if(lt(t\\,${growEnd.toFixed(
+      4
+    )})\\,${minSize}+${growAmount}*sin(PI/2*(t-${start})/${phase1Duration})\\,if(lt(t\\,${
+      start + entry
+    })\\,${overshoot}-${settleAmount}*sin(PI/2*(t-${growEnd.toFixed(
+      4
+    )})/${phase2Duration})\\,${baseSize}))`;
   }
 
   if (type === "scale-in") {
