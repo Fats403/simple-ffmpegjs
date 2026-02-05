@@ -1,12 +1,24 @@
+const fs = require("fs");
+const path = require("path");
 const { getVideoMetadata, getMediaDuration } = require("./core/media_info");
+const { ValidationError, MediaNotFoundError } = require("./core/errors");
 const C = require("./core/constants");
 
 async function loadVideo(project, clipObj) {
   const metadata = await getVideoMetadata(clipObj.url);
   if (typeof clipObj.cutFrom === "number" && metadata.durationSec != null) {
     if (clipObj.cutFrom >= metadata.durationSec) {
-      throw new Error(
-        `Video clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${metadata.durationSec}s)`
+      throw new ValidationError(
+        `Video clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${metadata.durationSec}s)`,
+        {
+          errors: [
+            {
+              code: "INVALID_RANGE",
+              path: "cutFrom",
+              message: `cutFrom exceeds source duration`,
+            },
+          ],
+        }
       );
     }
   }
@@ -40,8 +52,17 @@ async function loadAudio(project, clipObj) {
   const durationSec = await getMediaDuration(clipObj.url);
   if (typeof clipObj.cutFrom === "number" && durationSec != null) {
     if (clipObj.cutFrom >= durationSec) {
-      throw new Error(
-        `Audio clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${durationSec}s)`
+      throw new ValidationError(
+        `Audio clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${durationSec}s)`,
+        {
+          errors: [
+            {
+              code: "INVALID_RANGE",
+              path: "cutFrom",
+              message: `cutFrom exceeds source duration`,
+            },
+          ],
+        }
       );
     }
   }
@@ -84,8 +105,17 @@ async function loadBackgroundAudio(project, clipObj) {
   };
   if (typeof clip.cutFrom === "number" && durationSec != null) {
     if (clip.cutFrom >= durationSec) {
-      throw new Error(
-        `Background audio cutFrom (${clip.cutFrom}s) must be < source duration (${durationSec}s)`
+      throw new ValidationError(
+        `Background audio cutFrom (${clip.cutFrom}s) must be < source duration (${durationSec}s)`,
+        {
+          errors: [
+            {
+              code: "INVALID_RANGE",
+              path: "cutFrom",
+              message: `cutFrom exceeds source duration`,
+            },
+          ],
+        }
       );
     }
   }
@@ -124,7 +154,50 @@ function loadText(project, clipObj) {
   if (typeof clipObj.yPercent === "number") clip.yPercent = clipObj.yPercent;
   else if (typeof clipObj.y === "number") clip.y = clipObj.y;
   else clip.yPercent = 0.5; // Default to centered
-  project.textClips.push(clip);
+
+  // Karaoke mode uses ASS subtitles, so store separately
+  if (clip.mode === "karaoke") {
+    clip.highlightColor = clip.highlightColor || C.DEFAULT_KARAOKE_HIGHLIGHT;
+    project.subtitleClips.push(clip);
+  } else {
+    project.textClips.push(clip);
+  }
+}
+
+function loadSubtitle(project, clipObj) {
+  // Validate file exists
+  if (!fs.existsSync(clipObj.url)) {
+    throw new MediaNotFoundError(`Subtitle file not found: ${clipObj.url}`, {
+      path: clipObj.url,
+    });
+  }
+
+  // Validate format
+  const ext = path.extname(clipObj.url).toLowerCase();
+  if (![".srt", ".ass", ".ssa", ".vtt"].includes(ext)) {
+    throw new ValidationError(
+      `Unsupported subtitle format '${ext}'. Supported: .srt, .ass, .ssa, .vtt`,
+      {
+        errors: [
+          {
+            code: "INVALID_FORMAT",
+            path: "url",
+            message: `Unsupported subtitle format '${ext}'`,
+          },
+        ],
+      }
+    );
+  }
+
+  const clip = {
+    ...clipObj,
+    fontFamily: clipObj.fontFamily || C.DEFAULT_FONT_FAMILY,
+    fontSize: clipObj.fontSize || C.DEFAULT_FONT_SIZE,
+    fontColor: clipObj.fontColor || C.DEFAULT_FONT_COLOR,
+    position: clipObj.position || 0,
+  };
+
+  project.subtitleClips.push(clip);
 }
 
 module.exports = {
@@ -133,4 +206,5 @@ module.exports = {
   loadImage,
   loadBackgroundAudio,
   loadText,
+  loadSubtitle,
 };

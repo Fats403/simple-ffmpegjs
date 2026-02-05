@@ -383,5 +383,261 @@ describe("TextRenderer", () => {
       expect(windows[1].start).toBe(2);
       expect(windows[1].end).toBe(4);
     });
+
+    it("should expand typewriter to character windows", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Hi",
+          mode: "static",
+          position: 0,
+          end: 2,
+          animation: { type: "typewriter", speed: 0.5 },
+        },
+      ];
+
+      const windows = TextRenderer.expandTextWindows(textClips);
+
+      expect(windows).toHaveLength(2);
+      expect(windows[0].text).toBe("H");
+      expect(windows[1].text).toBe("Hi");
+    });
+  });
+
+  describe("new animations", () => {
+    const canvasWidth = 1920;
+    const canvasHeight = 1080;
+    const initialVideoLabel = "[outv]";
+
+    it("should handle fade-out animation", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Fade Out",
+          position: 1,
+          end: 3,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+          animation: { type: "fade-out", out: 0.5 },
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // fade-out should have alpha expression that fades at the end
+      expect(result.filterString).toContain(":alpha=");
+      expect(result.filterString).toContain("2.5"); // fadeOutStart = 3 - 0.5 = 2.5
+    });
+
+    it("should handle scale-in animation", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Scale In",
+          position: 1,
+          end: 3,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+          animation: { type: "scale-in", in: 0.3, intensity: 0.5 },
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // scale-in should have fontsize expression and alpha fade
+      expect(result.filterString).toContain("fontsize=if(");
+      expect(result.filterString).toContain(":alpha=");
+    });
+
+    it("should handle pulse animation", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Pulse",
+          position: 1,
+          end: 5,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+          animation: { type: "pulse", speed: 2, intensity: 0.2 },
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // pulse should have oscillating fontsize
+      expect(result.filterString).toContain("fontsize=48+");
+      expect(result.filterString).toContain("sin(");
+    });
+
+    it("should handle typewriter animation", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+          animation: { type: "typewriter", speed: 0.1 },
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // typewriter should generate multiple drawtext calls for progressive reveal
+      expect(result.filterString).toContain("text='H'");
+      expect(result.filterString).toContain("text='He'");
+      expect(result.filterString).toContain("text='Hel'");
+      expect(result.filterString).toContain("text='Hell'");
+      expect(result.filterString).toContain("text='Hello'");
+    });
+
+    it("should apply yOffset to center-positioned text", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Offset Test",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          // Default center + 100px offset
+          yOffset: 100,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // Should have center calculation + offset
+      expect(result.filterString).toContain(
+        `y=(${canvasHeight} - text_h)/2+100`
+      );
+    });
+
+    it("should apply xOffset to center-positioned text", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Offset Test",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          // Default center - 50px offset
+          xOffset: -50,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // Should have center calculation + negative offset
+      expect(result.filterString).toContain(
+        `x=(${canvasWidth} - text_w)/2+-50`
+      );
+    });
+
+    it("should apply offset to pixel-positioned text", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Pixel Offset",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          y: 200,
+          yOffset: 50,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // Should have pixel position + offset
+      expect(result.filterString).toContain("y=200+50");
+    });
+
+    it("should apply offset to percent-positioned text", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Percent Offset",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          yPercent: 0.25,
+          yOffset: -30,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // yPercent 0.25 on 1080 height = 270, minus text_h/2, plus offset
+      expect(result.filterString).toContain("y=270-text_h/2+-30");
+    });
   });
 });

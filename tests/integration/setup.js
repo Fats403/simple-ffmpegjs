@@ -25,7 +25,12 @@ beforeAll(() => {
 
   // Generate fixtures if FFmpeg is available
   if (ffmpegAvailable) {
-    const requiredFixtures = ["test-video-1s.mp4", "test-video-2s.mp4"];
+    const requiredFixtures = [
+      "test-video-1s.mp4",
+      "test-video-2s.mp4",
+      "test-video-3s.mp4",
+      "test-watermark.png",
+    ];
     const missingFixtures = requiredFixtures.filter(
       (f) => !fs.existsSync(path.join(FIXTURES_DIR, f))
     );

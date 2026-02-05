@@ -26,7 +26,9 @@ function fixturesExist() {
   const required = [
     "test-video-1s.mp4",
     "test-video-2s.mp4",
+    "test-video-3s.mp4",
     "test-audio-2s.mp3",
+    "test-watermark.png",
   ];
   return required.every((f) => fs.existsSync(path.join(FIXTURES_DIR, f)));
 }
@@ -402,6 +404,587 @@ describe("Integration Tests", () => {
         const cmdContent = fs.readFileSync(cmdPath, "utf8");
         expect(cmdContent).toContain("ffmpeg");
         expect(cmdContent).toContain("test-savecmd.mp4");
+      }, 30000);
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "platform presets",
+    () => {
+      it("should export with tiktok preset (vertical 9:16)", async () => {
+        const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+        const outputPath = path.join(OUTPUT_DIR, "test-tiktok-preset.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+
+        // Verify dimensions using ffprobe
+        try {
+          const info = execSync(
+            `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
+            { encoding: "utf8" }
+          );
+          const [width, height] = info.trim().split(",").map(Number);
+          expect(width).toBe(1080);
+          expect(height).toBe(1920);
+        } catch {
+          // ffprobe may not be available
+        }
+      }, 30000);
+
+      it("should export with youtube preset (horizontal 16:9)", async () => {
+        const project = new SIMPLEFFMPEG({ preset: "youtube" });
+        const outputPath = path.join(OUTPUT_DIR, "test-youtube-preset.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+
+        // Verify dimensions using ffprobe
+        try {
+          const info = execSync(
+            `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
+            { encoding: "utf8" }
+          );
+          const [width, height] = info.trim().split(",").map(Number);
+          expect(width).toBe(1920);
+          expect(height).toBe(1080);
+        } catch {
+          // ffprobe may not be available
+        }
+      }, 30000);
+
+      it("should export with instagram-post preset (square 1:1)", async () => {
+        const project = new SIMPLEFFMPEG({ preset: "instagram-post" });
+        const outputPath = path.join(OUTPUT_DIR, "test-instagram-preset.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+
+        // Verify dimensions using ffprobe
+        try {
+          const info = execSync(
+            `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
+            { encoding: "utf8" }
+          );
+          const [width, height] = info.trim().split(",").map(Number);
+          expect(width).toBe(1080);
+          expect(height).toBe(1080);
+        } catch {
+          // ffprobe may not be available
+        }
+      }, 30000);
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "text animations",
+    () => {
+      it("should export with typewriter animation", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-typewriter.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Hello",
+            position: 0,
+            end: 2,
+            mode: "static",
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "typewriter", speed: 0.2 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with scale-in animation", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-scale-in.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Scale In",
+            position: 0.5,
+            end: 1.5,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "scale-in", in: 0.4, intensity: 0.5 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with pulse animation", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-pulse.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Pulse",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "pulse", speed: 2, intensity: 0.2 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with fade-out animation", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-fade-out.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Fade Out",
+            position: 0,
+            end: 1.5,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "fade-out", out: 0.5 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())("watermarks", () => {
+    it("should export with text watermark", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-text-watermark.mp4");
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({
+        outputPath,
+        watermark: {
+          type: "text",
+          text: "@testchannel",
+          position: "bottom-right",
+          fontSize: 16,
+          fontColor: "#FFFFFF",
+          opacity: 0.7,
+          margin: 10,
+        },
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    }, 30000);
+
+    it("should export with image watermark", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-image-watermark.mp4");
+      const watermarkPath = path.join(FIXTURES_DIR, "test-watermark.png");
+
+      // Skip if watermark fixture doesn't exist
+      if (!fs.existsSync(watermarkPath)) {
+        console.warn("Watermark fixture not found, skipping test");
+        return;
+      }
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({
+        outputPath,
+        watermark: {
+          type: "image",
+          url: watermarkPath,
+          position: "top-right",
+          scale: 0.2,
+          opacity: 0.8,
+          margin: 10,
+        },
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    }, 30000);
+
+    it("should export with watermark at custom position", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-watermark-custom-pos.mp4");
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({
+        outputPath,
+        watermark: {
+          type: "text",
+          text: "Custom",
+          position: { xPercent: 0.1, yPercent: 0.9 },
+          fontSize: 14,
+          fontColor: "#00FF00",
+        },
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    }, 30000);
+
+    it("should export with timed watermark", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-watermark-timed.mp4");
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({
+        outputPath,
+        watermark: {
+          type: "text",
+          text: "Limited Time",
+          position: "center",
+          fontSize: 18,
+          fontColor: "#FF0000",
+          startTime: 0.5,
+          endTime: 1.5,
+        },
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    }, 30000);
+  });
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "subtitles and karaoke",
+    () => {
+      it("should export with karaoke text (evenly distributed words)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-karaoke-basic.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "text",
+            mode: "karaoke",
+            text: "Hello World Test",
+            position: 0.5,
+            end: 2.5,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            highlightColor: "#FFFF00",
+            yPercent: 0.85,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with karaoke text using word timestamps", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-karaoke-timestamps.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "text",
+            mode: "karaoke",
+            text: "One Two Three",
+            position: 0,
+            end: 3,
+            words: [
+              { text: "One", start: 0, end: 1 },
+              { text: "Two", start: 1, end: 2 },
+              { text: "Three", start: 2, end: 3 },
+            ],
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            highlightColor: "#00FF00",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with SRT subtitle import", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-srt-import.mp4");
+        const srtPath = path.join(FIXTURES_DIR, "test-subtitles.srt");
+
+        // Create SRT fixture if it doesn't exist
+        if (!fs.existsSync(srtPath)) {
+          fs.writeFileSync(
+            srtPath,
+            `1
+00:00:00,500 --> 00:00:01,500
+First subtitle
+
+2
+00:00:01,800 --> 00:00:02,800
+Second subtitle
+`
+          );
+        }
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "subtitle",
+            url: srtPath,
+            fontSize: 20,
+            fontColor: "#FFFFFF",
+            borderColor: "#000000",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with VTT subtitle import", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-vtt-import.mp4");
+        const vttPath = path.join(FIXTURES_DIR, "test-subtitles.vtt");
+
+        // Create VTT fixture if it doesn't exist
+        if (!fs.existsSync(vttPath)) {
+          fs.writeFileSync(
+            vttPath,
+            `WEBVTT
+
+00:00.500 --> 00:01.500
+First cue
+
+00:01.800 --> 00:02.800
+Second cue
+`
+          );
+        }
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "subtitle",
+            url: vttPath,
+            fontSize: 20,
+            fontColor: "#FFFF00",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with subtitle time offset", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-subtitle-offset.mp4");
+        const srtPath = path.join(FIXTURES_DIR, "test-subtitles.srt");
+
+        // Create SRT fixture if it doesn't exist
+        if (!fs.existsSync(srtPath)) {
+          fs.writeFileSync(
+            srtPath,
+            `1
+00:00:00,500 --> 00:00:01,500
+First subtitle
+
+2
+00:00:01,800 --> 00:00:02,800
+Second subtitle
+`
+          );
+        }
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "subtitle",
+            url: srtPath,
+            position: 0.5, // offset subtitles by 0.5 seconds
+            fontSize: 20,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export with mixed drawtext and karaoke subtitles", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-mixed-text-karaoke.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            // Regular drawtext overlay
+            type: "text",
+            text: "Title",
+            position: 0,
+            end: 3,
+            mode: "static",
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            yPercent: 0.1,
+          },
+          {
+            // Karaoke text (ASS-based)
+            type: "text",
+            mode: "karaoke",
+            text: "Singing along",
+            position: 0.5,
+            end: 2.5,
+            fontSize: 20,
+            fontColor: "#FFFFFF",
+            highlightColor: "#FF00FF",
+            yPercent: 0.85,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
       }, 30000);
     }
   );

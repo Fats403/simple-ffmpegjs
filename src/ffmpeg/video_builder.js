@@ -111,7 +111,9 @@ function buildVideoFilter(project, videoClips) {
         }
       }
 
-      filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,scale=${width}:-2,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
+      // Scale to cover target dimensions (upscaling if needed), then center crop
+      // force_original_aspect_ratio=increase ensures image covers the target area
+      filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
     } else {
       filterComplex += `[${inputIndex}:v]trim=start=${
         clip.cutFrom || 0

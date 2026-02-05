@@ -1,14 +1,50 @@
 const path = require("path");
-const { exec } = require("child_process");
+const { spawn } = require("child_process");
 const { buildFiltersForWindows } = require("./text_renderer");
 const { buildTextBatchCommand } = require("./command_builder");
+const { FFmpegError } = require("../core/errors");
+const { parseFFmpegCommand } = require("../lib/utils");
 
+/**
+ * Run an FFmpeg command using spawn() to avoid command injection.
+ * @param {string} cmd - The full FFmpeg command string
+ * @returns {Promise<void>}
+ * @throws {FFmpegError} If ffmpeg fails
+ */
 function runCmd(cmd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, (err, so, se) => {
-      if (err) {
-        console.error("FFmpeg text batch stderr:", se);
-        reject(err);
+    const args = parseFFmpegCommand(cmd);
+    const ffmpegPath = args.shift(); // Remove 'ffmpeg' from args
+
+    const proc = spawn(ffmpegPath, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+
+    let stderr = "";
+
+    proc.stderr.on("data", (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on("error", (error) => {
+      reject(
+        new FFmpegError(`FFmpeg text batch process error: ${error.message}`, {
+          stderr,
+          command: cmd,
+        })
+      );
+    });
+
+    proc.on("close", (code) => {
+      if (code !== 0) {
+        console.error("FFmpeg text batch stderr:", stderr);
+        reject(
+          new FFmpegError(`FFmpeg text batch exited with code ${code}`, {
+            stderr,
+            command: cmd,
+            exitCode: code,
+          })
+        );
         return;
       }
       resolve();

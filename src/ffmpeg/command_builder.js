@@ -1,3 +1,14 @@
+const os = require("os");
+const { escapeFilePath } = require("./strings");
+
+/**
+ * Get the null device path for the current platform
+ * @returns {string} '/dev/null' on Unix, 'NUL' on Windows
+ */
+function getNullDevice() {
+  return os.platform() === "win32" ? "NUL" : "/dev/null";
+}
+
 /**
  * Build the main FFmpeg export command
  */
@@ -77,7 +88,7 @@ function buildMainCommand({
     if (twoPass && passNumber) {
       cmd += `-pass ${passNumber} `;
       if (passLogFile) {
-        cmd += `-passlogfile "${passLogFile}" `;
+        cmd += `-passlogfile "${escapeFilePath(passLogFile)}" `;
       }
     }
 
@@ -112,7 +123,7 @@ function buildMainCommand({
 
   // For two-pass first pass, output to null
   if (twoPass && passNumber === 1) {
-    cmd += "-f null /dev/null";
+    cmd += `-f null ${getNullDevice()}`;
     return cmd;
   }
 
@@ -148,7 +159,7 @@ function buildMainCommand({
     }
   }
 
-  cmd += `"${outputPath}"`;
+  cmd += `"${escapeFilePath(outputPath)}"`;
   return cmd;
 }
 
@@ -163,14 +174,14 @@ function buildTextBatchCommand({
   intermediateCrf,
   outputPath,
 }) {
-  return `ffmpeg -y -i "${inputPath}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} -preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${outputPath}"`;
+  return `ffmpeg -y -i "${escapeFilePath(inputPath)}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} -preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(outputPath)}"`;
 }
 
 /**
  * Build command to generate a thumbnail
  */
 function buildThumbnailCommand({ inputPath, outputPath, time, width, height }) {
-  let cmd = `ffmpeg -y -ss ${time} -i "${inputPath}" -vframes 1 `;
+  let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(inputPath)}" -vframes 1 `;
 
   if (width || height) {
     const w = width || -1;
@@ -178,7 +189,7 @@ function buildThumbnailCommand({ inputPath, outputPath, time, width, height }) {
     cmd += `-vf "scale=${w}:${h}" `;
   }
 
-  cmd += `"${outputPath}"`;
+  cmd += `"${escapeFilePath(outputPath)}"`;
   return cmd;
 }
 

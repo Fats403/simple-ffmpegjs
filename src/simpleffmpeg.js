@@ -1,4 +1,5 @@
 const fs = require("fs");
+const fsPromises = require("fs").promises;
 const path = require("path");
 const TextRenderer = require("./ffmpeg/text_renderer");
 const { unrotateVideo } = require("./core/rotation");
@@ -6,8 +7,23 @@ const Loaders = require("./loaders");
 const { buildVideoFilter } = require("./ffmpeg/video_builder");
 const { buildAudioForVideoClips } = require("./ffmpeg/audio_builder");
 const { buildBackgroundMusicMix } = require("./ffmpeg/bgm_builder");
-const { getClipAudioString } = require("./ffmpeg/strings");
-const { validateClips } = require("./core/validation");
+const {
+  getClipAudioString,
+  hasProblematicChars,
+  escapeFilePath,
+} = require("./ffmpeg/strings");
+const {
+  validateConfig,
+  formatValidationResult,
+  ValidationCodes,
+} = require("./core/validation");
+const {
+  SimpleffmpegError,
+  ValidationError,
+  FFmpegError,
+  MediaNotFoundError,
+  ExportCancelledError,
+} = require("./core/errors");
 const C = require("./core/constants");
 const {
   buildMainCommand,
@@ -15,78 +31,245 @@ const {
 } = require("./ffmpeg/command_builder");
 const { runTextPasses } = require("./ffmpeg/text_passes");
 const { formatBytes, runFFmpeg } = require("./lib/utils");
+const {
+  buildWatermarkFilter,
+  validateWatermarkConfig,
+} = require("./ffmpeg/watermark_builder");
+const {
+  buildKaraokeASS,
+  loadSubtitleFile,
+  buildASSFilter,
+} = require("./ffmpeg/subtitle_builder");
 
 class SIMPLEFFMPEG {
+  /**
+   * Create a new SIMPLEFFMPEG project
+   *
+   * @param {Object} options - Project configuration options
+   * @param {number} options.width - Output width in pixels (default: 1920)
+   * @param {number} options.height - Output height in pixels (default: 1080)
+   * @param {number} options.fps - Frames per second (default: 30)
+   * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
+   * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
+   * @param {string} options.fillGaps - Gap handling: 'none' or 'black' (default: 'none')
+   *
+   * @example
+   * const project = new SIMPLEFFMPEG({ preset: 'tiktok' });
+   *
+   * @example
+   * const project = new SIMPLEFFMPEG({
+   *   width: 1920,
+   *   height: 1080,
+   *   fps: 30,
+   *   fillGaps: 'black'
+   * });
+   */
   constructor(options = {}) {
+    // Apply platform preset if specified
+    let presetConfig = {};
+    if (options.preset && C.PLATFORM_PRESETS[options.preset]) {
+      presetConfig = C.PLATFORM_PRESETS[options.preset];
+    } else if (options.preset) {
+      console.warn(
+        `Unknown platform preset '${
+          options.preset
+        }'. Valid presets: ${Object.keys(C.PLATFORM_PRESETS).join(", ")}`
+      );
+    }
+
+    // Explicit options override preset values
     this.options = {
-      fps: options.fps || C.DEFAULT_FPS,
-      width: options.width || C.DEFAULT_WIDTH,
-      height: options.height || C.DEFAULT_HEIGHT,
+      fps: options.fps || presetConfig.fps || C.DEFAULT_FPS,
+      width: options.width || presetConfig.width || C.DEFAULT_WIDTH,
+      height: options.height || presetConfig.height || C.DEFAULT_HEIGHT,
       validationMode: options.validationMode || C.DEFAULT_VALIDATION_MODE,
       fillGaps: options.fillGaps || "none", // 'none' | 'black'
+      preset: options.preset || null,
     };
     this.videoOrAudioClips = [];
     this.textClips = [];
+    this.subtitleClips = [];
     this.filesToClean = [];
+    this._isLoading = false; // Guard against concurrent load() calls
+    this._isExporting = false; // Guard against concurrent export() calls
   }
 
+  /**
+   * Build FFmpeg input stream arguments for all loaded clips
+   * @private
+   * @returns {string} FFmpeg input arguments string
+   */
   _getInputStreams() {
     return this.videoOrAudioClips
       .map((clip) => {
+        const escapedUrl = escapeFilePath(clip.url);
         if (clip.type === "image") {
           const duration = Math.max(0, clip.end - clip.position || 0);
-          return `-loop 1 -t ${duration} -i "${clip.url}"`;
+          return `-loop 1 -t ${duration} -i "${escapedUrl}"`;
         }
-        return `-i "${clip.url}"`;
+        // Loop background music if specified
+        if (
+          (clip.type === "music" || clip.type === "backgroundAudio") &&
+          clip.loop
+        ) {
+          return `-stream_loop -1 -i "${escapedUrl}"`;
+        }
+        return `-i "${escapedUrl}"`;
       })
       .join(" ");
   }
 
-  _cleanup() {
-    this.filesToClean.forEach((file) => {
-      fs.unlink(file, (error) => {
-        if (error) {
-          console.error("Error cleaning up file:", error);
-        } else {
-          console.log("File cleaned up:", file);
-        }
-      });
-    });
-  }
+  /**
+   * Clean up temporary files created during export (unrotated videos, temp ASS files, etc.)
+   * @private
+   * @returns {Promise<void>}
+   */
+  async _cleanup() {
+    const files = [...this.filesToClean];
+    this.filesToClean = []; // Clear the list to prevent double cleanup
 
-  load(clipObjs) {
-    validateClips(clipObjs, this.options.validationMode, {
-      fillGaps: this.options.fillGaps,
-    });
-    return Promise.all(
-      clipObjs.map((clipObj) => {
-        if (clipObj.type === "video" || clipObj.type === "audio") {
-          clipObj.volume = clipObj.volume || 1;
-          clipObj.cutFrom = clipObj.cutFrom || 0;
-          if (clipObj.type === "video" && clipObj.transition) {
-            clipObj.transition = {
-              type: clipObj.transition.type || clipObj.transition,
-              duration: clipObj.transition.duration || 0.5,
-            };
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          await fsPromises.unlink(file);
+          console.log("File cleaned up:", file);
+        } catch (error) {
+          // Ignore ENOENT (file already deleted), log others
+          if (error.code !== "ENOENT") {
+            console.error("Error cleaning up file:", error);
           }
-        }
-        if (clipObj.type === "video") {
-          return Loaders.loadVideo(this, clipObj);
-        }
-        if (clipObj.type === "audio") {
-          return Loaders.loadAudio(this, clipObj);
-        }
-        if (clipObj.type === "text") {
-          return Loaders.loadText(this, clipObj);
-        }
-        if (clipObj.type === "image") {
-          return Loaders.loadImage(this, clipObj);
-        }
-        if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
-          return Loaders.loadBackgroundAudio(this, clipObj);
         }
       })
     );
+  }
+
+  /**
+   * Calculate cumulative transition offset at a given timestamp.
+   * Transitions cause timeline compression - this returns how much time
+   * has been "lost" to transitions before the given timestamp.
+   * @private
+   * @param {Array} videoClips - Array of video clips sorted by position
+   * @param {number} timestamp - The original timeline timestamp
+   * @returns {number} Cumulative transition duration before this timestamp
+   */
+  _getTransitionOffsetAt(videoClips, timestamp) {
+    let cumulativeOffset = 0;
+    for (let i = 1; i < videoClips.length; i++) {
+      const clip = videoClips[i];
+      const transitionPoint = clip.position || 0;
+      // Only count transitions that occur at or before this timestamp
+      if (transitionPoint <= timestamp && clip.transition) {
+        const duration =
+          typeof clip.transition.duration === "number"
+            ? clip.transition.duration
+            : 0;
+        cumulativeOffset += duration;
+      }
+    }
+    return cumulativeOffset;
+  }
+
+  /**
+   * Adjust a timestamp to account for transition timeline compression.
+   * @private
+   * @param {Array} videoClips - Array of video clips sorted by position
+   * @param {number} timestamp - The original timeline timestamp
+   * @returns {number} Adjusted timestamp for the compressed timeline
+   */
+  _adjustTimestampForTransitions(videoClips, timestamp) {
+    return timestamp - this._getTransitionOffsetAt(videoClips, timestamp);
+  }
+
+  /**
+   * Load clips into the project for processing
+   *
+   * @param {Array} clipObjs - Array of clip configuration objects
+   * @param {string} clipObjs[].type - Clip type: 'video', 'audio', 'image', 'text', 'music', 'backgroundAudio', 'subtitle'
+   * @param {string} clipObjs[].url - Media file path (required for video, audio, image, music, subtitle)
+   * @param {number} clipObjs[].position - Start time on timeline in seconds
+   * @param {number} clipObjs[].end - End time on timeline in seconds
+   * @param {number} clipObjs[].cutFrom - Start time within source media (default: 0)
+   * @param {number} clipObjs[].volume - Audio volume multiplier (default: 1)
+   * @param {Object|string} clipObjs[].transition - Transition effect for video clips
+   * @param {string} clipObjs[].text - Text content (for text clips)
+   * @param {string} clipObjs[].mode - Text mode: 'static', 'word-replace', 'word-sequential', 'karaoke'
+   * @param {string} clipObjs[].kenBurns - Ken Burns effect for images: 'zoom-in', 'zoom-out', 'pan-left', etc.
+   * @returns {Promise<void>} Resolves when all clips are loaded
+   * @throws {ValidationError} If clip configuration is invalid
+   *
+   * @example
+   * await project.load([
+   *   { type: 'video', url: './clip.mp4', position: 0, end: 5 },
+   *   { type: 'text', text: 'Hello', position: 1, end: 4, fontSize: 48 }
+   * ]);
+   */
+  async load(clipObjs) {
+    // Guard against concurrent load() calls
+    if (this._isLoading) {
+      throw new SimpleffmpegError(
+        "Cannot call load() while another load() is in progress. Await the previous load() call first."
+      );
+    }
+
+    this._isLoading = true;
+
+    try {
+      const result = validateConfig(clipObjs, {
+        fillGaps: this.options.fillGaps,
+        width: this.options.width,
+        height: this.options.height,
+      });
+
+      if (!result.valid) {
+        throw new ValidationError(formatValidationResult(result), {
+          errors: result.errors,
+          warnings: result.warnings,
+        });
+      }
+
+      // Log warnings in warn mode
+      if (
+        this.options.validationMode === "warn" &&
+        result.warnings.length > 0
+      ) {
+        result.warnings.forEach((w) => console.warn(`${w.path}: ${w.message}`));
+      }
+
+      await Promise.all(
+        clipObjs.map((clipObj) => {
+          if (clipObj.type === "video" || clipObj.type === "audio") {
+            clipObj.volume = clipObj.volume || 1;
+            clipObj.cutFrom = clipObj.cutFrom || 0;
+            if (clipObj.type === "video" && clipObj.transition) {
+              clipObj.transition = {
+                type: clipObj.transition.type || clipObj.transition,
+                duration: clipObj.transition.duration || 0.5,
+              };
+            }
+          }
+          if (clipObj.type === "video") {
+            return Loaders.loadVideo(this, clipObj);
+          }
+          if (clipObj.type === "audio") {
+            return Loaders.loadAudio(this, clipObj);
+          }
+          if (clipObj.type === "text") {
+            return Loaders.loadText(this, clipObj);
+          }
+          if (clipObj.type === "image") {
+            return Loaders.loadImage(this, clipObj);
+          }
+          if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
+            return Loaders.loadBackgroundAudio(this, clipObj);
+          }
+          if (clipObj.type === "subtitle") {
+            return Loaders.loadSubtitle(this, clipObj);
+          }
+        })
+      );
+    } finally {
+      this._isLoading = false;
+    }
   }
 
   /**
@@ -138,6 +321,15 @@ class SIMPLEFFMPEG {
           ? options.intermediateCrf
           : C.INTERMEDIATE_CRF,
       intermediatePreset: options.intermediatePreset || C.INTERMEDIATE_PRESET,
+
+      // Watermark
+      watermark: options.watermark || null,
+
+      // Timeline compensation
+      compensateTransitions:
+        typeof options.compensateTransitions === "boolean"
+          ? options.compensateTransitions
+          : true, // Default: true
     };
 
     // Handle resolution presets
@@ -196,8 +388,7 @@ class SIMPLEFFMPEG {
         (acc, c) => acc + Math.max(0, (c.end || 0) - (c.position || 0)),
         0
       );
-      const transitionsOverlap = videoClips.reduce((acc, c, idx) => {
-        if (idx === 0) return acc;
+      const transitionsOverlap = videoClips.reduce((acc, c) => {
         const d =
           c.transition && typeof c.transition.duration === "number"
             ? c.transition.duration
@@ -288,26 +479,265 @@ class SIMPLEFFMPEG {
       finalAudioLabel = "[audfit]";
     }
 
-    // Text overlays
+    // Text overlays (drawtext-based)
     let needTextPasses = false;
     let textWindows = [];
     if (this.textClips.length > 0 && hasVideo) {
-      textWindows = TextRenderer.expandTextWindows(this.textClips);
+      // Compensate text timings for transition overlap if enabled
+      let adjustedTextClips = this.textClips;
+      if (exportOptions.compensateTransitions && videoClips.length > 1) {
+        adjustedTextClips = this.textClips.map((clip) => {
+          const adjustedPosition = this._adjustTimestampForTransitions(
+            videoClips,
+            clip.position || 0
+          );
+          const adjustedEnd = this._adjustTimestampForTransitions(
+            videoClips,
+            clip.end || 0
+          );
+          // Also adjust word timings if present
+          let adjustedWords = clip.words;
+          if (Array.isArray(clip.words)) {
+            adjustedWords = clip.words.map((word) => ({
+              ...word,
+              start: this._adjustTimestampForTransitions(
+                videoClips,
+                word.start || 0
+              ),
+              end: this._adjustTimestampForTransitions(
+                videoClips,
+                word.end || 0
+              ),
+            }));
+          }
+          // Also adjust wordTimestamps if present
+          let adjustedWordTimestamps = clip.wordTimestamps;
+          if (Array.isArray(clip.wordTimestamps)) {
+            adjustedWordTimestamps = clip.wordTimestamps.map((ts) =>
+              this._adjustTimestampForTransitions(videoClips, ts)
+            );
+          }
+          return {
+            ...clip,
+            position: adjustedPosition,
+            end: adjustedEnd,
+            words: adjustedWords,
+            wordTimestamps: adjustedWordTimestamps,
+          };
+        });
+      }
+
+      // For text with problematic characters, use temp files (textfile approach)
+      adjustedTextClips = adjustedTextClips.map((clip, idx) => {
+        const textContent = clip.text || "";
+        if (hasProblematicChars(textContent)) {
+          const tempPath = path.join(
+            path.dirname(exportOptions.outputPath),
+            `.simpleffmpeg_text_${idx}_${Date.now()}.txt`
+          );
+          // Replace newlines with space for non-karaoke (consistent with escapeDrawtextText)
+          const normalizedText = textContent.replace(/\r?\n/g, " ");
+          try {
+            fs.writeFileSync(tempPath, normalizedText, "utf-8");
+          } catch (writeError) {
+            throw new SimpleffmpegError(
+              `Failed to write temporary text file "${tempPath}": ${writeError.message}`,
+              { cause: writeError }
+            );
+          }
+          this.filesToClean.push(tempPath);
+          return { ...clip, _textFilePath: tempPath };
+        }
+        return clip;
+      });
+
+      textWindows = TextRenderer.expandTextWindows(adjustedTextClips);
       const projectDuration = totalVideoDuration;
       textWindows = textWindows
         .filter((w) => typeof w.start === "number" && w.start < projectDuration)
         .map((w) => ({ ...w, end: Math.min(w.end, projectDuration) }));
+
+      // Check if we need batching based on node count
       needTextPasses = textWindows.length > exportOptions.textMaxNodesPerPass;
+
       if (!needTextPasses) {
+        // Build the filter and check if it's too long
         const { filterString, finalVideoLabel: outLabel } =
           TextRenderer.buildTextFilters(
-            this.textClips,
+            adjustedTextClips,
             this.options.width,
             this.options.height,
             finalVideoLabel
           );
-        filterComplex += filterString;
-        finalVideoLabel = outLabel;
+
+        // Auto-batch if filter_complex would exceed safe command length limit
+        const potentialLength = filterComplex.length + filterString.length;
+        if (potentialLength > C.MAX_FILTER_COMPLEX_LENGTH) {
+          // Calculate optimal batch size based on filter length
+          const avgNodeLength = filterString.length / textWindows.length;
+          const safeNodes = Math.floor(
+            (C.MAX_FILTER_COMPLEX_LENGTH - filterComplex.length) / avgNodeLength
+          );
+          exportOptions.textMaxNodesPerPass = Math.max(
+            10,
+            Math.min(safeNodes, 50)
+          );
+          needTextPasses = true;
+
+          if (exportOptions.verbose) {
+            console.log(
+              `simple-ffmpeg: Auto-batching text (filter too long: ${potentialLength} > ${C.MAX_FILTER_COMPLEX_LENGTH}). ` +
+                `Using ${exportOptions.textMaxNodesPerPass} nodes per pass.`
+            );
+          }
+        } else {
+          filterComplex += filterString;
+          finalVideoLabel = outLabel;
+        }
+      }
+    }
+
+    // Subtitle overlays (ASS-based: karaoke mode and imported subtitles)
+    let assFilesToClean = [];
+    if (this.subtitleClips.length > 0 && hasVideo) {
+      for (let i = 0; i < this.subtitleClips.length; i++) {
+        let subClip = this.subtitleClips[i];
+
+        // Compensate subtitle timings for transition overlap if enabled
+        if (
+          exportOptions.compensateTransitions &&
+          videoClips.length > 1 &&
+          subClip.mode === "karaoke"
+        ) {
+          const adjustedPosition = this._adjustTimestampForTransitions(
+            videoClips,
+            subClip.position || 0
+          );
+          const adjustedEnd = this._adjustTimestampForTransitions(
+            videoClips,
+            subClip.end || 0
+          );
+          let adjustedWords = subClip.words;
+          if (Array.isArray(subClip.words)) {
+            adjustedWords = subClip.words.map((word) => ({
+              ...word,
+              start: this._adjustTimestampForTransitions(
+                videoClips,
+                word.start || 0
+              ),
+              end: this._adjustTimestampForTransitions(
+                videoClips,
+                word.end || 0
+              ),
+            }));
+          }
+          let adjustedWordTimestamps = subClip.wordTimestamps;
+          if (Array.isArray(subClip.wordTimestamps)) {
+            adjustedWordTimestamps = subClip.wordTimestamps.map((ts) =>
+              this._adjustTimestampForTransitions(videoClips, ts)
+            );
+          }
+          subClip = {
+            ...subClip,
+            position: adjustedPosition,
+            end: adjustedEnd,
+            words: adjustedWords,
+            wordTimestamps: adjustedWordTimestamps,
+          };
+        }
+
+        let assContent = "";
+        let assFilePath = "";
+
+        if (subClip.type === "subtitle") {
+          // Imported subtitle file
+          const ext = path.extname(subClip.url).toLowerCase();
+          if (ext === ".ass" || ext === ".ssa") {
+            // Use ASS file directly
+            assFilePath = subClip.url;
+          } else {
+            // Convert SRT/VTT to ASS
+            assContent = loadSubtitleFile(
+              subClip.url,
+              subClip,
+              this.options.width,
+              this.options.height
+            );
+          }
+        } else if (subClip.mode === "karaoke") {
+          // Generate karaoke ASS
+          assContent = buildKaraokeASS(
+            subClip,
+            this.options.width,
+            this.options.height
+          );
+        }
+
+        // Write temp ASS file if we generated content
+        if (assContent && !assFilePath) {
+          assFilePath = path.join(
+            path.dirname(exportOptions.outputPath),
+            `.simpleffmpeg_sub_${i}_${Date.now()}.ass`
+          );
+          try {
+            fs.writeFileSync(assFilePath, assContent, "utf-8");
+          } catch (writeError) {
+            throw new SimpleffmpegError(
+              `Failed to write temporary ASS file "${assFilePath}": ${writeError.message}`,
+              { cause: writeError }
+            );
+          }
+          assFilesToClean.push(assFilePath);
+          this.filesToClean.push(assFilePath);
+        }
+
+        // Apply ASS filter
+        if (assFilePath) {
+          const assResult = buildASSFilter(assFilePath, finalVideoLabel);
+          // Need to rename output label to avoid conflicts
+          const uniqueLabel = `[outsub${i}]`;
+          const filter = assResult.filter.replace(
+            assResult.finalLabel,
+            uniqueLabel
+          );
+          filterComplex += filter + ";";
+          finalVideoLabel = uniqueLabel;
+        }
+      }
+    }
+
+    // Watermark overlay
+    let watermarkInputIndex = null;
+    let watermarkInputString = "";
+    if (exportOptions.watermark && hasVideo) {
+      // Validate watermark config
+      const wmValidation = validateWatermarkConfig(exportOptions.watermark);
+      if (!wmValidation.valid) {
+        throw new Error(
+          `Watermark validation failed: ${wmValidation.errors.join(", ")}`
+        );
+      }
+
+      const wmConfig = exportOptions.watermark;
+
+      // For image watermarks, we need to add an input
+      if (wmConfig.type === "image" && wmConfig.url) {
+        watermarkInputIndex = this.videoOrAudioClips.length;
+        watermarkInputString = ` -i "${escapeFilePath(wmConfig.url)}"`;
+      }
+
+      const wmResult = buildWatermarkFilter(
+        wmConfig,
+        finalVideoLabel,
+        watermarkInputIndex,
+        this.options.width,
+        this.options.height,
+        totalVideoDuration
+      );
+
+      if (wmResult.filter) {
+        filterComplex += wmResult.filter + ";";
+        finalVideoLabel = wmResult.finalLabel;
       }
     }
 
@@ -323,7 +753,7 @@ class SIMPLEFFMPEG {
 
     // Build command
     const command = buildMainCommand({
-      inputs: this._getInputStreams(),
+      inputs: this._getInputStreams() + watermarkInputString,
       filterComplex,
       mapVideo: finalVideoLabel,
       mapAudio: finalAudioLabel,
@@ -407,10 +837,24 @@ class SIMPLEFFMPEG {
    * @returns {Promise<string>} The output file path
    */
   async export(options = {}) {
+    // Guard against concurrent export() calls
+    if (this._isExporting) {
+      throw new SimpleffmpegError(
+        "Cannot call export() while another export() is in progress. Await the previous export() call first."
+      );
+    }
+
+    this._isExporting = true;
     const t0 = Date.now();
     const { onProgress, signal } = options;
 
-    const prepared = await this._prepareExport(options);
+    let prepared;
+    try {
+      prepared = await this._prepareExport(options);
+    } catch (error) {
+      this._isExporting = false;
+      throw error;
+    }
     const {
       command,
       exportOptions,
@@ -436,10 +880,17 @@ class SIMPLEFFMPEG {
 
     // Save command to file if requested
     if (exportOptions.saveCommand) {
-      fs.writeFileSync(exportOptions.saveCommand, command, "utf8");
-      console.log(
-        `simple-ffmpeg: Command saved to ${exportOptions.saveCommand}`
-      );
+      try {
+        fs.writeFileSync(exportOptions.saveCommand, command, "utf8");
+        console.log(
+          `simple-ffmpeg: Command saved to ${exportOptions.saveCommand}`
+        );
+      } catch (writeError) {
+        throw new SimpleffmpegError(
+          `Failed to save command to "${exportOptions.saveCommand}": ${writeError.message}`,
+          { cause: writeError }
+        );
+      }
     }
 
     console.log("simple-ffmpeg: Starting export...");
@@ -602,12 +1053,103 @@ class SIMPLEFFMPEG {
         )}s (video:${visualCount}, audio:${audioCount}, music:${musicCount}, textPasses:${passes})`
       );
 
-      this._cleanup();
+      await this._cleanup();
+      this._isExporting = false;
       return exportOptions.outputPath;
     } catch (error) {
-      this._cleanup();
+      await this._cleanup();
+      this._isExporting = false;
       throw error;
     }
+  }
+
+  /**
+   * Get available platform presets
+   * @returns {Object} Map of preset names to their configurations
+   */
+  static getPresets() {
+    // Deep copy to prevent mutation of original
+    return JSON.parse(JSON.stringify(C.PLATFORM_PRESETS));
+  }
+
+  /**
+   * Get list of available preset names
+   * @returns {string[]} Array of preset names
+   */
+  static getPresetNames() {
+    return Object.keys(C.PLATFORM_PRESETS);
+  }
+
+  /**
+   * Validate clips configuration without creating a project
+   * Useful for AI feedback loops and pre-validation before processing
+   *
+   * @param {Array} clips - Array of clip objects to validate
+   * @param {Object} options - Validation options
+   * @param {boolean} options.skipFileChecks - Skip file existence checks (useful for AI)
+   * @param {string} options.fillGaps - Gap handling ('none' | 'black') - affects gap validation
+   * @returns {Object} Validation result { valid, errors, warnings }
+   *
+   * @example
+   * const result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+   * if (!result.valid) {
+   *   console.log('Errors:', result.errors);
+   *   // Each error has: { code, path, message, received? }
+   * }
+   */
+  static validate(clips, options = {}) {
+    return validateConfig(clips, options);
+  }
+
+  /**
+   * Format validation result as human-readable string
+   * @param {Object} result - Validation result from validate()
+   * @returns {string} Formatted validation result
+   */
+  static formatValidationResult(result) {
+    return formatValidationResult(result);
+  }
+
+  /**
+   * Validation error codes for programmatic handling
+   */
+  static get ValidationCodes() {
+    return ValidationCodes;
+  }
+
+  /**
+   * Base error class for all simple-ffmpeg errors
+   */
+  static get SimpleffmpegError() {
+    return SimpleffmpegError;
+  }
+
+  /**
+   * Thrown when clip validation fails
+   */
+  static get ValidationError() {
+    return ValidationError;
+  }
+
+  /**
+   * Thrown when FFmpeg command execution fails
+   */
+  static get FFmpegError() {
+    return FFmpegError;
+  }
+
+  /**
+   * Thrown when a media file cannot be found or accessed
+   */
+  static get MediaNotFoundError() {
+    return MediaNotFoundError;
+  }
+
+  /**
+   * Thrown when export is cancelled via AbortSignal
+   */
+  static get ExportCancelledError() {
+    return ExportCancelledError;
   }
 }
 

@@ -2,27 +2,35 @@ const Strings = require("./strings");
 const C = require("../core/constants");
 
 function buildXParam(baseClip, canvasWidth) {
+  const offset = typeof baseClip.xOffset === "number" ? baseClip.xOffset : 0;
+  const offsetStr = offset !== 0 ? `+${offset}` : "";
+
   if (typeof baseClip.xPercent === "number") {
     // xPercent is a percentage (0-1) where 0.5 = centered
     // Convert to pixel position: xPercent * canvasWidth - text_w/2
     const xPos = baseClip.xPercent * canvasWidth;
-    return `:x=${xPos}-text_w/2`;
+    return `:x=${xPos}-text_w/2${offsetStr}`;
   } else if (typeof baseClip.x === "number") {
-    return `:x=${baseClip.x}`;
+    return `:x=${baseClip.x}${offsetStr}`;
   }
-  return `:x=(${canvasWidth} - text_w)/2`;
+  // Default: center
+  return `:x=(${canvasWidth} - text_w)/2${offsetStr}`;
 }
 
 function baseYExpression(baseClip, canvasHeight) {
+  const offset = typeof baseClip.yOffset === "number" ? baseClip.yOffset : 0;
+  const offsetStr = offset !== 0 ? `+${offset}` : "";
+
   if (typeof baseClip.yPercent === "number") {
     // yPercent is a percentage (0-1) where 0.5 = centered
     // Convert to pixel position: yPercent * canvasHeight - text_h/2
     const yPos = baseClip.yPercent * canvasHeight;
-    return `${yPos}-text_h/2`;
+    return `${yPos}-text_h/2${offsetStr}`;
   } else if (typeof baseClip.y === "number") {
-    return `${baseClip.y}`;
+    return `${baseClip.y}${offsetStr}`;
   }
-  return `(${canvasHeight} - text_h)/2`;
+  // Default: center
+  return `(${canvasHeight} - text_h)/2${offsetStr}`;
 }
 
 function buildYParamAnimated(baseClip, canvasHeight, start, end) {
@@ -33,13 +41,22 @@ function buildYParamAnimated(baseClip, canvasHeight, start, end) {
 function buildAlphaParam(baseClip, start, end) {
   const anim = baseClip.animation || {};
   const type = anim.type || "none";
-  if (type === "fade-in") {
+
+  if (type === "fade-in" || type === "scale-in") {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
     return `:alpha=if(lt(t\\,${start})\\,0\\,if(lt(t\\,${
       start + entry
     })\\,(t-${start})/${entry}\\,1))`;
   }
+
+  if (type === "fade-out") {
+    const exit =
+      typeof anim.out === "number" ? anim.out : C.DEFAULT_TEXT_ANIM_OUT;
+    const fadeOutStart = Math.max(start, end - exit);
+    return `:alpha=if(lt(t\\,${fadeOutStart})\\,1\\,if(lt(t\\,${end})\\,(${end}-t)/${exit}\\,0))`;
+  }
+
   if (type === "fade-in-out" || type === "fade") {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
@@ -49,13 +66,15 @@ function buildAlphaParam(baseClip, start, end) {
       start + entry
     })\\,(t-${start})/${entry}\\,if(lt(t\\,${fadeOutStart})\\,1\\,if(lt(t\\,${end})\\,((${end}-t)/${exit})\\,0))))`;
   }
+
   return "";
 }
 
-function buildFontsizeParam(baseClip, start) {
+function buildFontsizeParam(baseClip, start, end) {
   const anim = baseClip.animation || {};
   const type = anim.type || "none";
   const baseSize = baseClip.fontSize;
+
   if (type === "pop") {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
@@ -65,6 +84,7 @@ function buildFontsizeParam(baseClip, start) {
       3
     )}*sin(PI/2*(t-${start})/${entry})\\,${baseSize})`;
   }
+
   if (type === "pop-bounce") {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
@@ -74,6 +94,36 @@ function buildFontsizeParam(baseClip, start) {
       3
     )}*sin(PI/2*(t-${start})/${entry})\\,${baseSize})`;
   }
+
+  if (type === "scale-in") {
+    const entry =
+      typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
+    const intensity =
+      typeof anim.intensity === "number"
+        ? anim.intensity
+        : C.DEFAULT_TEXT_ANIM_INTENSITY;
+    // Start at (1 - intensity) * baseSize, grow to baseSize
+    const startSize = (baseSize * (1 - intensity)).toFixed(3);
+    const sizeRange = (baseSize * intensity).toFixed(3);
+    // Smooth ease-out: use sin(PI/2 * progress) for smooth deceleration
+    return `:fontsize=if(lt(t\\,${start})\\,${startSize}\\,if(lt(t\\,${
+      start + entry
+    })\\,${startSize}+${sizeRange}*sin(PI/2*(t-${start})/${entry})\\,${baseSize}))`;
+  }
+
+  if (type === "pulse") {
+    const speed =
+      typeof anim.speed === "number" ? anim.speed : C.DEFAULT_PULSE_SPEED;
+    const intensity =
+      typeof anim.intensity === "number"
+        ? anim.intensity
+        : C.DEFAULT_TEXT_ANIM_INTENSITY;
+    // Oscillate between baseSize * (1 - intensity/2) and baseSize * (1 + intensity/2)
+    const pulseAmount = (baseSize * intensity * 0.5).toFixed(3);
+    // Use sin wave for smooth pulsing
+    return `:fontsize=${baseSize}+${pulseAmount}*sin(2*PI*${speed}*(t-${start}))`;
+  }
+
   return `:fontsize=${baseSize}`;
 }
 
@@ -91,9 +141,18 @@ function buildDrawtextParams(
     ? `font=${baseClip.fontFamily}`
     : `font=Sans`;
 
-  const escaped = Strings.escapeDrawtextText(text);
-  let params = `drawtext=text='${escaped}':${fontSpec}`;
-  params += buildFontsizeParam(baseClip, start);
+  // Use textfile approach if a temp file path is provided (for problematic characters)
+  // Only use textfile if the text matches the original clip text (not for typewriter frames, etc.)
+  let params;
+  const clipText = (baseClip.text || "").replace(/\r?\n/g, " ");
+  if (baseClip._textFilePath && text === clipText) {
+    const escapedPath = Strings.escapeTextFilePath(baseClip._textFilePath);
+    params = `drawtext=textfile='${escapedPath}':${fontSpec}`;
+  } else {
+    const escaped = Strings.escapeDrawtextText(text);
+    params = `drawtext=text='${escaped}':${fontSpec}`;
+  }
+  params += buildFontsizeParam(baseClip, start, end);
   params += `:fontcolor=${baseClip.fontColor}`;
   params += buildXParam(baseClip, canvasWidth);
   params += buildYParamAnimated(baseClip, canvasHeight, start, end);
@@ -177,6 +236,37 @@ function computeWordWindows(clip, words) {
   return windows;
 }
 
+/**
+ * Build character windows for typewriter effect
+ */
+function computeTypewriterWindows(clip, text) {
+  const windows = [];
+  const start = clip.position;
+  const end = clip.end;
+  const anim = clip.animation || {};
+  const speed =
+    typeof anim.speed === "number" ? anim.speed : C.DEFAULT_TYPEWRITER_SPEED;
+
+  const chars = text.split("");
+  if (chars.length === 0) return windows;
+
+  // Calculate total typing time based on speed
+  const typingDuration = chars.length * speed;
+  // Don't let typing exceed clip duration
+  const actualTypingDuration = Math.min(typingDuration, end - start);
+  const charDuration = actualTypingDuration / chars.length;
+
+  for (let i = 0; i < chars.length; i++) {
+    const charStart = start + i * charDuration;
+    const charEnd =
+      i === chars.length - 1 ? end : start + (i + 1) * charDuration;
+    const visibleText = text.substring(0, i + 1);
+    windows.push({ start: charStart, end: charEnd, text: visibleText });
+  }
+
+  return windows;
+}
+
 function buildTextFilters(
   textClips,
   canvasWidth,
@@ -194,6 +284,36 @@ function buildTextFilters(
 
   for (const clip of textClips) {
     const mode = clip.mode || "static";
+    const anim = clip.animation || {};
+    const animType = anim.type || "none";
+
+    // Handle typewriter animation (character-by-character reveal)
+    if (animType === "typewriter" && mode === "static") {
+      const text = clip.text || "";
+      const windows = computeTypewriterWindows(clip, text);
+      for (let i = 0; i < windows.length; i++) {
+        const w = windows[i];
+        const isLast = i === windows.length - 1;
+        const params = buildDrawtextParams(
+          clip,
+          w.text,
+          canvasWidth,
+          canvasHeight,
+          w.start,
+          w.end
+        );
+        // Use gte/lt for non-overlapping windows (inclusive start, exclusive end)
+        // Last window uses inclusive end so text stays visible
+        const enable = isLast
+          ? `:enable='between(t,${w.start},${w.end})'`
+          : `:enable='gte(t,${w.start})*lt(t,${w.end})'`;
+        const outLabel = nextLabel();
+        filterString += `${currentLabel}${params}${enable}${outLabel};`;
+        currentLabel = outLabel;
+      }
+      continue;
+    }
+
     if (mode === "static") {
       const params = buildDrawtextParams(
         clip,
@@ -281,6 +401,24 @@ function expandTextWindows(textClips) {
   for (const clip of textClips) {
     const effectiveClip = { ...clip };
     const mode = effectiveClip.mode || "static";
+    const anim = effectiveClip.animation || {};
+    const animType = anim.type || "none";
+
+    // Handle typewriter animation
+    if (animType === "typewriter" && mode === "static") {
+      const text = effectiveClip.text || "";
+      const windows = computeTypewriterWindows(effectiveClip, text);
+      for (const w of windows) {
+        ops.push({
+          text: w.text,
+          start: w.start,
+          end: w.end,
+          clip: effectiveClip,
+        });
+      }
+      continue;
+    }
+
     if (mode === "static") {
       ops.push({
         text: effectiveClip.text || "",

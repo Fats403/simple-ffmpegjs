@@ -34,14 +34,46 @@ const fixtures = [
   },
   {
     name: "test-image.png",
-    // Simple 320x240 orange image
-    cmd: `ffmpeg -y -f lavfi -i "color=c=orange:s=320x240:d=1" -frames:v 1`,
+    // Grid pattern image - makes Ken Burns zoom/pan effects visible
+    cmd: `ffmpeg -y -f lavfi -i "color=c=#336699:s=640x480:d=1,drawgrid=w=80:h=80:t=2:c=white@0.5,drawtext=text='A':fontsize=120:fontcolor=white:x=80:y=60,drawtext=text='B':fontsize=120:fontcolor=white:x=440:y=60,drawtext=text='C':fontsize=120:fontcolor=white:x=80:y=300,drawtext=text='D':fontsize=120:fontcolor=white:x=440:y=300,drawbox=x=280:y=200:w=80:h=80:c=yellow:t=fill" -frames:v 1`,
+  },
+  {
+    name: "test-watermark.png",
+    // Small 64x64 white circle on transparent background for watermark testing
+    cmd: `ffmpeg -y -f lavfi -i "color=c=white:s=64x64:d=1,format=rgba" -frames:v 1`,
+  },
+];
+
+// Text-based fixtures (subtitles)
+const textFixtures = [
+  {
+    name: "test-subtitles.srt",
+    content: `1
+00:00:00,500 --> 00:00:01,500
+First subtitle
+
+2
+00:00:01,800 --> 00:00:02,800
+Second subtitle
+`,
+  },
+  {
+    name: "test-subtitles.vtt",
+    content: `WEBVTT
+
+00:00.500 --> 00:01.500
+First cue
+
+00:01.800 --> 00:02.800
+Second cue
+`,
   },
 ];
 
 function generateFixtures() {
   console.log("Generating test fixtures...\n");
 
+  // Generate FFmpeg-based fixtures (video, audio, images)
   for (const fixture of fixtures) {
     const outputPath = path.join(FIXTURES_DIR, fixture.name);
     const fullCmd = `${fixture.cmd} "${outputPath}"`;
@@ -51,6 +83,20 @@ function generateFixtures() {
       execSync(fullCmd, { stdio: "pipe" });
       const stats = fs.statSync(outputPath);
       console.log(`  ✓ Created (${(stats.size / 1024).toFixed(1)} KB)\n`);
+    } catch (error) {
+      console.error(`  ✗ Failed: ${error.message}\n`);
+    }
+  }
+
+  // Generate text-based fixtures (subtitles)
+  for (const fixture of textFixtures) {
+    const outputPath = path.join(FIXTURES_DIR, fixture.name);
+
+    console.log(`Creating ${fixture.name}...`);
+    try {
+      fs.writeFileSync(outputPath, fixture.content);
+      const stats = fs.statSync(outputPath);
+      console.log(`  ✓ Created (${stats.size} bytes)\n`);
     } catch (error) {
       console.error(`  ✗ Failed: ${error.message}\n`);
     }

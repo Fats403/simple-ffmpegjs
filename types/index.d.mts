@@ -44,7 +44,8 @@ declare namespace SIMPLEFFMPEG {
     | "text"
     | "music"
     | "backgroundAudio"
-    | "image";
+    | "image"
+    | "subtitle";
 
   interface BaseClip {
     type: ClipType;
@@ -73,6 +74,8 @@ declare namespace SIMPLEFFMPEG {
     url: string;
     cutFrom?: number;
     volume?: number;
+    /** Loop the audio to fill the entire video duration */
+    loop?: boolean;
   }
 
   interface ImageClip extends BaseClip {
@@ -87,18 +90,25 @@ declare namespace SIMPLEFFMPEG {
       | "pan-down";
   }
 
-  type TextMode = "static" | "word-replace" | "word-sequential";
+  type TextMode = "static" | "word-replace" | "word-sequential" | "karaoke";
   type TextAnimationType =
     | "none"
     | "fade-in"
+    | "fade-out"
     | "fade-in-out"
+    | "fade"
     | "pop"
-    | "pop-bounce";
+    | "pop-bounce"
+    | "scale-in"
+    | "pulse"
+    | "typewriter";
 
   interface TextWordWindow {
     text: string;
     start: number;
     end: number;
+    /** Add line break after this word (for multi-line karaoke) */
+    lineBreak?: boolean;
   }
 
   interface TextClip {
@@ -125,6 +135,10 @@ declare namespace SIMPLEFFMPEG {
     x?: number;
     /** Absolute Y position in pixels */
     y?: number;
+    /** Pixel offset added to X position (works with x, xPercent, or center default) */
+    xOffset?: number;
+    /** Pixel offset added to Y position (works with y, yPercent, or center default) */
+    yOffset?: number;
 
     // Styling
     borderColor?: string;
@@ -139,9 +153,40 @@ declare namespace SIMPLEFFMPEG {
     // Animation
     animation?: {
       type: TextAnimationType;
+      /** Entry animation duration in seconds (default: 0.25) */
       in?: number;
+      /** Exit animation duration in seconds (default: same as in) */
       out?: number;
+      /** Animation intensity 0-1 for scale-in and pulse (default: 0.3) */
+      intensity?: number;
+      /** Speed for typewriter (sec/char, default: 0.05) or pulse (cycles/sec, default: 1) */
+      speed?: number;
     };
+
+    /** Highlight color for karaoke mode (default: '#FFFF00') */
+    highlightColor?: string;
+
+    /** Highlight style for karaoke mode: 'smooth' (gradual fill) or 'instant' (default: 'smooth') */
+    highlightStyle?: "smooth" | "instant";
+  }
+
+  /** Subtitle clip for importing external subtitle files */
+  interface SubtitleClip {
+    type: "subtitle";
+    /** Path to subtitle file (.srt, .ass, .ssa, .vtt) */
+    url: string;
+    /** Timeline position offset (default: 0) - adds to all subtitle timestamps */
+    position?: number;
+    /** Optional end time to cut off subtitles */
+    end?: number;
+
+    // Styling (for SRT/VTT import - ASS files use their own styles)
+    fontFamily?: string;
+    fontSize?: number;
+    fontColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    opacity?: number;
   }
 
   type Clip =
@@ -149,18 +194,96 @@ declare namespace SIMPLEFFMPEG {
     | AudioClip
     | BackgroundMusicClip
     | ImageClip
-    | TextClip;
+    | TextClip
+    | SubtitleClip;
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Options
   // ─────────────────────────────────────────────────────────────────────────────
 
-  interface SIMPLEFFMPEGOptions {
-    /** Frames per second (default: 30) */
-    fps?: number;
-    /** Output width in pixels (default: 1920) */
+  /** Platform preset names */
+  type PlatformPreset =
+    | "tiktok"
+    | "youtube-short"
+    | "instagram-reel"
+    | "instagram-story"
+    | "snapchat"
+    | "instagram-post"
+    | "instagram-square"
+    | "youtube"
+    | "twitter"
+    | "facebook"
+    | "landscape"
+    | "twitter-portrait"
+    | "instagram-portrait";
+
+  /** Platform preset configuration */
+  interface PresetConfig {
+    width: number;
+    height: number;
+    fps: number;
+  }
+
+  /** Validation error/warning codes */
+  const ValidationCodes: {
+    readonly INVALID_TYPE: "INVALID_TYPE";
+    readonly MISSING_REQUIRED: "MISSING_REQUIRED";
+    readonly INVALID_VALUE: "INVALID_VALUE";
+    readonly INVALID_RANGE: "INVALID_RANGE";
+    readonly INVALID_TIMELINE: "INVALID_TIMELINE";
+    readonly TIMELINE_GAP: "TIMELINE_GAP";
+    readonly FILE_NOT_FOUND: "FILE_NOT_FOUND";
+    readonly INVALID_FORMAT: "INVALID_FORMAT";
+    readonly INVALID_WORD_TIMING: "INVALID_WORD_TIMING";
+    readonly OUTSIDE_BOUNDS: "OUTSIDE_BOUNDS";
+  };
+
+  type ValidationCode = (typeof ValidationCodes)[keyof typeof ValidationCodes];
+
+  /** A single validation error or warning */
+  interface ValidationIssue {
+    /** Error code for programmatic handling */
+    code: ValidationCode;
+    /** Path to the problematic field (e.g., "clips[0].url") */
+    path: string;
+    /** Human-readable error message */
+    message: string;
+    /** The actual value that caused the issue (optional) */
+    received?: unknown;
+  }
+
+  /** Result from validate() */
+  interface ValidationResult {
+    /** Whether the configuration is valid (no errors) */
+    valid: boolean;
+    /** Array of validation errors (issues that will cause failures) */
+    errors: ValidationIssue[];
+    /** Array of validation warnings (potential issues that won't block) */
+    warnings: ValidationIssue[];
+  }
+
+  /** Options for validate() */
+  interface ValidateOptions {
+    /** Skip file existence checks (useful for AI generating configs before files exist) */
+    skipFileChecks?: boolean;
+    /** Gap handling mode - affects timeline gap validation */
+    fillGaps?: "none" | "black";
+    /** Project width - used to validate Ken Burns images are large enough */
     width?: number;
-    /** Output height in pixels (default: 1080) */
+    /** Project height - used to validate Ken Burns images are large enough */
+    height?: number;
+    /** If true, undersized Ken Burns images will error instead of warn (default: false, images are auto-upscaled) */
+    strictKenBurns?: boolean;
+  }
+
+  interface SIMPLEFFMPEGOptions {
+    /** Platform preset (e.g., 'tiktok', 'youtube', 'instagram-reel'). Sets width, height, fps. */
+    preset?: PlatformPreset;
+    /** Frames per second (default: 30, or from preset) */
+    fps?: number;
+    /** Output width in pixels (default: 1920, or from preset) */
+    width?: number;
+    /** Output height in pixels (default: 1080, or from preset) */
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
@@ -251,6 +374,65 @@ declare namespace SIMPLEFFMPEG {
 
   type ResolutionPreset = "480p" | "720p" | "1080p" | "1440p" | "4k";
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Watermark Types
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Preset position for watermarks */
+  type WatermarkPositionPreset =
+    | "top-left"
+    | "top-right"
+    | "bottom-left"
+    | "bottom-right"
+    | "center";
+
+  /** Custom position using percentages (0-1) */
+  interface WatermarkPositionPercent {
+    xPercent: number;
+    yPercent: number;
+  }
+
+  /** Custom position using pixels */
+  interface WatermarkPositionPixel {
+    x: number;
+    y: number;
+  }
+
+  type WatermarkPosition =
+    | WatermarkPositionPreset
+    | WatermarkPositionPercent
+    | WatermarkPositionPixel;
+
+  interface BaseWatermarkOptions {
+    position?: WatermarkPosition;
+    margin?: number;
+    opacity?: number;
+    startTime?: number;
+    endTime?: number;
+  }
+
+  interface ImageWatermarkOptions extends BaseWatermarkOptions {
+    type: "image";
+    url: string;
+    scale?: number;
+  }
+
+  interface TextWatermarkOptions extends BaseWatermarkOptions {
+    type: "text";
+    text: string;
+    fontSize?: number;
+    fontColor?: string;
+    fontFamily?: string;
+    fontFile?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    shadowColor?: string;
+    shadowX?: number;
+    shadowY?: number;
+  }
+
+  type WatermarkOptions = ImageWatermarkOptions | TextWatermarkOptions;
+
   interface ExportOptions {
     // Output
     outputPath?: string;
@@ -302,6 +484,16 @@ declare namespace SIMPLEFFMPEG {
     intermediateVideoCodec?: string;
     intermediateCrf?: number;
     intermediatePreset?: string;
+
+    // Watermark
+    watermark?: WatermarkOptions;
+
+    // Timeline
+    /**
+     * Automatically adjust text/subtitle timings to compensate for timeline
+     * compression caused by xfade transitions (default: true).
+     */
+    compensateTransitions?: boolean;
   }
 
   /** Result from preview() method */
@@ -337,6 +529,73 @@ declare class SIMPLEFFMPEG {
    * @param options Export options including outputPath, onProgress, and signal
    */
   export(options?: SIMPLEFFMPEG.ExportOptions): Promise<string>;
+
+  /**
+   * Get available platform presets
+   */
+  static getPresets(): Record<
+    SIMPLEFFMPEG.PlatformPreset,
+    SIMPLEFFMPEG.PresetConfig
+  >;
+
+  /**
+   * Get list of available preset names
+   */
+  static getPresetNames(): SIMPLEFFMPEG.PlatformPreset[];
+
+  /**
+   * Validate clips configuration without creating a project.
+   * Useful for AI feedback loops and pre-validation.
+   *
+   * @param clips - Array of clip objects to validate
+   * @param options - Validation options
+   * @returns Validation result with valid flag, errors, and warnings
+   *
+   * @example
+   * const result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+   * if (!result.valid) {
+   *   result.errors.forEach(e => console.log(`[${e.code}] ${e.path}: ${e.message}`));
+   * }
+   */
+  static validate(
+    clips: SIMPLEFFMPEG.Clip[],
+    options?: SIMPLEFFMPEG.ValidateOptions
+  ): SIMPLEFFMPEG.ValidationResult;
+
+  /**
+   * Format validation result as human-readable string
+   */
+  static formatValidationResult(result: SIMPLEFFMPEG.ValidationResult): string;
+
+  /**
+   * Validation error codes for programmatic handling
+   */
+  static readonly ValidationCodes: typeof SIMPLEFFMPEG.ValidationCodes;
+
+  /**
+   * Base error class for all simple-ffmpeg errors
+   */
+  static readonly SimpleffmpegError: typeof SIMPLEFFMPEG.SimpleffmpegError;
+
+  /**
+   * Thrown when clip validation fails
+   */
+  static readonly ValidationError: typeof SIMPLEFFMPEG.ValidationError;
+
+  /**
+   * Thrown when FFmpeg command execution fails
+   */
+  static readonly FFmpegError: typeof SIMPLEFFMPEG.FFmpegError;
+
+  /**
+   * Thrown when a media file cannot be found or accessed
+   */
+  static readonly MediaNotFoundError: typeof SIMPLEFFMPEG.MediaNotFoundError;
+
+  /**
+   * Thrown when export is cancelled via AbortSignal
+   */
+  static readonly ExportCancelledError: typeof SIMPLEFFMPEG.ExportCancelledError;
 }
 
 export default SIMPLEFFMPEG;
