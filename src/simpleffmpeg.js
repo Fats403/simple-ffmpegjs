@@ -40,6 +40,7 @@ const {
   loadSubtitleFile,
   buildASSFilter,
 } = require("./ffmpeg/subtitle_builder");
+const { getSchema, getSchemaModules } = require("./schema");
 
 class SIMPLEFFMPEG {
   /**
@@ -1150,6 +1151,48 @@ class SIMPLEFFMPEG {
    */
   static get ExportCancelledError() {
     return ExportCancelledError;
+  }
+
+  /**
+   * Get the clip schema as formatted prompt-ready text.
+   * Returns a structured description of all clip types accepted by load(),
+   * optimized for LLM consumption, documentation, or code generation.
+   *
+   * @param {Object} [options] - Schema options
+   * @param {string[]} [options.include] - Only include these module IDs (e.g., ['video', 'image'])
+   * @param {string[]} [options.exclude] - Exclude these module IDs (e.g., ['text', 'subtitle'])
+   * @param {string|string[]} [options.instructions] - Custom top-level instructions to embed in the schema
+   * @param {Object<string, string|string[]>} [options.moduleInstructions] - Per-module custom instructions
+   * @returns {string} Formatted schema text
+   *
+   * @example
+   * // Get full schema (all clip types)
+   * const schema = SIMPLEFFMPEG.getSchema();
+   *
+   * @example
+   * // Only video and image clip types
+   * const schema = SIMPLEFFMPEG.getSchema({ include: ['video', 'image'] });
+   *
+   * @example
+   * // Everything except text, with custom instructions
+   * const schema = SIMPLEFFMPEG.getSchema({
+   *   exclude: ['text'],
+   *   instructions: 'Keep videos under 30 seconds.',
+   *   moduleInstructions: { video: 'Always use fade transitions.' }
+   * });
+   */
+  static getSchema(options) {
+    return getSchema(options);
+  }
+
+  /**
+   * Get the list of available schema module IDs.
+   * Use these IDs with getSchema({ include: [...] }) or getSchema({ exclude: [...] }).
+   *
+   * @returns {string[]} Array of module IDs: ['video', 'audio', 'image', 'text', 'subtitle', 'music']
+   */
+  static getSchemaModules() {
+    return getSchemaModules();
   }
 }
 

@@ -593,6 +593,31 @@ declare namespace SIMPLEFFMPEG {
     compensateTransitions?: boolean;
   }
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Schema Types
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Available schema module IDs */
+  type SchemaModuleId =
+    | "video"
+    | "audio"
+    | "image"
+    | "text"
+    | "subtitle"
+    | "music";
+
+  /** Options for getSchema() */
+  interface SchemaOptions {
+    /** Only include these module IDs in the schema output */
+    include?: SchemaModuleId[];
+    /** Exclude these module IDs from the schema output */
+    exclude?: SchemaModuleId[];
+    /** Custom top-level instructions to embed at the top of the schema */
+    instructions?: string | string[];
+    /** Per-module custom instructions, keyed by module ID */
+    moduleInstructions?: Partial<Record<SchemaModuleId, string | string[]>>;
+  }
+
   /** Result from preview() method */
   interface PreviewResult {
     /** The full FFmpeg command that would be executed */
@@ -695,6 +720,40 @@ declare class SIMPLEFFMPEG {
    * Thrown when export is cancelled via AbortSignal
    */
   static readonly ExportCancelledError: typeof SIMPLEFFMPEG.ExportCancelledError;
+
+  /**
+   * Get the clip schema as formatted prompt-ready text.
+   * Returns a structured description of all clip types accepted by load(),
+   * optimized for LLM consumption, documentation, or code generation.
+   *
+   * @param options - Schema options for filtering modules and adding custom instructions
+   * @returns Formatted schema text
+   *
+   * @example
+   * // Get full schema (all clip types)
+   * const schema = SIMPLEFFMPEG.getSchema();
+   *
+   * @example
+   * // Only video and image clip types
+   * const schema = SIMPLEFFMPEG.getSchema({ include: ['video', 'image'] });
+   *
+   * @example
+   * // Everything except text, with custom instructions
+   * const schema = SIMPLEFFMPEG.getSchema({
+   *   exclude: ['text'],
+   *   instructions: 'Keep videos under 30 seconds.',
+   *   moduleInstructions: { video: 'Always use fade transitions.' }
+   * });
+   */
+  static getSchema(options?: SIMPLEFFMPEG.SchemaOptions): string;
+
+  /**
+   * Get the list of available schema module IDs.
+   * Use these IDs with getSchema({ include: [...] }) or getSchema({ exclude: [...] }).
+   *
+   * @returns Array of module IDs
+   */
+  static getSchemaModules(): SIMPLEFFMPEG.SchemaModuleId[];
 }
 
 /**

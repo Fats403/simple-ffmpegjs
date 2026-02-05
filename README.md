@@ -1,10 +1,17 @@
-# simple-ffmpeg
+<p align="center">
+  <img src="https://7llpl63xkl8jovgt.public.blob.vercel-storage.com/simple-ffmpeg/zENiV5XBIET_cu11ZpOdE.png" alt="simple-ffmpeg" width="100%">
+</p>
 
-[![npm version](https://img.shields.io/npm/v/simple-ffmpegjs.svg)](https://www.npmjs.com/package/simple-ffmpegjs)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
+<p align="center">
+  <a href="https://www.npmjs.com/package/simple-ffmpegjs"><img src="https://img.shields.io/npm/v/simple-ffmpegjs.svg" alt="npm version"></a>
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg" alt="Node.js"></a>
+</p>
 
-A lightweight Node.js library for programmatic video composition using FFmpeg. Designed for data pipelines and automation workflows that need reliable video assembly without the complexity of a full editing suite.
+<p align="center">
+  A lightweight Node.js library for programmatic video composition using FFmpeg.<br>
+  Define your timeline as a simple array of clips, and the library handles the rest.
+</p>
 
 ## Table of Contents
 
@@ -12,7 +19,8 @@ A lightweight Node.js library for programmatic video composition using FFmpeg. D
 - [Features](#features)
 - [Installation](#installation)
 - [Quick Start](#quick-start)
-- [Pre-Validation (for AI Pipelines)](#pre-validation-for-ai-pipelines)
+- [Pre-Validation](#pre-validation)
+- [Schema Export](#schema-export)
 - [API Reference](#api-reference)
   - [Constructor](#constructor)
   - [Methods](#methods)
@@ -24,26 +32,26 @@ A lightweight Node.js library for programmatic video composition using FFmpeg. D
   - [Cancellation](#cancellation)
   - [Gap Handling](#gap-handling)
 - [Examples](#examples)
-  - [Transitions](#two-clips-with-transition)
-  - [Text Positioning](#text-positioning-with-offsets)
-  - [Word-by-Word Animation](#word-by-word-text-animation)
-  - [Ken Burns Slideshow](#image-slideshow-with-ken-burns)
-  - [Export Options](#high-quality-export-with-custom-settings)
-  - [Text Animations](#typewriter-text-effect)
-  - [Karaoke](#karaoke-text-effect)
-  - [Subtitles](#import-srtvtt-subtitles)
-- [Timeline Behavior](#timeline-behavior)
-  - [Transition Compensation](#transition-compensation)
-- [Auto-Batching](#auto-batching-for-complex-filter-graphs)
+  - [Clips & Transitions](#clips--transitions)
+  - [Text & Animations](#text--animations)
+  - [Karaoke](#karaoke)
+  - [Subtitles](#subtitles)
+  - [Export Settings](#export-settings)
+- [Real-World Usage Patterns](#real-world-usage-patterns)
+  - [Data Pipeline](#data-pipeline-example)
+  - [AI Video Pipeline](#ai-video-generation-pipeline-example)
+- [Advanced](#advanced)
+  - [Timeline Behavior](#timeline-behavior)
+  - [Auto-Batching](#auto-batching)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
 
 ## Why simple-ffmpeg?
 
-With `fluent-ffmpeg` no longer actively maintained, there's a need for a modern, well-supported alternative. simple-ffmpeg fills this gap with a declarative, config-driven API that's particularly well-suited for structured validation with error codes that makes it easy to build feedback loops where AI can generate configs, validate them, and iterate until successful
+FFmpeg is incredibly powerful, but its command-line interface is notoriously difficult to work with programmatically. Composing even a simple two-clip video with a crossfade requires navigating complex filter graphs, input mapping, and stream labeling. simple-ffmpeg abstracts all of that behind a declarative, config-driven API. You describe _what_ your video should look like, and the library figures out _how_ to build the FFmpeg command.
 
-The library handles FFmpeg's complexity internally while exposing a clean interface that both humans and AI can work with effectively.
+The entire timeline is expressed as a plain array of clip objects, making it straightforward to generate configurations from any data source: databases, APIs, templates, or AI models. Structured validation with machine-readable error codes means you can catch problems early and handle them programmatically, whether that's logging a warning, retrying with corrected input, or surfacing feedback to an end user.
 
 ## Example Output
 
@@ -70,6 +78,8 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 - **Cancellation** — AbortController support for stopping exports
 - **Gap Handling** — Optional black frame fill for timeline gaps
 - **Auto-Batching** — Automatically splits complex filter graphs to avoid OS command limits
+- **Schema Export** — Generate a structured description of the clip format for documentation, code generation, or AI context
+- **Pre-Validation** — Validate clip configurations before processing with structured, machine-readable error codes
 - **TypeScript Ready** — Full type definitions included
 - **Zero Dependencies** — Only requires FFmpeg on your system
 
@@ -109,41 +119,50 @@ apt-get install -y ffmpeg fontconfig fonts-dejavu-core
 ```js
 import SIMPLEFFMPEG from "simple-ffmpegjs";
 
-const project = new SIMPLEFFMPEG({
-  width: 1920,
-  height: 1080,
-  fps: 30,
-});
+// Use a platform preset — or set width/height/fps manually
+const project = new SIMPLEFFMPEG({ preset: "youtube" });
 
 await project.load([
-  { type: "video", url: "./intro.mp4", position: 0, end: 5 },
+  // Two video clips with a crossfade transition between them
+  { type: "video", url: "./opening-shot.mp4", position: 0, end: 6 },
   {
     type: "video",
-    url: "./main.mp4",
-    position: 5,
-    end: 15,
+    url: "./highlights.mp4",
+    position: 5.5,
+    end: 18,
+    cutFrom: 3, // start 3s into the source file
     transition: { type: "fade", duration: 0.5 },
   },
-  { type: "music", url: "./bgm.mp3", volume: 0.2 },
+
+  // Title card with a pop animation
   {
     type: "text",
-    text: "Hello World",
-    position: 1,
+    text: "Summer Highlights 2025",
+    position: 0.5,
     end: 4,
-    fontColor: "white",
-    fontSize: 64,
+    fontFile: "./fonts/Montserrat-Bold.ttf",
+    fontSize: 72,
+    fontColor: "#FFFFFF",
+    borderColor: "#000000",
+    borderWidth: 2,
+    xPercent: 0.5,
+    yPercent: 0.4,
+    animation: { type: "pop", in: 0.3 },
   },
+
+  // Background music — loops to fill the whole video
+  { type: "music", url: "./chill-beat.mp3", volume: 0.2, loop: true },
 ]);
 
 await project.export({
-  outputPath: "./output.mp4",
+  outputPath: "./summer-highlights.mp4",
   onProgress: ({ percent }) => console.log(`${percent}% complete`),
 });
 ```
 
-## Pre-Validation (for AI Pipelines)
+## Pre-Validation
 
-Validate configurations before creating a project—ideal for AI feedback loops where you want to catch errors early and provide structured feedback:
+Validate clip configurations before creating a project. Useful for catching errors early in data pipelines, form-based editors, or any workflow where configurations are generated dynamically:
 
 ```js
 import SIMPLEFFMPEG from "simple-ffmpegjs";
@@ -155,7 +174,7 @@ const clips = [
 
 // Validate without creating a project
 const result = SIMPLEFFMPEG.validate(clips, {
-  skipFileChecks: true, // Skip file existence checks (useful when files don't exist yet)
+  skipFileChecks: true, // Skip file existence checks (useful when files aren't on disk yet)
   width: 1920, // Project dimensions (for Ken Burns size validation)
   height: 1080,
   strictKenBurns: false, // If true, undersized Ken Burns images error instead of warn (default: false)
@@ -189,6 +208,70 @@ if (result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)) {
   // Handle gap-specific logic
 }
 ```
+
+## Schema Export
+
+Export a structured, human-readable description of all clip types accepted by `load()`. The output is designed to serve as context for LLMs, documentation generators, code generation tools, or anything that needs to understand the library's clip format.
+
+### Basic Usage
+
+```js
+// Get the full schema (all clip types)
+const schema = SIMPLEFFMPEG.getSchema();
+console.log(schema);
+```
+
+The output is a formatted text document with type definitions, allowed values, usage notes, and examples for each clip type.
+
+### Filtering Modules
+
+The schema is broken into modules — one per clip type. You can include or exclude modules to control exactly what appears in the output:
+
+```js
+// Only include video and image clip types
+const schema = SIMPLEFFMPEG.getSchema({ include: ["video", "image"] });
+
+// Include everything except text and subtitle
+const schema = SIMPLEFFMPEG.getSchema({ exclude: ["text", "subtitle"] });
+
+// See all available module IDs
+SIMPLEFFMPEG.getSchemaModules();
+// ['video', 'audio', 'image', 'text', 'subtitle', 'music']
+```
+
+Available modules:
+
+| Module     | Covers                                                      |
+| ---------- | ----------------------------------------------------------- |
+| `video`    | Video clips, transitions, volume, trimming                  |
+| `audio`    | Standalone audio clips                                      |
+| `image`    | Image clips, Ken Burns effects                              |
+| `text`     | Text overlays — all modes, animations, positioning, styling |
+| `subtitle` | Subtitle file import (SRT, VTT, ASS, SSA)                   |
+| `music`    | Background music / background audio, looping                |
+
+### Custom Instructions
+
+Embed your own instructions directly into the schema output. Top-level instructions appear at the beginning, and per-module instructions are placed inside the relevant section — formatted identically to the built-in notes:
+
+```js
+const schema = SIMPLEFFMPEG.getSchema({
+  include: ["video", "image", "music"],
+  instructions: [
+    "You are creating short cooking tutorials for TikTok.",
+    "Keep all videos under 30 seconds.",
+  ],
+  moduleInstructions: {
+    video: [
+      "Always use fade transitions at 0.5s.",
+      "Limit to 5 clips maximum.",
+    ],
+    music: "Always include background music at volume 0.15.",
+  },
+});
+```
+
+Both `instructions` and `moduleInstructions` values accept a `string` or `string[]`. Per-module instructions for excluded modules are silently ignored.
 
 ## API Reference
 
@@ -597,9 +680,10 @@ await project.load([
 
 ## Examples
 
-### Two Clips with Transition
+### Clips & Transitions
 
 ```ts
+// Two clips with a crossfade
 await project.load([
   { type: "video", url: "./a.mp4", position: 0, end: 5 },
   {
@@ -612,56 +696,7 @@ await project.load([
 ]);
 ```
 
-### Text Positioning with Offsets
-
-Text is centered by default. Use `xOffset` and `yOffset` to adjust position relative to any base:
-
-```ts
-await project.load([
-  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
-  // Title: centered, 100px above center
-  {
-    type: "text",
-    text: "Main Title",
-    position: 0,
-    end: 5,
-    fontSize: 72,
-    yOffset: -100,
-  },
-  // Subtitle: centered, 50px below center
-  {
-    type: "text",
-    text: "Subtitle here",
-    position: 0.5,
-    end: 5,
-    fontSize: 36,
-    yOffset: 50,
-  },
-]);
-```
-
-Offsets work with all positioning methods (`x`/`y` pixels, `xPercent`/`yPercent`, or default center).
-
-### Word-by-Word Text Animation
-
-```ts
-await project.load([
-  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
-  {
-    type: "text",
-    mode: "word-replace",
-    text: "One Two Three Four",
-    position: 2,
-    end: 6,
-    wordTimestamps: [2, 3, 4, 5, 6],
-    animation: { type: "fade-in", in: 0.2 },
-    fontSize: 72,
-    fontColor: "white",
-  },
-]);
-```
-
-### Image Slideshow with Ken Burns
+**Image slideshow with Ken Burns effects:**
 
 ```ts
 await project.load([
@@ -690,173 +725,69 @@ await project.load([
 ]);
 ```
 
-> **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning about potential quality loss). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
+> **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
 
-### Export with Progress Tracking
+### Text & Animations
 
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  onProgress: ({ percent, fps, speed }) => {
-    process.stdout.write(`\rRendering: ${percent}% (${fps} fps, ${speed}x)`);
-  },
-});
-```
-
-### High-Quality Export with Custom Settings
-
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  videoCodec: "libx265",
-  crf: 18, // Higher quality
-  preset: "slow", // Better compression
-  audioCodec: "libopus",
-  audioBitrate: "256k",
-  metadata: {
-    title: "My Video",
-    artist: "My Name",
-    date: "2024",
-  },
-});
-```
-
-### Hardware-Accelerated Export (macOS)
-
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  hwaccel: "videotoolbox",
-  videoCodec: "h264_videotoolbox",
-  crf: 23,
-});
-```
-
-### Two-Pass Encoding for Target File Size
-
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  twoPass: true,
-  videoBitrate: "5M", // Target bitrate
-  preset: "slow",
-});
-```
-
-### Scale Output Resolution
-
-```ts
-// Use resolution preset
-await project.export({
-  outputPath: "./output-720p.mp4",
-  outputResolution: "720p",
-});
-
-// Or specify exact dimensions
-await project.export({
-  outputPath: "./output-custom.mp4",
-  outputWidth: 1280,
-  outputHeight: 720,
-});
-```
-
-### Audio-Only Export
-
-```ts
-await project.export({
-  outputPath: "./audio.mp3",
-  audioOnly: true,
-  audioCodec: "libmp3lame",
-  audioBitrate: "320k",
-});
-```
-
-### Generate Thumbnail
-
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  thumbnail: {
-    outputPath: "./thumbnail.jpg",
-    time: 5, // Capture at 5 seconds
-    width: 640,
-  },
-});
-```
-
-### Debug Export Command
-
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  verbose: true, // Log export options
-  saveCommand: "./ffmpeg-command.txt", // Save command to file
-});
-```
-
-### Typewriter Text Effect
+Text is centered by default. Use `xPercent`/`yPercent` for percentage positioning, `x`/`y` for pixels, or `xOffset`/`yOffset` to nudge from any base:
 
 ```ts
 await project.load([
-  { type: "video", url: "./bg.mp4", position: 0, end: 5 },
+  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
+  // Title: centered, 100px above center
   {
     type: "text",
-    text: "Appearing letter by letter...",
-    position: 1,
-    end: 4,
-    fontSize: 48,
-    fontColor: "white",
-    animation: {
-      type: "typewriter",
-      speed: 15, // 15 characters per second
-    },
+    text: "Main Title",
+    position: 0,
+    end: 5,
+    fontSize: 72,
+    yOffset: -100,
   },
-]);
-```
-
-### Pulsing Text Effect
-
-```ts
-await project.load([
-  { type: "video", url: "./bg.mp4", position: 0, end: 5 },
+  // Subtitle: centered, 50px below center
   {
     type: "text",
-    text: "Pulsing...",
+    text: "Subtitle here",
     position: 0.5,
-    end: 4.5,
-    fontSize: 52,
-    fontColor: "cyan",
-    animation: {
-      type: "pulse",
-      speed: 2, // 2 pulses per second
-      intensity: 0.2, // 20% size variation
-    },
+    end: 5,
+    fontSize: 36,
+    yOffset: 50,
   },
 ]);
 ```
 
-### Karaoke Text Effect
-
-Create word-by-word highlighting like karaoke subtitles:
+**Word-by-word replacement:**
 
 ```ts
-await project.load([
-  { type: "video", url: "./music-video.mp4", position: 0, end: 10 },
-  {
-    type: "text",
-    mode: "karaoke",
-    text: "Never gonna give you up",
-    position: 2,
-    end: 6,
-    fontColor: "#FFFFFF",
-    highlightColor: "#FFFF00", // Words highlight to yellow
-    fontSize: 48,
-    yPercent: 0.85, // Position near bottom
-  },
-]);
+{
+  type: "text",
+  mode: "word-replace",
+  text: "One Two Three Four",
+  position: 2,
+  end: 6,
+  wordTimestamps: [2, 3, 4, 5, 6],
+  animation: { type: "fade-in", in: 0.2 },
+  fontSize: 72,
+  fontColor: "white",
+}
 ```
 
-With precise word timings:
+**Typewriter, pulse, and other animations:**
+
+```ts
+// Typewriter — letters appear one at a time
+{ type: "text", text: "Appearing letter by letter...", position: 1, end: 4,
+  animation: { type: "typewriter", speed: 15 } }
+
+// Pulse — rhythmic scaling
+{ type: "text", text: "Pulsing...", position: 0.5, end: 4.5,
+  animation: { type: "pulse", speed: 2, intensity: 0.2 } }
+
+// Also available: fade-in, fade-out, fade-in-out, pop, pop-bounce, scale-in
+```
+
+### Karaoke
+
+Word-by-word highlighting with customizable colors. Use `highlightStyle: "instant"` for immediate color changes instead of the default smooth fill:
 
 ```ts
 await project.load([
@@ -877,74 +808,16 @@ await project.load([
     fontColor: "#FFFFFF",
     highlightColor: "#00FF00",
     fontSize: 52,
+    yPercent: 0.85,
   },
 ]);
 ```
 
-With instant highlight (words change color immediately instead of gradual fill):
+For simple usage without explicit word timings, just provide `text` and `wordTimestamps` — the library will split on spaces. Multi-line karaoke is supported with `\n` in the text string or `lineBreak: true` in the words array.
 
-```ts
-await project.load([
-  { type: "video", url: "./music-video.mp4", position: 0, end: 10 },
-  {
-    type: "text",
-    mode: "karaoke",
-    text: "Each word pops instantly",
-    position: 1,
-    end: 5,
-    fontColor: "#FFFFFF",
-    highlightColor: "#FF00FF",
-    highlightStyle: "instant", // Words change color immediately
-    fontSize: 48,
-  },
-]);
-```
+### Subtitles
 
-Multi-line karaoke (use `\n` for line breaks):
-
-```ts
-await project.load([
-  { type: "video", url: "./music-video.mp4", position: 0, end: 10 },
-  {
-    type: "text",
-    mode: "karaoke",
-    text: "First line of lyrics\nSecond line continues",
-    position: 0,
-    end: 6,
-    fontColor: "#FFFFFF",
-    highlightColor: "#FFFF00",
-    fontSize: 36,
-    yPercent: 0.8,
-  },
-]);
-```
-
-Or with explicit line breaks in the words array:
-
-```ts
-await project.load([
-  { type: "video", url: "./music-video.mp4", position: 0, end: 10 },
-  {
-    type: "text",
-    mode: "karaoke",
-    text: "Hello World Goodbye World",
-    position: 0,
-    end: 4,
-    words: [
-      { text: "Hello", start: 0, end: 1 },
-      { text: "World", start: 1, end: 2, lineBreak: true }, // Line break after this word
-      { text: "Goodbye", start: 2, end: 3 },
-      { text: "World", start: 3, end: 4 },
-    ],
-    fontColor: "#FFFFFF",
-    highlightColor: "#00FF00",
-  },
-]);
-```
-
-### Import SRT/VTT Subtitles
-
-Add existing subtitle files to your video:
+Import external subtitle files (SRT, VTT, ASS/SSA):
 
 ```ts
 await project.load([
@@ -959,72 +832,77 @@ await project.load([
 ]);
 ```
 
-With time offset (shift subtitles forward):
+Use `position` to offset all subtitle timestamps forward (e.g., `position: 2.5` delays everything by 2.5s). ASS/SSA files use their own embedded styles — font options are for SRT/VTT imports.
+
+### Export Settings
 
 ```ts
-await project.load([
-  { type: "video", url: "./video.mp4", position: 0, end: 60 },
-  {
-    type: "subtitle",
-    url: "./subtitles.srt",
-    position: 2.5, // Delay subtitles by 2.5 seconds
-  },
-]);
-```
+// High-quality H.265 with metadata
+await project.export({
+  outputPath: "./output.mp4",
+  videoCodec: "libx265",
+  crf: 18,
+  preset: "slow",
+  audioCodec: "libopus",
+  audioBitrate: "256k",
+  metadata: { title: "My Video", artist: "My Name", date: "2025" },
+});
 
-### Using Platform Presets
+// Hardware-accelerated (macOS)
+await project.export({
+  outputPath: "./output.mp4",
+  hwaccel: "videotoolbox",
+  videoCodec: "h264_videotoolbox",
+});
 
-```ts
-// Create a TikTok-optimized video
-const tiktok = new SIMPLEFFMPEG({ preset: "tiktok" });
+// Two-pass encoding for target file size
+await project.export({
+  outputPath: "./output.mp4",
+  twoPass: true,
+  videoBitrate: "5M",
+  preset: "slow",
+});
 
-await tiktok.load([
-  { type: "video", url: "./vertical.mp4", position: 0, end: 15 },
-  {
-    type: "text",
-    text: "Follow for more!",
-    position: 12,
-    end: 15,
-    fontSize: 48,
-    fontColor: "white",
-    yPercent: 0.8,
-    animation: { type: "pop-bounce", in: 0.3 },
-  },
-]);
+// Scale output resolution
+await project.export({ outputPath: "./720p.mp4", outputResolution: "720p" });
 
-await tiktok.export({
-  outputPath: "./tiktok-video.mp4",
-  watermark: {
-    type: "text",
-    text: "@myhandle",
-    position: "bottom-right",
-    opacity: 0.7,
-  },
+// Audio-only export
+await project.export({
+  outputPath: "./audio.mp3",
+  audioOnly: true,
+  audioCodec: "libmp3lame",
+  audioBitrate: "320k",
+});
+
+// Generate thumbnail
+await project.export({
+  outputPath: "./output.mp4",
+  thumbnail: { outputPath: "./thumb.jpg", time: 5, width: 640 },
+});
+
+// Debug — save the FFmpeg command to a file
+await project.export({
+  outputPath: "./output.mp4",
+  verbose: true,
+  saveCommand: "./ffmpeg-command.txt",
 });
 ```
 
-## Timeline Behavior
+## Advanced
+
+### Timeline Behavior
 
 - Clip timing uses `[position, end)` intervals in seconds
 - Transitions create overlaps that reduce total duration
 - Background music is mixed after video transitions (unaffected by crossfades)
 
-### Transition Compensation
+**Transition Compensation:**
 
-FFmpeg's `xfade` transitions work by **overlapping** clips, which compresses the timeline. For example:
+FFmpeg's `xfade` transitions **overlap** clips, compressing the timeline. A 1s fade between two 10s clips produces 19s of output, not 20s. With multiple transitions this compounds.
 
-- Clip A: 0-10s
-- Clip B: 10-20s with 1s fade transition
-- **Actual output duration: 19s** (not 20s)
-
-With multiple transitions, this compounds—10 clips with 0.5s transitions each would be ~4.5 seconds shorter than the sum of clip durations.
-
-**Automatic Compensation (default):**
-
-By default, simple-ffmpeg automatically adjusts text and subtitle timings to compensate for this compression. When you position text at "15s", it appears at the visual 15s mark in the output video, regardless of how many transitions have occurred.
+By default, simple-ffmpeg automatically adjusts text and subtitle timings to compensate. When you position text at "15s", it appears at the visual 15s mark regardless of how many transitions preceded it:
 
 ```ts
-// Text will appear at the correct visual position even with transitions
 await project.load([
   { type: "video", url: "./a.mp4", position: 0, end: 10 },
   {
@@ -1038,138 +916,247 @@ await project.load([
 ]);
 ```
 
-**Disabling Compensation:**
+Disable with `compensateTransitions: false` in export options if you've pre-calculated offsets yourself.
 
-If you need raw timeline positioning (e.g., you've pre-calculated offsets yourself):
+### Auto-Batching
 
-```ts
-await project.export({
-  outputPath: "./output.mp4",
-  compensateTransitions: false, // Use raw timestamps
-});
-```
+FFmpeg's `filter_complex` has platform-specific length limits (Windows ~32KB, macOS ~1MB, Linux ~2MB). When text animations create many filter nodes, the command can exceed these limits.
 
-## Auto-Batching for Complex Filter Graphs
+simple-ffmpeg handles this automatically — detecting oversized filter graphs and splitting text overlays into multiple rendering passes with intermediate files. No configuration needed.
 
-FFmpeg's `filter_complex` has platform-specific length limits (Windows ~32KB, macOS ~1MB, Linux ~2MB). When text animations like typewriter create many filter nodes, the command can exceed these limits.
-
-**simple-ffmpeg automatically handles this:**
-
-1. **Auto-detection**: Before running FFmpeg, the library checks if the filter graph exceeds a safe 100KB limit
-2. **Smart batching**: If too long, text overlays are rendered in multiple passes with intermediate files
-3. **Optimal batch sizing**: Calculates the ideal number of nodes per pass based on actual filter complexity
-
-This happens transparently—you don't need to configure anything. For very complex projects, you can tune it manually:
+For very complex projects, you can tune it:
 
 ```js
 await project.export({
-  outputPath: "./output.mp4",
-  // Lower this if you have many complex text animations
   textMaxNodesPerPass: 30, // default: 75
-  // Intermediate encoding settings (used between passes)
   intermediateVideoCodec: "libx264", // default
   intermediateCrf: 18, // default (high quality)
   intermediatePreset: "veryfast", // default (fast encoding)
 });
 ```
 
-**When batching activates:**
-
-- Typewriter animations with long text (creates one filter node per character)
-- Many simultaneous text overlays
-- Complex animation combinations
-
-With `verbose: true`, you'll see when auto-batching kicks in:
-
-```
-simple-ffmpeg: Auto-batching text (filter too long: 150000 > 100000). Using 35 nodes per pass.
-```
+Batching activates for typewriter animations with long text, many simultaneous text overlays, or complex animation combinations. With `verbose: true`, you'll see when it kicks in.
 
 ## Real-World Usage Patterns
 
 ### Data Pipeline Example
 
-Generate videos programmatically from structured data (JSON, database, API, CMS):
+Generate videos programmatically from structured data — database records, API responses, CMS content, etc. This example creates property tour videos from real estate listings:
 
 ```js
-const SIMPLEFFMPEG = require("simple-ffmpegjs");
+import SIMPLEFFMPEG from "simple-ffmpegjs";
 
-// Your data source - could be database records, API response, etc.
-const quotes = [
-  {
-    text: "The only way to do great work is to love what you do.",
-    author: "Steve Jobs",
-  },
-  { text: "Move fast and break things.", author: "Mark Zuckerberg" },
-];
+const listings = await db.getActiveListings(); // your data source
 
-async function generateQuoteVideo(quote, outputPath) {
+async function generateListingVideo(listing, outputPath) {
+  const photos = listing.photos; // ['kitchen.jpg', 'living-room.jpg', ...]
+  const slideDuration = 4;
+
+  // Build an image slideshow from listing photos
+  const photoClips = photos.map((photo, i) => ({
+    type: "image",
+    url: photo,
+    position: i * slideDuration,
+    end: (i + 1) * slideDuration,
+    kenBurns: i % 2 === 0 ? "zoom-in" : "pan-right",
+  }));
+
+  const totalDuration = photos.length * slideDuration;
+
   const clips = [
-    { type: "video", url: "./backgrounds/default.mp4", position: 0, end: 5 },
+    ...photoClips,
+    // Price banner
     {
       type: "text",
-      text: `"${quote.text}"`,
+      text: listing.price,
       position: 0.5,
-      end: 4,
-      fontSize: 42,
+      end: totalDuration - 0.5,
+      fontSize: 36,
       fontColor: "#FFFFFF",
-      yPercent: 0.4,
-      animation: { type: "fade-in", in: 0.3 },
+      backgroundColor: "#000000",
+      backgroundOpacity: 0.6,
+      padding: 12,
+      xPercent: 0.5,
+      yPercent: 0.1,
     },
+    // Address at the bottom
     {
       type: "text",
-      text: `— ${quote.author}`,
-      position: 1.5,
-      end: 4.5,
+      text: listing.address,
+      position: 0.5,
+      end: totalDuration - 0.5,
       fontSize: 28,
-      fontColor: "#CCCCCC",
-      yPercent: 0.6,
-      animation: { type: "fade-in", in: 0.3 },
+      fontColor: "#FFFFFF",
+      borderColor: "#000000",
+      borderWidth: 2,
+      xPercent: 0.5,
+      yPercent: 0.9,
     },
+    { type: "music", url: "./assets/ambient.mp3", volume: 0.15, loop: true },
   ];
 
-  const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+  const project = new SIMPLEFFMPEG({ preset: "instagram-reel" });
   await project.load(clips);
   return project.export({ outputPath });
 }
 
-// Batch process all quotes
-for (const [i, quote] of quotes.entries()) {
-  await generateQuoteVideo(quote, `./output/quote-${i + 1}.mp4`);
+// Batch generate videos for all listings
+for (const listing of listings) {
+  await generateListingVideo(listing, `./output/${listing.id}.mp4`);
 }
 ```
 
-### AI Generation with Validation Loop
+### AI Video Generation Pipeline Example
 
-The structured validation with error codes makes it easy to build AI feedback loops:
+Combine schema export, validation, and structured error codes to build a complete AI-driven video generation pipeline. The schema gives the model the exact specification it needs, and the validation loop lets it self-correct until the output is valid.
 
 ```js
-const SIMPLEFFMPEG = require("simple-ffmpegjs");
+import SIMPLEFFMPEG from "simple-ffmpegjs";
 
-async function generateVideoWithAI(prompt) {
-  let config = await ai.generateVideoConfig(prompt);
-  let result = SIMPLEFFMPEG.validate(config, { skipFileChecks: true });
-  let retries = 0;
+// 1. Build the schema context for the AI
+// Only expose the clip types you want the AI to work with.
+// Developer-level config (codecs, resolution, etc.) stays out of the schema.
 
-  // Let AI fix its own mistakes
-  while (!result.valid && retries < 3) {
-    // Feed structured errors back to AI for correction
-    config = await ai.fixConfig(config, result.errors);
-    result = SIMPLEFFMPEG.validate(config, { skipFileChecks: true });
-    retries++;
+const schema = SIMPLEFFMPEG.getSchema({
+  include: ["video", "image", "text", "music"],
+  instructions: [
+    "You are composing a short-form video for TikTok.",
+    "Keep total duration under 30 seconds.",
+    "Return ONLY valid JSON — an array of clip objects.",
+  ],
+  moduleInstructions: {
+    video: "Use fade transitions between clips. Keep each clip 3-6 seconds.",
+    text: [
+      "Add a title in the first 2 seconds with fontSize 72.",
+      "Use white text with a black border for readability.",
+    ],
+    music: "Always include looping background music at volume 0.15.",
+  },
+});
+
+// 2. Send the schema + prompt to your LLM
+
+async function askAI(systemPrompt, userPrompt) {
+  // Replace with your LLM provider (OpenAI, Anthropic, etc.)
+  const response = await llm.chat({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  return JSON.parse(response.content);
+}
+
+// 3. Generate → Validate → Retry loop
+
+async function generateVideo(userPrompt, media) {
+  // Build the system prompt with schema + available media and their details.
+  // Descriptions and durations help the AI make good creative decisions —
+  // ordering clips logically, setting accurate position/end times, etc.
+  const mediaList = media
+    .map((m) => `  - ${m.file} (${m.duration}s) — ${m.description}`)
+    .join("\n");
+
+  const systemPrompt = [
+    "You are a video editor. Given the user's request and the available media,",
+    "produce a clips array that follows this schema:\n",
+    schema,
+    "\nAvailable media (use these exact file paths):",
+    mediaList,
+  ].join("\n");
+
+  const knownPaths = media.map((m) => m.file);
+
+  // First attempt
+  let clips = await askAI(systemPrompt, userPrompt);
+  let result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+  let attempts = 1;
+
+  // Self-correction loop: feed structured errors back to the AI
+  while (!result.valid && attempts < 3) {
+    const errorFeedback = result.errors
+      .map((e) => `[${e.code}] ${e.path}: ${e.message}`)
+      .join("\n");
+
+    clips = await askAI(
+      systemPrompt,
+      [
+        `Your previous output had validation errors:\n${errorFeedback}`,
+        `\nOriginal request: ${userPrompt}`,
+        "\nPlease fix the errors and return the corrected clips array.",
+      ].join("\n")
+    );
+
+    result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+    attempts++;
   }
 
   if (!result.valid) {
-    throw new Error("AI failed to generate valid config");
+    throw new Error(
+      `Failed to generate valid config after ${attempts} attempts:\n` +
+        SIMPLEFFMPEG.formatValidationResult(result)
+    );
   }
 
-  const project = new SIMPLEFFMPEG({ width: 1080, height: 1920 });
-  await project.load(config);
-  return project.export({ outputPath: "./output.mp4" });
+  // 4. Verify the AI only used known media paths
+  // The structural loop (skipFileChecks: true) can't catch hallucinated paths.
+  // You could also put this inside the retry loop to let the AI self-correct
+  // bad paths — just append the unknown paths to the error feedback string.
+
+  const usedPaths = clips.filter((c) => c.url).map((c) => c.url);
+  const unknownPaths = usedPaths.filter((p) => !knownPaths.includes(p));
+  if (unknownPaths.length > 0) {
+    throw new Error(`AI used unknown media paths: ${unknownPaths.join(", ")}`);
+  }
+
+  // 5. Build and export
+  // load() will also throw MediaNotFoundError if any file is missing on disk.
+
+  const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+  await project.load(clips);
+
+  return project.export({
+    outputPath: "./output.mp4",
+    onProgress: ({ percent }) => console.log(`Rendering: ${percent}%`),
+  });
 }
+
+// Usage
+
+await generateVideo("Make a hype travel montage with upbeat text overlays", [
+  {
+    file: "clips/beach-drone.mp4",
+    duration: 4,
+    description:
+      "Aerial drone shot of a tropical beach with people playing volleyball",
+  },
+  {
+    file: "clips/city-timelapse.mp4",
+    duration: 8,
+    description: "Timelapse of a city skyline transitioning from day to night",
+  },
+  {
+    file: "clips/sunset.mp4",
+    duration: 6,
+    description: "Golden hour sunset over the ocean with gentle waves",
+  },
+  {
+    file: "music/upbeat-track.mp3",
+    duration: 120,
+    description:
+      "Upbeat electronic track with a strong beat, good for montages",
+  },
+]);
 ```
 
-Each validation error includes a `code` (e.g., `INVALID_TIMELINE`, `MISSING_REQUIRED`) and `path` (e.g., `clips[2].position`) for precise AI feedback.
+The key parts of this pattern:
+
+1. **`getSchema()`** gives the AI a precise specification of what it can produce, with only the clip types you've chosen to expose.
+2. **`instructions` / `moduleInstructions`** embed your creative constraints directly into the spec — the AI treats them the same as built-in rules.
+3. **Media descriptions** with durations and content details give the AI enough context to make good creative decisions — ordering clips logically, setting accurate timings, and choosing the right media for each part of the video.
+4. **`validate()`** with `skipFileChecks: true` checks structural correctness in the retry loop — types, timelines, required fields — without touching the filesystem.
+5. **The retry loop** lets the AI self-correct. Most validation failures resolve in one retry.
+6. **The path guard** catches hallucinated file paths before `load()` hits the filesystem. You can optionally move this check inside the retry loop to let the AI self-correct bad paths. `load()` itself will also throw `MediaNotFoundError` if a file is missing on disk.
 
 ## Testing
 
