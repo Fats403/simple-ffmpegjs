@@ -6,8 +6,9 @@ module.exports = {
   schema: `{
   type: "video";              // Required: clip type identifier
   url: string;                // Required: path to video file
-  position: number;           // Required: start time on timeline (seconds)
-  end: number;                // Required: end time on timeline (seconds)
+  position?: number;          // Start time on timeline (seconds). Omit to auto-sequence after previous clip.
+  end?: number;               // End time on timeline (seconds). Use end OR duration, not both.
+  duration?: number;          // Duration in seconds (alternative to end). end = position + duration.
   cutFrom?: number;           // Trim: start playback from this point in the source (default: 0)
   volume?: number;            // Audio volume multiplier (default: 1, 0 = mute, >1 = amplify)
   transition?: {              // Crossfade transition INTO this clip from the previous one
@@ -70,11 +71,20 @@ module.exports = {
 ]`,
     },
     {
-      label: "Trim source video (use 10s-20s of the file)",
-      code: `{ type: "video", url: "long-clip.mp4", position: 0, end: 10, cutFrom: 10 }`,
+      label: "Auto-sequenced clips using duration",
+      code: `[
+  { type: "video", url: "intro.mp4", duration: 5 },
+  { type: "video", url: "main.mp4", duration: 10 }
+]`,
+    },
+    {
+      label: "Trim source video (use 10s starting at the 10s mark)",
+      code: `{ type: "video", url: "long-clip.mp4", cutFrom: 10, duration: 10 }`,
     },
   ],
   notes: [
+    "If position is omitted, the clip is placed immediately after the previous video/image clip (auto-sequencing). The first clip defaults to position 0.",
+    "Use duration instead of end to specify how long the clip appears: end = position + duration. Cannot use both.",
     "Transitions overlap clips: a 0.5s fade means clip B's position should start 0.5s before clip A's end.",
     "The first clip in the timeline cannot have a transition (there's nothing to transition from).",
     "The total video duration is shortened by the sum of all transition durations.",

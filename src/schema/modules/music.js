@@ -7,7 +7,8 @@ module.exports = {
   type: "music";              // Required: clip type ("music" or "backgroundAudio")
   url: string;                // Required: path to audio file
   position?: number;          // Start time on timeline (default: 0)
-  end?: number;               // End time on timeline (default: end of video)
+  end?: number;               // End time on timeline (default: end of video). Use end OR duration, not both.
+  duration?: number;          // Duration in seconds (alternative to end). end = position + duration.
   cutFrom?: number;           // Start playback from this point in the source (default: 0)
   volume?: number;            // Volume multiplier (default: 0.2 — quieter than main audio)
   loop?: boolean;             // Loop the track to fill the entire video duration (default: false)

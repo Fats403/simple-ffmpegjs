@@ -7,7 +7,8 @@ module.exports = {
   type: "subtitle";           // Required: clip type identifier
   url: string;                // Required: path to subtitle file (.srt, .vtt, .ass, .ssa)
   position?: number;          // Timeline offset — shifts all subtitle timestamps forward (default: 0)
-  end?: number;               // Optional end time to cut off subtitles
+  end?: number;               // Optional end time to cut off subtitles. Use end OR duration, not both.
+  duration?: number;          // Duration in seconds (alternative to end). end = position + duration.
 
   // Styling (applies to SRT/VTT imports — ASS/SSA files use their own embedded styles)
   fontFamily?: string;        // Font family (default: "Sans")

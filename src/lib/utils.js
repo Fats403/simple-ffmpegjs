@@ -126,6 +126,7 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal }) {
       if (onProgress && typeof onProgress === "function") {
         const progress = parseFFmpegProgress(chunk, totalDuration);
         if (Object.keys(progress).length > 0) {
+          progress.phase = "rendering";
           onProgress(progress);
         }
       }

@@ -41,6 +41,8 @@ const {
   buildASSFilter,
 } = require("./ffmpeg/subtitle_builder");
 const { getSchema, getSchemaModules } = require("./schema");
+const { resolveClips } = require("./core/resolve");
+const { probeMedia } = require("./core/media_info");
 
 class SIMPLEFFMPEG {
   /**
@@ -215,11 +217,19 @@ class SIMPLEFFMPEG {
     this._isLoading = true;
 
     try {
-      const result = validateConfig(clipObjs, {
+      // Resolve shorthand: duration → end, auto-sequential positioning
+      const resolved = resolveClips(clipObjs);
+
+      // Merge resolution errors into validation
+      const result = validateConfig(resolved.clips, {
         fillGaps: this.options.fillGaps,
         width: this.options.width,
         height: this.options.height,
       });
+
+      // Prepend resolution errors (e.g. duration+end conflict)
+      result.errors.unshift(...resolved.errors);
+      result.valid = result.valid && resolved.errors.length === 0;
 
       if (!result.valid) {
         throw new ValidationError(formatValidationResult(result), {
@@ -236,8 +246,11 @@ class SIMPLEFFMPEG {
         result.warnings.forEach((w) => console.warn(`${w.path}: ${w.message}`));
       }
 
+      // Use resolved clips (with position/end computed) for loading
+      const resolvedClips = resolved.clips;
+
       await Promise.all(
-        clipObjs.map((clipObj) => {
+        resolvedClips.map((clipObj) => {
           if (clipObj.type === "video" || clipObj.type === "audio") {
             clipObj.volume = clipObj.volume || 1;
             clipObj.cutFrom = clipObj.cutFrom || 0;
@@ -991,6 +1004,9 @@ class SIMPLEFFMPEG {
       // Handle multi-pass text overlays if needed
       let passes = 0;
       if (needTextPasses) {
+        if (onProgress && typeof onProgress === "function") {
+          onProgress({ phase: "batching" });
+        }
         const {
           finalPath,
           tempOutputs,
@@ -1099,7 +1115,100 @@ class SIMPLEFFMPEG {
    * }
    */
   static validate(clips, options = {}) {
-    return validateConfig(clips, options);
+    // Resolve shorthand (duration, auto-sequencing) before validation
+    const resolved = resolveClips(clips);
+    const result = validateConfig(resolved.clips, options);
+
+    // Merge resolution errors
+    result.errors.unshift(...resolved.errors);
+    result.valid = result.valid && resolved.errors.length === 0;
+
+    return result;
+  }
+
+  /**
+   * Calculate the total duration of a clips configuration.
+   * Resolves shorthand (duration, auto-sequencing) before computing.
+   * Returns the visual timeline duration: sum of video/image clip durations
+   * minus transition overlaps.
+   *
+   * This is a pure function — same clips always produce the same result.
+   * No file I/O is performed.
+   *
+   * @param {Array} clips - Array of clip objects
+   * @returns {number} Total duration in seconds
+   *
+   * @example
+   * const duration = SIMPLEFFMPEG.getDuration([
+   *   { type: "video", url: "./a.mp4", duration: 5 },
+   *   { type: "video", url: "./b.mp4", duration: 10, transition: { type: "fade", duration: 0.5 } },
+   * ]);
+   * // duration === 14.5 (15 - 0.5 transition overlap)
+   */
+  static getDuration(clips) {
+    if (!Array.isArray(clips) || clips.length === 0) return 0;
+
+    // Resolve shorthand (duration → end, auto-sequencing)
+    const { clips: resolved } = resolveClips(clips);
+
+    // Filter to visual clips (video + image)
+    const visual = resolved.filter(
+      (c) => c.type === "video" || c.type === "image"
+    );
+
+    if (visual.length === 0) return 0;
+
+    const baseSum = visual.reduce(
+      (acc, c) => acc + Math.max(0, (c.end || 0) - (c.position || 0)),
+      0
+    );
+
+    const transitionsOverlap = visual.reduce((acc, c) => {
+      const d =
+        c.transition && typeof c.transition.duration === "number"
+          ? c.transition.duration
+          : 0;
+      return acc + d;
+    }, 0);
+
+    return Math.max(0, baseSum - transitionsOverlap);
+  }
+
+  /**
+   * Probe a media file and return comprehensive metadata.
+   *
+   * Uses ffprobe to extract duration, dimensions, codecs, format,
+   * bitrate, audio details, and rotation info from any media file
+   * (video, audio, or image).
+   *
+   * @param {string} filePath - Path to the media file
+   * @returns {Promise<Object>} Media info object with:
+   *   - duration (number|null) — total duration in seconds
+   *   - width (number|null) — video width in pixels
+   *   - height (number|null) — video height in pixels
+   *   - hasVideo (boolean) — true if file contains a video stream
+   *   - hasAudio (boolean) — true if file contains an audio stream
+   *   - rotation (number) — iPhone/mobile rotation value (0 if none)
+   *   - videoCodec (string|null) — e.g. "h264", "hevc", "vp9"
+   *   - audioCodec (string|null) — e.g. "aac", "mp3"
+   *   - format (string|null) — container format, e.g. "mov,mp4,m4a,3gp,3g2,mj2"
+   *   - fps (number|null) — frames per second
+   *   - size (number|null) — file size in bytes
+   *   - bitrate (number|null) — overall bitrate in bits/sec
+   *   - sampleRate (number|null) — audio sample rate, e.g. 48000
+   *   - channels (number|null) — audio channels (1=mono, 2=stereo)
+   * @throws {MediaNotFoundError} If the file cannot be found or probed
+   *
+   * @example
+   * const info = await SIMPLEFFMPEG.probe("./video.mp4");
+   * console.log(info.duration);   // 30.5
+   * console.log(info.width);      // 1920
+   * console.log(info.height);     // 1080
+   * console.log(info.videoCodec); // "h264"
+   * console.log(info.hasAudio);   // true
+   */
+  static async probe(filePath) {
+    return probeMedia(filePath);
   }
 
   /**

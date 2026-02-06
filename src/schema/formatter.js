@@ -108,6 +108,12 @@ function formatSchema(modules, options = {}) {
     "- All times are in **seconds**. `position` = when the clip starts, `end` = when it ends."
   );
   lines.push(
+    "- **`duration`** can be used instead of `end`: the library computes `end = position + duration`. Cannot use both."
+  );
+  lines.push(
+    "- **Auto-sequencing:** For video, image, and audio clips, `position` can be omitted. The clip will be placed immediately after the previous clip on its track. The first clip defaults to position 0."
+  );
+  lines.push(
     "- Video/image clips form the visual timeline. Audio, text, and music are layered on top."
   );
   lines.push(

@@ -298,6 +298,98 @@ Load clip descriptors into the project. Validates the timeline and reads media m
 await project.load(clips: Clip[]): Promise<void[]>
 ```
 
+#### `SIMPLEFFMPEG.getDuration(clips)`
+
+Calculate the total visual timeline duration from a clips array. Handles `duration` and auto-sequencing shorthand, and subtracts transition overlaps. Pure function — no file I/O.
+
+```ts
+const clips = [
+  { type: "video", url: "./a.mp4", duration: 5 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    duration: 10,
+    transition: { type: "fade", duration: 0.5 },
+  },
+];
+SIMPLEFFMPEG.getDuration(clips); // 14.5
+```
+
+Useful for computing text overlay timings or background music end times before calling `load()`.
+
+**Duration and Auto-Sequencing:**
+
+For video, image, and audio clips, you can use shorthand to avoid specifying explicit `position` and `end` values:
+
+- **`duration`** — Use instead of `end`. The library computes `end = position + duration`. You cannot specify both `duration` and `end` on the same clip.
+- **Omit `position`** — The clip is placed immediately after the previous clip on its track. Video and image clips share the visual track; audio clips have their own track. The first clip defaults to `position: 0`.
+
+These can be combined:
+
+```ts
+// Before: manual position/end for every clip
+await project.load([
+  { type: "video", url: "./a.mp4", position: 0, end: 5 },
+  { type: "video", url: "./b.mp4", position: 5, end: 10 },
+  { type: "video", url: "./c.mp4", position: 10, end: 18, cutFrom: 3 },
+]);
+
+// After: auto-sequencing + duration
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 },
+  { type: "video", url: "./b.mp4", duration: 5 },
+  { type: "video", url: "./c.mp4", duration: 8, cutFrom: 3 },
+]);
+```
+
+You can mix explicit and implicit positioning freely. Clips with explicit `position` are placed there; subsequent auto-sequenced clips follow from the last clip's end:
+
+```ts
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 }, // position: 0, end: 5
+  { type: "video", url: "./b.mp4", position: 10, end: 15 }, // explicit gap
+  { type: "video", url: "./c.mp4", duration: 5 }, // position: 15, end: 20
+]);
+```
+
+Text clips always require an explicit `position` (they're overlays on specific moments). Background music and subtitle clips already have optional `position`/`end` with their own defaults.
+
+#### `SIMPLEFFMPEG.probe(filePath)`
+
+Probe a media file and return comprehensive metadata using ffprobe. Works with video, audio, and image files.
+
+```ts
+const info = await SIMPLEFFMPEG.probe("./video.mp4");
+// {
+//   duration: 30.5,         // seconds
+//   width: 1920,            // pixels
+//   height: 1080,           // pixels
+//   hasVideo: true,
+//   hasAudio: true,
+//   rotation: 0,            // iPhone/mobile rotation
+//   videoCodec: "h264",
+//   audioCodec: "aac",
+//   format: "mov,mp4,m4a,3gp,3g2,mj2",
+//   fps: 30,
+//   size: 15728640,         // bytes
+//   bitrate: 4125000,       // bits/sec
+//   sampleRate: 48000,      // Hz
+//   channels: 2             // stereo
+// }
+```
+
+Fields that don't apply to the file type are `null` (e.g. `width`/`height`/`videoCodec`/`fps` for audio-only files, `audioCodec`/`sampleRate`/`channels` for video-only files).
+
+Throws `MediaNotFoundError` if the file cannot be found or probed.
+
+```ts
+// Audio file
+const audio = await SIMPLEFFMPEG.probe("./music.wav");
+console.log(audio.hasVideo); // false
+console.log(audio.duration); // 180.5
+console.log(audio.sampleRate); // 44100
+```
+
 #### `project.export(options)`
 
 Build and execute the FFmpeg command to render the final video.
@@ -353,8 +445,9 @@ await project.preview(options?: ExportOptions): Promise<{
 {
   type: "video";
   url: string;              // File path
-  position: number;         // Timeline start (seconds)
-  end: number;              // Timeline end (seconds)
+  position?: number;        // Timeline start (seconds). Omit to auto-sequence after previous clip.
+  end?: number;             // Timeline end (seconds). Use end OR duration, not both.
+  duration?: number;        // Duration in seconds (alternative to end). end = position + duration.
   cutFrom?: number;         // Source offset (default: 0)
   volume?: number;          // Audio volume (default: 1)
   transition?: {
@@ -372,8 +465,9 @@ All [xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
 {
   type: "audio";
   url: string;
-  position: number;
-  end: number;
+  position?: number;        // Omit to auto-sequence after previous audio clip
+  end?: number;             // Use end OR duration, not both
+  duration?: number;        // Duration in seconds (alternative to end)
   cutFrom?: number;
   volume?: number;
 }
@@ -412,8 +506,9 @@ await project.load([
 {
   type: "image";
   url: string;
-  position: number;
-  end: number;
+  position?: number;        // Omit to auto-sequence after previous video/image clip
+  end?: number;             // Use end OR duration, not both
+  duration?: number;        // Duration in seconds (alternative to end)
   kenBurns?: "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down";
 }
 ```
@@ -424,7 +519,8 @@ await project.load([
 {
   type: "text";
   position: number;
-  end: number;
+  end?: number;             // Use end OR duration, not both
+  duration?: number;        // Duration in seconds (alternative to end)
 
   // Content
   text?: string;
@@ -601,10 +697,28 @@ The `onProgress` callback receives:
 ```ts
 {
   percent?: number;         // 0-100
+  phase?: string;           // "rendering" or "batching"
   timeProcessed?: number;   // Seconds processed
   frame?: number;           // Current frame
   fps?: number;             // Processing speed
   speed?: number;           // Multiplier (e.g., 2.0 = 2x realtime)
+}
+```
+
+The `phase` field indicates what the export is doing:
+
+- `"rendering"` — main video export (includes `percent`, `frame`, etc.)
+- `"batching"` — text overlay passes are running (fired once when batching starts)
+
+Use `phase` to update your UI when the export hits 100% but still has work to do:
+
+```ts
+onProgress: ({ percent, phase }) => {
+  if (phase === "batching") {
+    console.log("Applying text overlays...");
+  } else {
+    console.log(`${percent}%`);
+  }
 }
 ```
 
@@ -700,30 +814,14 @@ await project.load([
 
 ```ts
 await project.load([
-  {
-    type: "image",
-    url: "./photo1.jpg",
-    position: 0,
-    end: 3,
-    kenBurns: "zoom-in",
-  },
-  {
-    type: "image",
-    url: "./photo2.jpg",
-    position: 3,
-    end: 6,
-    kenBurns: "pan-right",
-  },
-  {
-    type: "image",
-    url: "./photo3.jpg",
-    position: 6,
-    end: 9,
-    kenBurns: "zoom-out",
-  },
+  { type: "image", url: "./photo1.jpg", duration: 3, kenBurns: "zoom-in" },
+  { type: "image", url: "./photo2.jpg", duration: 3, kenBurns: "pan-right" },
+  { type: "image", url: "./photo3.jpg", duration: 3, kenBurns: "zoom-out" },
   { type: "music", url: "./music.mp3", volume: 0.3 },
 ]);
 ```
+
+When `position` is omitted, clips are placed sequentially — each one starts where the previous one ended. `duration` is an alternative to `end`: the library computes `end = position + duration`. The explicit form (`position: 0, end: 3`) still works identically.
 
 > **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
 
@@ -952,16 +1050,19 @@ async function generateListingVideo(listing, outputPath) {
   const photos = listing.photos; // ['kitchen.jpg', 'living-room.jpg', ...]
   const slideDuration = 4;
 
-  // Build an image slideshow from listing photos
+  // Build an image slideshow from listing photos (auto-sequenced with crossfades)
+  const transitionDuration = 0.5;
   const photoClips = photos.map((photo, i) => ({
     type: "image",
     url: photo,
-    position: i * slideDuration,
-    end: (i + 1) * slideDuration,
+    duration: slideDuration,
     kenBurns: i % 2 === 0 ? "zoom-in" : "pan-right",
+    ...(i > 0 && {
+      transition: { type: "fade", duration: transitionDuration },
+    }),
   }));
 
-  const totalDuration = photos.length * slideDuration;
+  const totalDuration = SIMPLEFFMPEG.getDuration(photoClips);
 
   const clips = [
     ...photoClips,

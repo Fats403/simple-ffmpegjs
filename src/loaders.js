@@ -1,15 +1,15 @@
 const fs = require("fs");
 const path = require("path");
-const { getVideoMetadata, getMediaDuration } = require("./core/media_info");
+const { probeMedia } = require("./core/media_info");
 const { ValidationError, MediaNotFoundError } = require("./core/errors");
 const C = require("./core/constants");
 
 async function loadVideo(project, clipObj) {
-  const metadata = await getVideoMetadata(clipObj.url);
-  if (typeof clipObj.cutFrom === "number" && metadata.durationSec != null) {
-    if (clipObj.cutFrom >= metadata.durationSec) {
+  const metadata = await probeMedia(clipObj.url);
+  if (typeof clipObj.cutFrom === "number" && metadata.duration != null) {
+    if (clipObj.cutFrom >= metadata.duration) {
       throw new ValidationError(
-        `Video clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${metadata.durationSec}s)`,
+        `Video clip cutFrom (${clipObj.cutFrom}s) must be < source duration (${metadata.duration}s)`,
         {
           errors: [
             {
@@ -26,10 +26,10 @@ async function loadVideo(project, clipObj) {
     typeof clipObj.position === "number" &&
     typeof clipObj.end === "number" &&
     typeof clipObj.cutFrom === "number" &&
-    metadata.durationSec != null
+    metadata.duration != null
   ) {
     const requestedDuration = Math.max(0, clipObj.end - clipObj.position);
-    const maxAvailable = Math.max(0, metadata.durationSec - clipObj.cutFrom);
+    const maxAvailable = Math.max(0, metadata.duration - clipObj.cutFrom);
     if (requestedDuration > maxAvailable) {
       const clampedEnd = clipObj.position + maxAvailable;
       console.warn(
@@ -42,14 +42,15 @@ async function loadVideo(project, clipObj) {
   }
   project.videoOrAudioClips.push({
     ...clipObj,
-    iphoneRotation: metadata.iphoneRotation,
+    iphoneRotation: metadata.rotation,
     hasAudio: metadata.hasAudio,
-    mediaDuration: metadata.durationSec,
+    mediaDuration: metadata.duration,
   });
 }
 
 async function loadAudio(project, clipObj) {
-  const durationSec = await getMediaDuration(clipObj.url);
+  const metadata = await probeMedia(clipObj.url);
+  const durationSec = metadata.duration;
   if (typeof clipObj.cutFrom === "number" && durationSec != null) {
     if (clipObj.cutFrom >= durationSec) {
       throw new ValidationError(
@@ -93,7 +94,8 @@ function loadImage(project, clipObj) {
 }
 
 async function loadBackgroundAudio(project, clipObj) {
-  const durationSec = await getMediaDuration(clipObj.url);
+  const metadata = await probeMedia(clipObj.url);
+  const durationSec = metadata.duration;
   const clip = {
     ...clipObj,
     volume:

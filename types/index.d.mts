@@ -50,8 +50,12 @@ declare namespace SIMPLEFFMPEG {
   interface BaseClip {
     type: ClipType;
     url?: string;
-    position: number;
-    end: number;
+    /** Start time on timeline in seconds. For video/image/audio: omit to auto-sequence after the previous clip. */
+    position?: number;
+    /** End time on timeline in seconds. Mutually exclusive with duration. */
+    end?: number;
+    /** Duration in seconds (alternative to end). Computes end = position + duration. Mutually exclusive with end. */
+    duration?: number;
   }
 
   interface VideoClip extends BaseClip {
@@ -307,6 +311,8 @@ declare namespace SIMPLEFFMPEG {
     bitrate?: number;
     /** Current output size in bytes */
     size?: number;
+    /** Export phase: "rendering" during main export, "batching" during text overlay passes */
+    phase?: "rendering" | "batching";
   }
 
   /** Metadata to embed in output file */
@@ -530,6 +536,42 @@ declare namespace SIMPLEFFMPEG {
     /** Total expected duration in seconds */
     totalDuration: number;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Media Info (probe)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Result from SIMPLEFFMPEG.probe() — comprehensive media file metadata */
+  interface MediaInfo {
+    /** Total duration in seconds */
+    duration: number | null;
+    /** Video width in pixels (null for audio-only files) */
+    width: number | null;
+    /** Video height in pixels (null for audio-only files) */
+    height: number | null;
+    /** Whether the file contains a video stream */
+    hasVideo: boolean;
+    /** Whether the file contains an audio stream */
+    hasAudio: boolean;
+    /** iPhone/mobile rotation value in degrees (0 if none) */
+    rotation: number;
+    /** Video codec name, e.g. "h264", "hevc", "vp9" (null if no video) */
+    videoCodec: string | null;
+    /** Audio codec name, e.g. "aac", "mp3", "pcm_s16le" (null if no audio) */
+    audioCodec: string | null;
+    /** Container format name, e.g. "mov,mp4,m4a,3gp,3g2,mj2" */
+    format: string | null;
+    /** Frames per second (null for non-video files) */
+    fps: number | null;
+    /** File size in bytes */
+    size: number | null;
+    /** Overall bitrate in bits per second */
+    bitrate: number | null;
+    /** Audio sample rate in Hz, e.g. 48000, 44100 (null if no audio) */
+    sampleRate: number | null;
+    /** Number of audio channels (1=mono, 2=stereo) (null if no audio) */
+    channels: number | null;
+  }
 }
 
 declare class SIMPLEFFMPEG {
@@ -586,6 +628,47 @@ declare class SIMPLEFFMPEG {
     clips: SIMPLEFFMPEG.Clip[],
     options?: SIMPLEFFMPEG.ValidateOptions
   ): SIMPLEFFMPEG.ValidationResult;
+
+  /**
+   * Calculate the total duration of a clips configuration.
+   * Resolves shorthand (duration, auto-sequencing) before computing.
+   * Returns the visual timeline duration: sum of video/image clip durations
+   * minus transition overlaps.
+   *
+   * Pure function — same clips always produce the same result. No file I/O.
+   *
+   * @param clips - Array of clip objects
+   * @returns Total duration in seconds
+   *
+   * @example
+   * const duration = SIMPLEFFMPEG.getDuration([
+   *   { type: "video", url: "./a.mp4", duration: 5 },
+   *   { type: "video", url: "./b.mp4", duration: 10,
+   *     transition: { type: "fade", duration: 0.5 } },
+   * ]);
+   * // duration === 14.5
+   */
+  static getDuration(clips: SIMPLEFFMPEG.Clip[]): number;
+
+  /**
+   * Probe a media file and return comprehensive metadata.
+   *
+   * Uses ffprobe to extract duration, dimensions, codecs, format,
+   * bitrate, audio details, and rotation info from any media file.
+   *
+   * @param filePath - Path to the media file
+   * @returns Media info object
+   * @throws {SIMPLEFFMPEG.MediaNotFoundError} If the file cannot be found or probed
+   *
+   * @example
+   * const info = await SIMPLEFFMPEG.probe("./video.mp4");
+   * console.log(info.duration);   // 30.5
+   * console.log(info.width);      // 1920
+   * console.log(info.height);     // 1080
+   * console.log(info.videoCodec); // "h264"
+   * console.log(info.hasAudio);   // true
+   */
+  static probe(filePath: string): Promise<SIMPLEFFMPEG.MediaInfo>;
 
   /**
    * Format validation result as human-readable string

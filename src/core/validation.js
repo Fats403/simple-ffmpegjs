@@ -79,6 +79,49 @@ function validateClip(clip, index, options = {}) {
     return { errors, warnings }; // Can't validate further with invalid type
   }
 
+  // Validate duration field if present (applies to all clip types)
+  if (clip.duration != null) {
+    if (typeof clip.duration !== "number") {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.duration`,
+          "Duration must be a number",
+          clip.duration
+        )
+      );
+    } else if (!Number.isFinite(clip.duration)) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.duration`,
+          "Duration must be a finite number (not NaN or Infinity)",
+          clip.duration
+        )
+      );
+    } else if (clip.duration <= 0) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_RANGE,
+          `${path}.duration`,
+          "Duration must be greater than 0",
+          clip.duration
+        )
+      );
+    }
+    // Conflict check: duration + end both set
+    if (clip.end != null) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}`,
+          "Cannot specify both 'duration' and 'end'. Use one or the other.",
+          { duration: clip.duration, end: clip.end }
+        )
+      );
+    }
+  }
+
   // Types that require position/end on timeline
   const requiresTimeline = ["video", "audio", "text", "image"].includes(
     clip.type

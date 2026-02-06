@@ -6,7 +6,8 @@ module.exports = {
   schema: `{
   type: "text";                   // Required: clip type identifier
   position: number;               // Required: start time on timeline (seconds)
-  end: number;                    // Required: end time on timeline (seconds)
+  end?: number;                   // End time on timeline (seconds). Use end OR duration, not both.
+  duration?: number;              // Duration in seconds (alternative to end). end = position + duration.
 
   // Content
   text?: string;                  // Text content (required for "static" mode)
@@ -111,6 +112,7 @@ module.exports = {
     },
   ],
   notes: [
+    "Use duration instead of end to specify how long the text appears: end = position + duration. Cannot use both.",
     "If no position is specified (xPercent/yPercent/x/y), text defaults to center of the screen.",
     "For karaoke mode, provide the words array with per-word start/end times.",
     "For word-replace and word-sequential, you can use either words[] or wordTimestamps[] (paired with a space-separated text string).",

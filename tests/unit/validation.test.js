@@ -654,6 +654,111 @@ describe("Validation", () => {
     });
   });
 
+  describe("duration field validation", () => {
+    it("should reject non-number duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, duration: "five" },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0].duration" &&
+            e.code === ValidationCodes.INVALID_VALUE
+        )
+      ).toBe(true);
+    });
+
+    it("should reject non-finite duration (Infinity)", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, duration: Infinity },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0].duration" &&
+            e.code === ValidationCodes.INVALID_VALUE
+        )
+      ).toBe(true);
+    });
+
+    it("should reject non-finite duration (NaN)", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, duration: NaN },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0].duration" &&
+            e.code === ValidationCodes.INVALID_VALUE
+        )
+      ).toBe(true);
+    });
+
+    it("should reject zero duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, duration: 0 },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0].duration" &&
+            e.code === ValidationCodes.INVALID_RANGE
+        )
+      ).toBe(true);
+    });
+
+    it("should reject negative duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, duration: -3 },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0].duration" &&
+            e.code === ValidationCodes.INVALID_RANGE
+        )
+      ).toBe(true);
+    });
+
+    it("should reject providing both duration and end", () => {
+      const clips = [
+        {
+          type: "video",
+          url: "./test.mp4",
+          position: 0,
+          duration: 5,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.code === ValidationCodes.INVALID_VALUE &&
+            e.message.includes("duration") &&
+            e.message.includes("end")
+        )
+      ).toBe(true);
+    });
+  });
+
   describe("formatValidationResult", () => {
     it("should format passed result", () => {
       const result = { valid: true, errors: [], warnings: [] };
