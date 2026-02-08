@@ -253,7 +253,7 @@ class SIMPLEFFMPEG {
       await Promise.all(
         resolvedClips.map((clipObj) => {
           if (clipObj.type === "video" || clipObj.type === "audio") {
-            clipObj.volume = clipObj.volume || 1;
+            clipObj.volume = clipObj.volume != null ? clipObj.volume : 1;
             clipObj.cutFrom = clipObj.cutFrom || 0;
             if (clipObj.type === "video" && clipObj.transition) {
               clipObj.transition = {
@@ -439,8 +439,18 @@ class SIMPLEFFMPEG {
     }
 
     // Audio for video clips (aligned amix)
+    // Compute cumulative transition offsets so audio adelay values
+    // match the xfade-compressed video timeline.
     if (videoClips.length > 0) {
-      const ares = buildAudioForVideoClips(this, videoClips);
+      const transitionOffsets = new Map();
+      let cumOffset = 0;
+      for (let i = 0; i < videoClips.length; i++) {
+        if (i > 0 && videoClips[i].transition) {
+          cumOffset += videoClips[i].transition.duration || 0;
+        }
+        transitionOffsets.set(videoClips[i], cumOffset);
+      }
+      const ares = buildAudioForVideoClips(this, videoClips, transitionOffsets);
       filterComplex += ares.filter;
       finalAudioLabel = ares.finalAudioLabel || finalAudioLabel;
       hasAudio = hasAudio || ares.hasAudio;

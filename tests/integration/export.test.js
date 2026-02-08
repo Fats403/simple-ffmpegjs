@@ -1373,6 +1373,141 @@ Second subtitle
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "audio transition sync",
+    () => {
+      it("should adjust audio adelay values for transition compression", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 2,
+            end: 4,
+            transition: { type: "fade", duration: 0.5 },
+          },
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
+            position: 4,
+            end: 5,
+            transition: { type: "fade", duration: 0.5 },
+          },
+        ]);
+
+        const preview = await project.preview({
+          outputPath: "./test-audio-sync.mp4",
+        });
+
+        // Clip 2 at position=2 with 0.5s cumulative offset -> adelay=1500
+        expect(preview.filterComplex).toContain("adelay=1500|1500");
+        // Clip 3 at position=4 with 1.0s cumulative offset -> adelay=3000
+        expect(preview.filterComplex).toContain("adelay=3000|3000");
+      });
+
+      it("should produce correct output duration with transitions", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-audio-transition-sync.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 2,
+            end: 4,
+            transition: { type: "fade", duration: 0.5 },
+          },
+        ]);
+
+        await project.export({ outputPath });
+
+        expect(fs.existsSync(outputPath)).toBe(true);
+        // 4s total - 0.5s transition = 3.5s expected
+        const duration = getVideoDuration(outputPath);
+        expect(duration).toBeGreaterThan(3.0);
+        expect(duration).toBeLessThan(4.0);
+      }, 30000);
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "video clip volume",
+    () => {
+      it("should apply volume filter in filter_complex", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+            volume: 0.5,
+          },
+        ]);
+
+        const preview = await project.preview({
+          outputPath: "./test-volume.mp4",
+        });
+
+        expect(preview.filterComplex).toContain("volume=0.5,");
+      });
+
+      it("should export successfully with custom video volume", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-video-volume.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+            volume: 0.3,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should mute video audio with volume=0", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+            volume: 0,
+          },
+        ]);
+
+        const preview = await project.preview({
+          outputPath: "./test-mute.mp4",
+        });
+
+        expect(preview.filterComplex).toContain("volume=0,");
+      });
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
     "error details",
     () => {
       it("should populate error.details when FFmpeg fails", async () => {
