@@ -10,8 +10,13 @@ vi.mock("fs", () => ({
 }));
 
 // Dynamic import for CommonJS module
-const { validateConfig, formatValidationResult, ValidationCodes } =
-  await import("../../src/core/validation.js");
+const {
+  validateConfig,
+  formatValidationResult,
+  ValidationCodes,
+  isValidFFmpegColor,
+  normalizeFillGaps,
+} = await import("../../src/core/validation.js");
 
 describe("Validation", () => {
   beforeEach(() => {
@@ -802,6 +807,276 @@ describe("Validation", () => {
 
       expect(formatted).toContain("Warnings");
       expect(formatted).toContain("FILE_NOT_FOUND");
+    });
+  });
+
+  describe("isValidFFmpegColor", () => {
+    it("should accept standard named colors", () => {
+      expect(isValidFFmpegColor("black")).toBe(true);
+      expect(isValidFFmpegColor("red")).toBe(true);
+      expect(isValidFFmpegColor("white")).toBe(true);
+      expect(isValidFFmpegColor("navy")).toBe(true);
+      expect(isValidFFmpegColor("cornflowerblue")).toBe(true);
+      expect(isValidFFmpegColor("darkslategray")).toBe(true);
+    });
+
+    it("should accept named colors case-insensitively", () => {
+      expect(isValidFFmpegColor("Black")).toBe(true);
+      expect(isValidFFmpegColor("RED")).toBe(true);
+      expect(isValidFFmpegColor("DarkSlateGray")).toBe(true);
+      expect(isValidFFmpegColor("CORNFLOWERBLUE")).toBe(true);
+    });
+
+    it("should accept hex colors with # prefix", () => {
+      expect(isValidFFmpegColor("#000")).toBe(true);
+      expect(isValidFFmpegColor("#fff")).toBe(true);
+      expect(isValidFFmpegColor("#FF0000")).toBe(true);
+      expect(isValidFFmpegColor("#1a1a2e")).toBe(true);
+      expect(isValidFFmpegColor("#FF000080")).toBe(true); // with alpha
+    });
+
+    it("should accept hex colors with 0x prefix", () => {
+      expect(isValidFFmpegColor("0xFF0000")).toBe(true);
+      expect(isValidFFmpegColor("0x1a1a2e")).toBe(true);
+      expect(isValidFFmpegColor("0xFF000080")).toBe(true); // with alpha
+    });
+
+    it("should accept 'random'", () => {
+      expect(isValidFFmpegColor("random")).toBe(true);
+    });
+
+    it("should reject invalid values", () => {
+      expect(isValidFFmpegColor("")).toBe(false);
+      expect(isValidFFmpegColor("notacolor")).toBe(false);
+      expect(isValidFFmpegColor("123")).toBe(false);
+      expect(isValidFFmpegColor("#GG0000")).toBe(false);
+      expect(isValidFFmpegColor("#12345")).toBe(false); // 5 hex chars invalid
+      expect(isValidFFmpegColor("0x12345")).toBe(false); // 5 hex chars invalid
+    });
+
+    it("should reject non-string values", () => {
+      expect(isValidFFmpegColor(null)).toBe(false);
+      expect(isValidFFmpegColor(undefined)).toBe(false);
+      expect(isValidFFmpegColor(123)).toBe(false);
+      expect(isValidFFmpegColor({})).toBe(false);
+      expect(isValidFFmpegColor(true)).toBe(false);
+    });
+
+    it("should accept colors with @alpha suffix", () => {
+      expect(isValidFFmpegColor("white@0.5")).toBe(true);
+      expect(isValidFFmpegColor("black@0")).toBe(true);
+      expect(isValidFFmpegColor("red@1")).toBe(true);
+      expect(isValidFFmpegColor("#FF0000@0.8")).toBe(true);
+      expect(isValidFFmpegColor("0xFF0000@0.3")).toBe(true);
+    });
+
+    it("should reject colors with invalid @alpha suffix", () => {
+      expect(isValidFFmpegColor("white@1.5")).toBe(false); // > 1
+      expect(isValidFFmpegColor("white@-0.1")).toBe(false); // < 0
+      expect(isValidFFmpegColor("white@abc")).toBe(false); // not a number
+      expect(isValidFFmpegColor("notacolor@0.5")).toBe(false); // invalid color
+      expect(isValidFFmpegColor("@0.5")).toBe(false); // no color part
+    });
+  });
+
+  describe("normalizeFillGaps", () => {
+    it("should return 'none' for disabled values", () => {
+      expect(normalizeFillGaps(undefined)).toEqual({ color: "none", error: null });
+      expect(normalizeFillGaps(null)).toEqual({ color: "none", error: null });
+      expect(normalizeFillGaps(false)).toEqual({ color: "none", error: null });
+      expect(normalizeFillGaps("none")).toEqual({ color: "none", error: null });
+      expect(normalizeFillGaps("off")).toEqual({ color: "none", error: null });
+    });
+
+    it("should return 'black' for true", () => {
+      expect(normalizeFillGaps(true)).toEqual({ color: "black", error: null });
+    });
+
+    it("should pass through valid color strings", () => {
+      expect(normalizeFillGaps("black")).toEqual({ color: "black", error: null });
+      expect(normalizeFillGaps("red")).toEqual({ color: "red", error: null });
+      expect(normalizeFillGaps("#FF0000")).toEqual({ color: "#FF0000", error: null });
+      expect(normalizeFillGaps("0xFF0000")).toEqual({ color: "0xFF0000", error: null });
+      expect(normalizeFillGaps("random")).toEqual({ color: "random", error: null });
+    });
+
+    it("should return error for invalid color strings", () => {
+      const result = normalizeFillGaps("notacolor");
+      expect(result.color).toBeNull();
+      expect(result.error).toContain("not a recognised FFmpeg color");
+    });
+
+    it("should return error for non-string non-boolean types", () => {
+      const result = normalizeFillGaps(42);
+      expect(result.color).toBeNull();
+      expect(result.error).toContain("must be a string color value");
+    });
+  });
+
+  describe("clip color property validation", () => {
+    it("should accept valid text clip colors without warnings", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+          fontColor: "#FFFFFF",
+          borderColor: "black",
+          shadowColor: "navy",
+          backgroundColor: "red@0.5",
+          highlightColor: "#FFFF00",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      expect(result.valid).toBe(true);
+      const colorWarnings = result.warnings.filter((w) =>
+        w.message.includes("Invalid color")
+      );
+      expect(colorWarnings).toHaveLength(0);
+    });
+
+    it("should warn on invalid text clip fontColor", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+          fontColor: "notacolor",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.path.includes("fontColor")
+      );
+      expect(colorWarnings).toHaveLength(1);
+      expect(colorWarnings[0].message).toContain("Invalid color");
+    });
+
+    it("should warn on invalid text clip borderColor", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+          borderColor: "bblue",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.path.includes("borderColor")
+      );
+      expect(colorWarnings).toHaveLength(1);
+    });
+
+    it("should warn on invalid text clip backgroundColor", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+          backgroundColor: "#GGGGGG",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.path.includes("backgroundColor")
+      );
+      expect(colorWarnings).toHaveLength(1);
+    });
+
+    it("should warn on multiple invalid text colors at once", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+          fontColor: "badcolor1",
+          borderColor: "badcolor2",
+          shadowColor: "badcolor3",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.message.includes("Invalid color")
+      );
+      expect(colorWarnings).toHaveLength(3);
+    });
+
+    it("should not warn when color properties are not set", () => {
+      const clips = [
+        {
+          type: "text",
+          text: "Hello",
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.message.includes("Invalid color")
+      );
+      expect(colorWarnings).toHaveLength(0);
+    });
+
+    it("should accept valid subtitle clip colors without warnings", () => {
+      const clips = [
+        {
+          type: "subtitle",
+          url: "./test.srt",
+          fontColor: "#FFFFFF",
+          borderColor: "black",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.message.includes("Invalid color")
+      );
+      expect(colorWarnings).toHaveLength(0);
+    });
+
+    it("should warn on invalid subtitle clip fontColor", () => {
+      const clips = [
+        {
+          type: "subtitle",
+          url: "./test.srt",
+          fontColor: "notacolor",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.path.includes("fontColor")
+      );
+      expect(colorWarnings).toHaveLength(1);
+      expect(colorWarnings[0].message).toContain("Invalid color");
+    });
+
+    it("should warn on invalid subtitle clip borderColor", () => {
+      const clips = [
+        {
+          type: "subtitle",
+          url: "./test.srt",
+          borderColor: "invalidhex#123",
+        },
+      ];
+      const result = validateConfig(clips);
+
+      const colorWarnings = result.warnings.filter((w) =>
+        w.path.includes("borderColor")
+      );
+      expect(colorWarnings).toHaveLength(1);
     });
   });
 });

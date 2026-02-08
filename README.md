@@ -77,7 +77,7 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 - **Image Support** — Ken Burns effects (zoom, pan) for static images
 - **Progress Tracking** — Real-time export progress callbacks
 - **Cancellation** — AbortController support for stopping exports
-- **Gap Handling** — Optional black frame fill for timeline gaps
+- **Gap Handling** — Auto-fill timeline gaps with any color (including trailing gaps for text-on-background endings)
 - **Auto-Batching** — Automatically splits complex filter graphs to avoid OS command limits
 - **Schema Export** — Generate a structured description of the clip format for documentation, code generation, or AI context
 - **Pre-Validation** — Validate clip configurations before processing with structured, machine-readable error codes
@@ -284,7 +284,7 @@ new SIMPLEFFMPEG(options?: {
   height?: number;          // Output height (default: 1080)
   fps?: number;             // Frame rate (default: 30)
   validationMode?: 'warn' | 'strict';  // Validation behavior (default: 'warn')
-  fillGaps?: 'none' | 'black';         // Gap handling (default: 'none')
+  fillGaps?: boolean | string;         // Gap handling: true/"black", any FFmpeg color, or "none"/false (default: "none")
   preset?: string;          // Platform preset (e.g., 'tiktok', 'youtube', 'instagram-post')
 })
 ```
@@ -854,7 +854,7 @@ try {
 
 ### Gap Handling
 
-By default, timeline gaps (periods with no video/image content) throw a validation error. Enable automatic black frame fill:
+By default, timeline gaps (periods with no video/image content) produce a validation warning. Enable automatic gap filling to insert solid-color frames wherever there's no visual media — leading gaps, middle gaps, and trailing gaps are all handled:
 
 ```ts
 const project = new SIMPLEFFMPEG({
@@ -862,7 +862,34 @@ const project = new SIMPLEFFMPEG({
 });
 
 await project.load([
-  { type: "video", url: "./clip.mp4", position: 2, end: 5 }, // Gap from 0-2s filled with black
+  { type: "video", url: "./clip.mp4", position: 2, end: 5 }, // Leading gap from 0-2s filled with black
+]);
+```
+
+`fillGaps` accepts any valid FFmpeg color — named colors, hex codes, or `true` as shorthand for `"black"`:
+
+```ts
+// Custom color fill
+const project = new SIMPLEFFMPEG({ fillGaps: "#0a0a2e" }); // dark navy
+const project = new SIMPLEFFMPEG({ fillGaps: "navy" });     // named color
+const project = new SIMPLEFFMPEG({ fillGaps: true });        // same as "black"
+```
+
+All three gap types are supported:
+
+- **Leading gaps** — no visual media at the start of the timeline (e.g. video starts at 2s, gap from 0-2s)
+- **Middle gaps** — periods between visual clips with no media
+- **Trailing gaps** — text or audio extends past the last visual clip, so the video is extended with the fill color
+
+Trailing gaps are useful for ending a video with text on a solid background:
+
+```ts
+const project = new SIMPLEFFMPEG({ fillGaps: "#1a1a2e" });
+
+await project.load([
+  { type: "video", url: "./clip.mp4", position: 0, end: 5 },
+  // Text extends 5 seconds past the video — dark blue fill from 5-10s
+  { type: "text", text: "The End", position: 4, end: 10, fontSize: 64, fontColor: "white" },
 ]);
 ```
 
@@ -1389,11 +1416,31 @@ npm run test:watch
 
 ### Manual Verification
 
-For visual verification, run the examples script to generate sample videos demonstrating all major features (transitions, text animations, Ken Burns, karaoke, watermarks, subtitles, and more):
+For visual verification, run the demo suite to generate sample videos covering all major features. Each demo outputs to its own subfolder under `examples/output/` and includes annotated expected timelines so you know exactly what to look for:
 
 ```bash
+# Run all demos (timeline, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
 node examples/run-examples.js
 
+# Run a specific demo by name (partial match)
+node examples/run-examples.js transitions
+node examples/run-examples.js torture ken
+```
+
+Available demo scripts (can also be run individually):
+
+| Script | What it tests |
+| --- | --- |
+| `demo-timeline-and-gaps.js` | Leading/middle/trailing gaps, custom fill colors, `fillGaps: true` shorthand |
+| `demo-transitions.js` | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions |
+| `demo-text-and-animations.js` | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
+| `demo-ken-burns.js` | All 6 presets, smart anchors, custom diagonal, slideshow with transitions |
+| `demo-audio-mixing.js` | Volume levels, background music, standalone audio, loop, multi-source mix |
+| `demo-watermarks.js` | Text/image watermarks, all positions, timed appearance, styled over transitions |
+| `demo-karaoke-and-subtitles.js` | Smooth/instant karaoke, word timestamps, multiline, SRT, VTT, mixed text+karaoke |
+| `demo-torture-test.js` | Kitchen sink, many clips+gaps+transitions, 6 simultaneous text animations, edge cases |
+
+Each script header contains a `WHAT TO CHECK` section describing the expected visual output at every timestamp, making it easy to spot regressions.
 
 ## Contributing
 

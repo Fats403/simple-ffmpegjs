@@ -128,6 +128,89 @@ describe("Gap Detection", () => {
 
       expect(gaps).toHaveLength(1);
     });
+
+    describe("trailing gap (timelineEnd option)", () => {
+      it("should detect trailing gap when timelineEnd extends past last clip", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 10 });
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]).toEqual({ start: 5, end: 10, duration: 5 });
+      });
+
+      it("should detect trailing gap along with leading gap", () => {
+        const clips = [{ type: "video", position: 2, end: 5 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 10 });
+
+        expect(gaps).toHaveLength(2);
+        expect(gaps[0]).toEqual({ start: 0, end: 2, duration: 2 });
+        expect(gaps[1]).toEqual({ start: 5, end: 10, duration: 5 });
+      });
+
+      it("should detect trailing gap along with middle and leading gaps", () => {
+        const clips = [
+          { type: "video", position: 1, end: 3 },
+          { type: "video", position: 5, end: 7 },
+        ];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 12 });
+
+        expect(gaps).toHaveLength(3);
+        expect(gaps[0]).toEqual({ start: 0, end: 1, duration: 1 });
+        expect(gaps[1]).toEqual({ start: 3, end: 5, duration: 2 });
+        expect(gaps[2]).toEqual({ start: 7, end: 12, duration: 5 });
+      });
+
+      it("should not detect trailing gap when timelineEnd equals visual end", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 5 });
+
+        expect(gaps).toEqual([]);
+      });
+
+      it("should not detect trailing gap within epsilon", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 5.0005 });
+
+        expect(gaps).toEqual([]);
+      });
+
+      it("should not add trailing gap when timelineEnd is not specified", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+        const gaps = detectVisualGaps(clips);
+
+        expect(gaps).toEqual([]);
+      });
+
+      it("should not add trailing gap when timelineEnd is less than visual end", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 3 });
+
+        expect(gaps).toEqual([]);
+      });
+
+      it("should create full-range gap when no visual clips and timelineEnd is set", () => {
+        const clips = [{ type: "audio", position: 0, end: 10 }];
+        const gaps = detectVisualGaps(clips, { timelineEnd: 10 });
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]).toEqual({ start: 0, end: 10, duration: 10 });
+      });
+
+      it("should handle empty clips array with timelineEnd", () => {
+        const gaps = detectVisualGaps([], { timelineEnd: 10 });
+
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]).toEqual({ start: 0, end: 10, duration: 10 });
+      });
+
+      it("should ignore non-finite timelineEnd values", () => {
+        const clips = [{ type: "video", position: 0, end: 5 }];
+
+        expect(detectVisualGaps(clips, { timelineEnd: Infinity })).toEqual([]);
+        expect(detectVisualGaps(clips, { timelineEnd: NaN })).toEqual([]);
+        expect(detectVisualGaps(clips, { timelineEnd: -Infinity })).toEqual([]);
+      });
+    });
   });
 
   describe("hasVisualGaps", () => {

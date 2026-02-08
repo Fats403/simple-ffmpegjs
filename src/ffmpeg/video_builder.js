@@ -1,15 +1,17 @@
 const { detectVisualGaps } = require("../core/gaps");
 
 /**
- * Create synthetic black clips to fill visual gaps
+ * Create synthetic clips to fill visual gaps.
+ * The actual fill color is determined by the project's fillGaps option
+ * and applied when building the filter graph.
  */
-function createBlackClipsForGaps(gaps, fps, width, height) {
+function createGapFillClips(gaps) {
   return gaps.map((gap, index) => ({
-    type: "_black",
+    type: "_gapfill",
     position: gap.start,
     end: gap.end,
     _gapIndex: index,
-    _isBlackFill: true,
+    _isGapFill: true,
   }));
 }
 
@@ -195,7 +197,7 @@ function computeOverscanWidth(width, startZoom, endZoom) {
   return overscan;
 }
 
-function buildVideoFilter(project, videoClips) {
+function buildVideoFilter(project, videoClips, options = {}) {
   let filterComplex = "";
   let videoIndex = 0;
   let blackGapIndex = 0;
@@ -204,13 +206,13 @@ function buildVideoFilter(project, videoClips) {
   const height = project.options.height;
   const fillGaps = project.options.fillGaps || "none";
 
-  // Detect and fill gaps if fillGaps is enabled
+  // Detect and fill gaps if fillGaps is enabled (any value other than "none")
   let allVisualClips = [...videoClips];
-  if (fillGaps === "black") {
-    const gaps = detectVisualGaps(videoClips);
+  if (fillGaps !== "none") {
+    const gaps = detectVisualGaps(videoClips, { timelineEnd: options.timelineEnd });
     if (gaps.length > 0) {
-      const blackClips = createBlackClipsForGaps(gaps, fps, width, height);
-      allVisualClips = [...videoClips, ...blackClips].sort(
+      const gapClips = createGapFillClips(gaps);
+      allVisualClips = [...videoClips, ...gapClips].sort(
         (a, b) => (a.position || 0) - (b.position || 0),
       );
     }
@@ -226,10 +228,10 @@ function buildVideoFilter(project, videoClips) {
       (clip.end || 0) - (clip.position || 0),
     );
 
-    // Handle synthetic black fill clips
-    if (clip._isBlackFill) {
-      // Generate a black color source for the gap duration
-      filterComplex += `color=c=black:s=${width}x${height}:d=${requestedDuration},fps=${fps},settb=1/${fps}${scaledLabel};`;
+    // Handle synthetic gap fill clips
+    if (clip._isGapFill) {
+      // Generate a color source for the gap duration
+      filterComplex += `color=c=${fillGaps}:s=${width}x${height}:d=${requestedDuration},fps=${fps},settb=1/${fps}${scaledLabel};`;
       scaledStreams.push({
         label: scaledLabel,
         clip,
@@ -290,7 +292,7 @@ function buildVideoFilter(project, videoClips) {
   });
 
   if (scaledStreams.length === 0) {
-    return { filter: "", finalVideoLabel: null, hasVideo: false };
+    return { filter: "", finalVideoLabel: null, hasVideo: false, videoDuration: 0 };
   }
 
   const hasTransitions = scaledStreams.some(
@@ -299,10 +301,11 @@ function buildVideoFilter(project, videoClips) {
 
   if (!hasTransitions) {
     const labels = scaledStreams.map((s) => s.label);
+    const videoDuration = scaledStreams.reduce((sum, s) => sum + s.duration, 0);
     filterComplex += `${labels.join("")}concat=n=${
       labels.length
     }:v=1:a=0,fps=${fps},settb=1/${fps}[outv];`;
-    return { filter: filterComplex, finalVideoLabel: "[outv]", hasVideo: true };
+    return { filter: filterComplex, finalVideoLabel: "[outv]", hasVideo: true, videoDuration };
   }
 
   let currentVideo = scaledStreams[0].label;
@@ -331,6 +334,7 @@ function buildVideoFilter(project, videoClips) {
     filter: filterComplex,
     finalVideoLabel: currentVideo,
     hasVideo: true,
+    videoDuration: currentVideoDuration,
   };
 }
 

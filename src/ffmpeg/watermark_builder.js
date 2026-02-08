@@ -1,4 +1,5 @@
 const Strings = require("./strings");
+const { isValidFFmpegColor } = require("../core/validation");
 
 /**
  * Calculate position expressions for overlay/drawtext
@@ -318,6 +319,18 @@ function validateWatermarkConfig(config) {
   if (type === "text") {
     if (typeof config.text !== "string" || config.text.length === 0) {
       errors.push("watermark.text is required for text watermarks");
+    }
+  }
+
+  // Validate color properties
+  const colorProps = ["fontColor", "borderColor", "shadowColor"];
+  for (const prop of colorProps) {
+    if (config[prop] != null && typeof config[prop] === "string") {
+      if (!isValidFFmpegColor(config[prop])) {
+        errors.push(
+          `watermark.${prop} "${config[prop]}" is not a valid FFmpeg color. Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`
+        );
+      }
     }
   }
 

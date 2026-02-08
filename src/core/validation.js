@@ -1,5 +1,109 @@
 const fs = require("fs");
 
+// ========================================================================
+// FFmpeg named colors (X11/CSS color names accepted by libavutil)
+// This list is extremely stable — identical across FFmpeg versions.
+// Reference: https://ffmpeg.org/ffmpeg-utils.html#Color
+// ========================================================================
+const FFMPEG_NAMED_COLORS = new Set([
+  "aliceblue", "antiquewhite", "aqua", "aquamarine", "azure",
+  "beige", "bisque", "black", "blanchedalmond", "blue",
+  "blueviolet", "brown", "burlywood", "cadetblue", "chartreuse",
+  "chocolate", "coral", "cornflowerblue", "cornsilk", "crimson",
+  "cyan", "darkblue", "darkcyan", "darkgoldenrod", "darkgray",
+  "darkgreen", "darkgrey", "darkkhaki", "darkmagenta", "darkolivegreen",
+  "darkorange", "darkorchid", "darkred", "darksalmon", "darkseagreen",
+  "darkslateblue", "darkslategray", "darkslategrey", "darkturquoise", "darkviolet",
+  "deeppink", "deepskyblue", "dimgray", "dimgrey", "dodgerblue",
+  "firebrick", "floralwhite", "forestgreen", "fuchsia", "gainsboro",
+  "ghostwhite", "gold", "goldenrod", "gray", "green",
+  "greenyellow", "grey", "honeydew", "hotpink", "indianred",
+  "indigo", "ivory", "khaki", "lavender", "lavenderblush",
+  "lawngreen", "lemonchiffon", "lightblue", "lightcoral", "lightcyan",
+  "lightgoldenrodyellow", "lightgray", "lightgreen", "lightgrey", "lightpink",
+  "lightsalmon", "lightseagreen", "lightskyblue", "lightslategray", "lightslategrey",
+  "lightsteelblue", "lightyellow", "lime", "limegreen", "linen",
+  "magenta", "maroon", "mediumaquamarine", "mediumblue", "mediumorchid",
+  "mediumpurple", "mediumseagreen", "mediumslateblue", "mediumspringgreen", "mediumturquoise",
+  "mediumvioletred", "midnightblue", "mintcream", "mistyrose", "moccasin",
+  "navajowhite", "navy", "oldlace", "olive", "olivedrab",
+  "orange", "orangered", "orchid", "palegoldenrod", "palegreen",
+  "paleturquoise", "palevioletred", "papayawhip", "peachpuff", "peru",
+  "pink", "plum", "powderblue", "purple", "red",
+  "rosybrown", "royalblue", "saddlebrown", "salmon", "sandybrown",
+  "seagreen", "seashell", "sienna", "silver", "skyblue",
+  "slateblue", "slategray", "slategrey", "snow", "springgreen",
+  "steelblue", "tan", "teal", "thistle", "tomato",
+  "turquoise", "violet", "wheat", "white", "whitesmoke",
+  "yellow", "yellowgreen",
+]);
+
+// Hex patterns accepted by FFmpeg: #RGB, #RRGGBB, #RRGGBBAA, 0xRRGGBB, 0xRRGGBBAA
+const HEX_COLOR_RE = /^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|0x[0-9a-fA-F]{6}|0x[0-9a-fA-F]{8})$/;
+
+/**
+ * Check whether a string is a valid FFmpeg color value.
+ *
+ * Accepted formats:
+ *   - Named colors (case-insensitive): "black", "Red", "DarkSlateGray", …
+ *   - Hex:  #RGB, #RRGGBB, #RRGGBBAA, 0xRRGGBB, 0xRRGGBBAA
+ *   - Special keyword: "random"
+ *   - Any of the above with an @alpha suffix: "white@0.5", "#FF0000@0.8"
+ *
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isValidFFmpegColor(value) {
+  if (typeof value !== "string" || value.length === 0) return false;
+
+  // Strip optional @alpha suffix (e.g. "white@0.5", "#FF0000@0.8")
+  let color = value;
+  const atIdx = value.indexOf("@");
+  if (atIdx > 0) {
+    const alphaPart = value.slice(atIdx + 1);
+    const alpha = Number(alphaPart);
+    if (!Number.isFinite(alpha) || alpha < 0 || alpha > 1) return false;
+    color = value.slice(0, atIdx);
+  }
+
+  if (color === "random") return true;
+  if (HEX_COLOR_RE.test(color)) return true;
+  return FFMPEG_NAMED_COLORS.has(color.toLowerCase());
+}
+
+/**
+ * Normalise a fillGaps option value to either "none" (disabled) or a
+ * valid FFmpeg color string.
+ *
+ * Accepted inputs:
+ *   - false / "none" / "off" / undefined → "none"
+ *   - true                               → "black"
+ *   - "black", "red", "#FF0000", …       → the color string (validated)
+ *
+ * @param {*} value - Raw fillGaps option value
+ * @returns {{ color: string|null, error: string|null }}
+ *   color is the normalised value ("none" when disabled), error is a
+ *   human-readable message when the value is invalid.
+ */
+function normalizeFillGaps(value) {
+  if (value === undefined || value === null || value === false || value === "none" || value === "off") {
+    return { color: "none", error: null };
+  }
+  if (value === true) {
+    return { color: "black", error: null };
+  }
+  if (typeof value !== "string") {
+    return { color: null, error: `fillGaps must be a string color value, boolean, or "none" — got ${typeof value}` };
+  }
+  if (!isValidFFmpegColor(value)) {
+    return {
+      color: null,
+      error: `fillGaps color "${value}" is not a recognised FFmpeg color. Use a named color (e.g. "black", "red", "navy"), hex (#RRGGBB, 0xRRGGBB), or "random".`,
+    };
+  }
+  return { color: value, error: null };
+}
+
 /**
  * Error/warning codes for programmatic handling
  */
@@ -525,6 +629,29 @@ function validateClip(clip, index, options = {}) {
         );
       }
     }
+
+    // Validate text clip color properties
+    const textColorProps = [
+      "fontColor",
+      "borderColor",
+      "shadowColor",
+      "backgroundColor",
+      "highlightColor",
+    ];
+    for (const prop of textColorProps) {
+      if (clip[prop] != null && typeof clip[prop] === "string") {
+        if (!isValidFFmpegColor(clip[prop])) {
+          warnings.push(
+            createIssue(
+              ValidationCodes.INVALID_VALUE,
+              `${path}.${prop}`,
+              `Invalid color "${clip[prop]}". Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`,
+              clip[prop]
+            )
+          );
+        }
+      }
+    }
   }
 
   // Subtitle clip validation
@@ -582,6 +709,23 @@ function validateClip(clip, index, options = {}) {
           clip.position
         )
       );
+    }
+
+    // Validate subtitle color properties
+    const subtitleColorProps = ["fontColor", "borderColor"];
+    for (const prop of subtitleColorProps) {
+      if (clip[prop] != null && typeof clip[prop] === "string") {
+        if (!isValidFFmpegColor(clip[prop])) {
+          warnings.push(
+            createIssue(
+              ValidationCodes.INVALID_VALUE,
+              `${path}.${prop}`,
+              `Invalid color "${clip[prop]}". Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`,
+              clip[prop]
+            )
+          );
+        }
+      }
     }
   }
 
@@ -823,7 +967,7 @@ function validateTimelineGaps(clips, options = {}) {
         "timeline",
         `Gap at start of timeline [0, ${visual[0].clip.position.toFixed(
           3
-        )}s] - no video/image content. Use fillGaps: 'black' to auto-fill.`,
+        )}s] - no video/image content. Use fillGaps option (e.g. 'black') to auto-fill.`,
         { start: 0, end: visual[0].clip.position }
       )
     );
@@ -845,7 +989,7 @@ function validateTimelineGaps(clips, options = {}) {
             3
           )}s] between clips[${visual[i - 1].index}] and clips[${
             visual[i].index
-          }]. Use fillGaps: 'black' to auto-fill.`,
+          }]. Use fillGaps option (e.g. 'black') to auto-fill.`,
           { start: gapStart, end: gapEnd }
         )
       );
@@ -946,4 +1090,7 @@ module.exports = {
   validateConfig,
   formatValidationResult,
   ValidationCodes,
+  isValidFFmpegColor,
+  normalizeFillGaps,
+  FFMPEG_NAMED_COLORS,
 };

@@ -620,5 +620,51 @@ describe("watermark_builder", () => {
       const result = validateWatermarkConfig(config);
       expect(result.valid).toBe(true);
     });
+
+    it("should accept valid watermark colors", () => {
+      const config = {
+        type: "text",
+        text: "@channel",
+        fontColor: "#FFFFFF",
+        borderColor: "black",
+        shadowColor: "navy@0.5",
+      };
+      const result = validateWatermarkConfig(config);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("should reject invalid watermark fontColor", () => {
+      const config = {
+        type: "text",
+        text: "@channel",
+        fontColor: "notacolor",
+      };
+      const result = validateWatermarkConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("fontColor"))).toBe(true);
+    });
+
+    it("should reject invalid watermark borderColor", () => {
+      const config = {
+        type: "text",
+        text: "@channel",
+        borderColor: "bblue",
+      };
+      const result = validateWatermarkConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("borderColor"))).toBe(true);
+    });
+
+    it("should reject invalid watermark shadowColor", () => {
+      const config = {
+        type: "text",
+        text: "@channel",
+        shadowColor: "#GGGGGG",
+      };
+      const result = validateWatermarkConfig(config);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("shadowColor"))).toBe(true);
+    });
   });
 });

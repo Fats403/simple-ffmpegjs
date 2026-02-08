@@ -297,8 +297,8 @@ declare namespace SIMPLEFFMPEG {
   interface ValidateOptions {
     /** Skip file existence checks (useful for AI generating configs before files exist) */
     skipFileChecks?: boolean;
-    /** Gap handling mode - affects timeline gap validation */
-    fillGaps?: "none" | "black";
+    /** Gap handling mode - affects timeline gap validation. Any valid FFmpeg color, or "none"/false to disable. */
+    fillGaps?: "none" | string | boolean;
     /** Project width - used to validate Ken Burns images are large enough */
     width?: number;
     /** Project height - used to validate Ken Burns images are large enough */
@@ -318,8 +318,8 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
-    /** How to handle visual gaps: 'none' throws error, 'black' fills with black frames (default: 'none') */
-    fillGaps?: "none" | "black";
+    /** How to handle visual gaps: 'none'/false (disabled), true/'black' (black fill), or any valid FFmpeg color name/hex (default: 'none') */
+    fillGaps?: "none" | string | boolean;
   }
 
   /** Log entry passed to onLog callback */
