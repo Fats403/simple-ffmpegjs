@@ -160,7 +160,7 @@ describe("buildVideoFilter", () => {
 
       expect(result.hasVideo).toBe(true);
       expect(result.filter).toContain("zoompan=");
-      expect(result.filter).toContain("zoom+");
+      expect(result.filter).toContain("z='1+(0.15)*(");
     });
 
     it("should apply zoompan for zoom-out effect", () => {
@@ -177,7 +177,7 @@ describe("buildVideoFilter", () => {
       const result = buildVideoFilter(project, [clip]);
 
       expect(result.filter).toContain("zoompan=");
-      expect(result.filter).toContain("zoom-");
+      expect(result.filter).toContain("z='1.15+(-0.15)*(");
     });
 
     it("should apply zoompan for pan-left effect", () => {
@@ -228,8 +228,8 @@ describe("buildVideoFilter", () => {
 
       const result = buildVideoFilter(project, [clip]);
 
-      // The zoompan z expression should have plain commas (not \,) inside quotes
-      expect(result.filter).toContain("z='if(eq(on,0),1,zoom+");
+      // The zoompan z expression should not contain escaped commas
+      expect(result.filter).toContain("z='1+(0.15)*(");
       // Should NOT have \\, inside the quoted expression
       expect(result.filter).not.toMatch(/z='[^']*\\\\,[^']*'/);
       expect(result.filter).not.toMatch(/z='[^']*\\,[^']*'/);
@@ -268,8 +268,8 @@ describe("buildVideoFilter", () => {
 
       const result = buildVideoFilter(project, [clip]);
 
-      // zoom-out expression: if(eq(on,0),START,zoom-DEC)
-      expect(result.filter).toMatch(/z='if\(eq\(on,0\),[^']+,zoom-[^']+\)'/);
+      // zoom-out expression: linear interpolation from 1.15 to 1.0
+      expect(result.filter).toMatch(/z='1\.15\+\(-0\.15\)\*\(/);
     });
 
     it("should handle image without Ken Burns", () => {
@@ -287,6 +287,303 @@ describe("buildVideoFilter", () => {
       expect(result.hasVideo).toBe(true);
       // Should use trim-based approach without zoompan
       expect(result.filter).toContain("trim=");
+    });
+
+    it("should support custom Ken Burns endpoints", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        kenBurns: {
+          type: "custom",
+          startZoom: 1.1,
+          endZoom: 1.3,
+          startX: 0.2,
+          endX: 0.7,
+          startY: 0.8,
+          endY: 0.3,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain("z='1.1+(0.2)*((on/119))'");
+      expect(result.filter).toContain(
+        "x='(iw - iw/zoom)*(0.2+(0.5)*((on/119)))'"
+      );
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(0.8+(-0.5)*((on/119)))'"
+      );
+    });
+
+    it("should support smart Ken Burns with anchor", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        width: 1080,
+        height: 1920,
+        kenBurns: {
+          type: "smart",
+          anchor: "top",
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'"
+      );
+    });
+
+    it("should choose pan axis based on source vs output aspect", () => {
+      const project = createProject({ width: 1920, height: 1080 });
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        width: 1080,
+        height: 1920,
+        kenBurns: {
+          type: "smart",
+          anchor: "top",
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'"
+      );
+    });
+
+    it("should apply zoompan for pan-up effect", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "pan-up",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      // pan-up: constant zoom, y goes from 1 to 0
+      expect(result.filter).toContain("z='1.12'");
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(1+(-1)*("
+      );
+      // x stays centered at 0.5
+      expect(result.filter).toContain("x='(iw - iw/zoom)*(0.5)'");
+    });
+
+    it("should apply zoompan for pan-down effect", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "pan-down",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      // pan-down: constant zoom, y goes from 0 to 1
+      expect(result.filter).toContain("z='1.12'");
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(0+(1)*("
+      );
+    });
+
+    it("should auto-apply pan zoom when custom positions differ but no zoom set", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        kenBurns: {
+          type: "custom",
+          startX: 0.2,
+          startY: 0.8,
+          endX: 0.8,
+          endY: 0.2,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // Should auto-apply DEFAULT_PAN_ZOOM (1.12) since positions differ but no zoom
+      expect(result.filter).toContain("z='1.12'");
+      expect(result.filter).toContain(
+        "x='(iw - iw/zoom)*(0.2+(0.6)*((on/119)))'"
+      );
+      expect(result.filter).toContain(
+        "y='(ih - ih/zoom)*(0.8+(-0.6)*((on/119)))'"
+      );
+    });
+
+    it("should NOT auto-apply pan zoom when zoom is explicitly set", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        kenBurns: {
+          type: "custom",
+          startZoom: 1.0,
+          endZoom: 1.0,
+          startX: 0.2,
+          endX: 0.8,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // User explicitly set zoom to 1.0, so it should stay at 1.0
+      expect(result.filter).toContain("z='1'");
+    });
+
+    it("should use object form of string preset identically", () => {
+      const project1 = createProject();
+      const clip1 = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-in",
+      };
+      project1.videoOrAudioClips.push(clip1);
+      const result1 = buildVideoFilter(project1, [clip1]);
+
+      const project2 = createProject();
+      const clip2 = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: { type: "zoom-in" },
+      };
+      project2.videoOrAudioClips.push(clip2);
+      const result2 = buildVideoFilter(project2, [clip2]);
+
+      // Both forms should produce the same zoompan filter
+      expect(result1.filter).toEqual(result2.filter);
+    });
+
+    it("should allow overriding preset defaults", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: {
+          type: "zoom-in",
+          startZoom: 1.05,
+          endZoom: 1.25,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // Should use overridden zoom values, not the zoom-in defaults (1.0 → 1.15)
+      expect(result.filter).toContain("z='1.05+(0.2)*((on/89))'");
+    });
+
+    it("should default to ease-in-out easing when not specified", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-in",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // ease-in-out uses cosine: 0.5-0.5*cos(PI*t)
+      expect(result.filter).toContain("0.5-0.5*cos(PI*");
+    });
+
+    it("should generate ease-in expression (quadratic)", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: { type: "zoom-in", easing: "ease-in" },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // ease-in: t*t
+      expect(result.filter).toMatch(/z='1\+\(0\.15\)\*\(\(.*\)\*\(.*\)\)'/);
+    });
+
+    it("should generate ease-out expression", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: { type: "zoom-in", easing: "ease-out" },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // ease-out: 1-((1-t)*(1-t))
+      expect(result.filter).toContain("1-((1-");
+    });
+
+    it("should generate linear expression", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: { type: "zoom-in", easing: "linear" },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // linear: just (on/N) without any wrapping function
+      expect(result.filter).toContain("z='1+(0.15)*((on/89))'");
     });
   });
 

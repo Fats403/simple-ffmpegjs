@@ -13,6 +13,188 @@ function createBlackClipsForGaps(gaps, fps, width, height) {
   }));
 }
 
+const DEFAULT_KEN_BURNS_ZOOM = 0.15;
+const DEFAULT_PAN_ZOOM = 1.12;
+
+function clamp01(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+  return Math.min(1, Math.max(0, value));
+}
+
+function formatNumber(value, decimals) {
+  return Number(value.toFixed(decimals)).toString();
+}
+
+function buildEasingExpr(framesMinusOne, easing) {
+  const t = `(on/${framesMinusOne})`;
+  if (easing === "ease-in") {
+    return `(${t})*(${t})`;
+  }
+  if (easing === "ease-out") {
+    return `1-((1-${t})*(1-${t}))`;
+  }
+  if (easing === "ease-in-out") {
+    return `0.5-0.5*cos(PI*${t})`;
+  }
+  return t;
+}
+
+function buildInterpolatedExpr(start, end, framesMinusOne, easing, decimals) {
+  const delta = end - start;
+  const startStr = formatNumber(start, decimals);
+  if (framesMinusOne <= 1 || Math.abs(delta) < 1e-8) {
+    return startStr;
+  }
+  const deltaStr = formatNumber(delta, decimals);
+  const ease = buildEasingExpr(framesMinusOne, easing);
+  return `${startStr}+(${deltaStr})*(${ease})`;
+}
+
+function buildZoomExpr(startZoom, endZoom, framesMinusOne, easing) {
+  return buildInterpolatedExpr(startZoom, endZoom, framesMinusOne, easing, 4);
+}
+
+function buildPositionExpr(start, end, framesMinusOne, easing) {
+  return buildInterpolatedExpr(start, end, framesMinusOne, easing, 4);
+}
+
+function resolveKenBurnsOptions(kenBurns, width, height, sourceWidth, sourceHeight) {
+  const kb = typeof kenBurns === "object" && kenBurns ? kenBurns : {};
+  const type = typeof kenBurns === "string" ? kenBurns : kb.type || "custom";
+  const easing = kb.easing || "ease-in-out";
+
+  let startZoom = 1;
+  let endZoom = 1;
+  let startX = 0.5;
+  let startY = 0.5;
+  let endX = 0.5;
+  let endY = 0.5;
+
+  if (type === "zoom-in") {
+    startZoom = 1;
+    endZoom = 1 + DEFAULT_KEN_BURNS_ZOOM;
+  } else if (type === "zoom-out") {
+    startZoom = 1 + DEFAULT_KEN_BURNS_ZOOM;
+    endZoom = 1;
+  } else if (type === "pan-left") {
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+    startX = 1;
+    endX = 0;
+  } else if (type === "pan-right") {
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+    startX = 0;
+    endX = 1;
+  } else if (type === "pan-up") {
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+    startY = 1;
+    endY = 0;
+  } else if (type === "pan-down") {
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+    startY = 0;
+    endY = 1;
+  } else if (type === "smart") {
+    const anchor = kb.anchor;
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+
+    let panAxis = "horizontal";
+    const hasSourceDims =
+      typeof sourceWidth === "number" &&
+      typeof sourceHeight === "number" &&
+      sourceWidth > 0 &&
+      sourceHeight > 0;
+
+    if (hasSourceDims) {
+      const outputAspect = width / height;
+      const sourceAspect = sourceWidth / sourceHeight;
+      if (Math.abs(sourceAspect - outputAspect) > 0.001) {
+        panAxis = sourceAspect < outputAspect ? "vertical" : "horizontal";
+      } else {
+        panAxis = height > width ? "vertical" : "horizontal";
+      }
+    } else {
+      panAxis = height > width ? "vertical" : "horizontal";
+    }
+
+    if (panAxis === "vertical") {
+      if (anchor === "top") {
+        startY = 0;
+        endY = 1;
+      } else {
+        startY = 1;
+        endY = 0;
+      }
+    } else {
+      if (anchor === "left") {
+        startX = 0;
+        endX = 1;
+      } else {
+        startX = 1;
+        endX = 0;
+      }
+    }
+  }
+
+  if (typeof kb.startZoom === "number" && Number.isFinite(kb.startZoom)) {
+    startZoom = kb.startZoom;
+  }
+  if (typeof kb.endZoom === "number" && Number.isFinite(kb.endZoom)) {
+    endZoom = kb.endZoom;
+  }
+
+  const customStartX = clamp01(kb.startX);
+  const customEndX = clamp01(kb.endX);
+  const customStartY = clamp01(kb.startY);
+  const customEndY = clamp01(kb.endY);
+
+  if (typeof customStartX === "number") {
+    startX = customStartX;
+  }
+  if (typeof customEndX === "number") {
+    endX = customEndX;
+  }
+  if (typeof customStartY === "number") {
+    startY = customStartY;
+  }
+  if (typeof customEndY === "number") {
+    endY = customEndY;
+  }
+
+  // When positions indicate panning but zoom wasn't explicitly set (still at
+  // the default 1.0), apply a default pan zoom.  At zoom=1.0 the zoompan
+  // visible window equals the full image, so (iw - iw/zoom) = 0 and position
+  // values are multiplied by zero — making the pan completely invisible.
+  const hasPan = startX !== endX || startY !== endY;
+  const zoomWasExplicit =
+    typeof kb.startZoom === "number" || typeof kb.endZoom === "number";
+  if (hasPan && !zoomWasExplicit && startZoom === 1 && endZoom === 1) {
+    startZoom = DEFAULT_PAN_ZOOM;
+    endZoom = DEFAULT_PAN_ZOOM;
+  }
+
+  return { startZoom, endZoom, startX, startY, endX, endY, easing };
+}
+
+function computeOverscanWidth(width, startZoom, endZoom) {
+  const maxZoom = Math.max(1, startZoom, endZoom);
+  // Generous pre-scale ensures zoompan has enough pixel resolution for smooth
+  // sub-pixel motion.  The integer x/y crop offsets in zoompan need a large
+  // canvas so that small position changes don't appear as visible stepping.
+  // 3x output width (floor 4000px) provides ~5-6 pixels of displacement per
+  // frame for typical pan speeds, which is imperceptible on screen.
+  let overscan = Math.max(width * 3, 4000, Math.round(width * maxZoom * 2));
+  if (overscan % 2 !== 0) {
+    overscan += 1;
+  }
+  return overscan;
+}
+
 function buildVideoFilter(project, videoClips) {
   let filterComplex = "";
   let videoIndex = 0;
@@ -71,55 +253,31 @@ function buildVideoFilter(project, videoClips) {
       const framesMinusOne = Math.max(1, frames - 1);
       const s = `${width}x${height}`;
 
-      // Use overscan pre-scale + center crop, then zoompan with center-based x/y
-      const overscanW = Math.max(width * 3, 4000);
-      const kb = clip.kenBurns;
-      const type = typeof kb === "string" ? kb : kb.type;
-      // Simplified fixed-intensity zoom. API no longer exposes strength.
-      const zoomAmount = 0.15;
-
-      let zoomExpr = `1`;
-      let xExpr = `round(iw/2 - (iw/zoom)/2)`;
-      let yExpr = `round(ih/2 - (ih/zoom)/2)`;
-
-      if (type === "zoom-in") {
-        const inc = (zoomAmount / framesMinusOne).toFixed(6);
-        // Ensure first frame starts exactly at base zoom=1 (on==0)
-        zoomExpr = `if(eq(on,0),1,zoom+${inc})`;
-      } else if (type === "zoom-out") {
-        const start = (1 + zoomAmount).toFixed(4);
-        const dec = (zoomAmount / framesMinusOne).toFixed(6);
-        // Start pre-zoomed on first frame to avoid jump
-        zoomExpr = `if(eq(on,0),${start},zoom-${dec})`;
-      } else {
-        const panZoom = 1.12;
-        zoomExpr = `${panZoom}`;
-        const dx = `(iw - iw/${panZoom})`;
-        const dy = `(ih - ih/${panZoom})`;
-        if (type === "pan-left") {
-          xExpr = `${dx} - ${dx}*on/${framesMinusOne}`;
-          yExpr = `(ih - ih/zoom)/2`;
-        } else if (type === "pan-right") {
-          xExpr = `${dx}*on/${framesMinusOne}`;
-          yExpr = `(ih - ih/zoom)/2`;
-        } else if (type === "pan-up") {
-          xExpr = `(iw - iw/zoom)/2`;
-          yExpr = `${dy} - ${dy}*on/${framesMinusOne}`;
-        } else if (type === "pan-down") {
-          xExpr = `(iw - iw/zoom)/2`;
-          yExpr = `${dy}*on/${framesMinusOne}`;
-        }
-      }
+      const { startZoom, endZoom, startX, startY, endX, endY, easing } =
+        resolveKenBurnsOptions(
+          clip.kenBurns,
+          width,
+          height,
+          clip.width,
+          clip.height
+        );
+      // Overscan provides enough pixel resolution for smooth zoompan motion.
+      const overscanW = computeOverscanWidth(width, startZoom, endZoom);
+      const zoomExpr = buildZoomExpr(startZoom, endZoom, framesMinusOne, easing);
+      const xPosExpr = buildPositionExpr(startX, endX, framesMinusOne, easing);
+      const yPosExpr = buildPositionExpr(startY, endY, framesMinusOne, easing);
+      const xExpr = `(iw - iw/zoom)*(${xPosExpr})`;
+      const yExpr = `(ih - ih/zoom)*(${yPosExpr})`;
 
       // Scale to cover target dimensions (upscaling if needed), then center crop
       // force_original_aspect_ratio=increase ensures image covers the target area
       // select='eq(n,0)' uses single quotes to protect the comma from the graph parser.
       // zoompan z/x/y values are also single-quoted — commas inside are literal.
-      filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
+      filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s}:fps=${fps},setsar=1:1,settb=1/${fps}${scaledLabel};`;
     } else {
       filterComplex += `[${inputIndex}:v]trim=start=${
         clip.cutFrom || 0
-      }:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,settb=1/${fps}${scaledLabel};`;
+      }:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
     }
 
     scaledStreams.push({

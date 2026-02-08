@@ -88,8 +88,15 @@ async function loadAudio(project, clipObj) {
   project.videoOrAudioClips.push({ ...clipObj, mediaDuration: durationSec });
 }
 
-function loadImage(project, clipObj) {
-  const clip = { ...clipObj, hasAudio: false, cutFrom: 0 };
+async function loadImage(project, clipObj) {
+  const metadata = await probeMedia(clipObj.url);
+  const clip = {
+    ...clipObj,
+    hasAudio: false,
+    cutFrom: 0,
+    width: clipObj.width ?? metadata.width,
+    height: clipObj.height ?? metadata.height,
+  };
   project.videoOrAudioClips.push(clip);
 }
 

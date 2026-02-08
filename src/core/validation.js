@@ -595,6 +595,8 @@ function validateClip(clip, index, options = {}) {
         "pan-right",
         "pan-up",
         "pan-down",
+        "smart",
+        "custom",
       ];
       const kbType =
         typeof clip.kenBurns === "string" ? clip.kenBurns : clip.kenBurns.type;
@@ -609,6 +611,105 @@ function validateClip(clip, index, options = {}) {
             kbType
           )
         );
+      }
+
+      if (typeof clip.kenBurns === "object") {
+        const {
+          anchor,
+          easing,
+          startZoom,
+          endZoom,
+          startX,
+          startY,
+          endX,
+          endY,
+        } =
+          clip.kenBurns;
+        if (anchor !== undefined) {
+          const validAnchors = ["top", "bottom", "left", "right"];
+          if (!validAnchors.includes(anchor)) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_VALUE,
+                `${path}.kenBurns.anchor`,
+                `Invalid kenBurns anchor '${anchor}'. Expected: ${validAnchors.join(
+                  ", "
+                )}`,
+                anchor
+              )
+            );
+          }
+        }
+
+        if (easing !== undefined) {
+          const validEasing = ["linear", "ease-in", "ease-out", "ease-in-out"];
+          if (!validEasing.includes(easing)) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_VALUE,
+                `${path}.kenBurns.easing`,
+                `Invalid kenBurns easing '${easing}'. Expected: ${validEasing.join(
+                  ", "
+                )}`,
+                easing
+              )
+            );
+          }
+        }
+
+        const numericFields = [
+          ["startZoom", startZoom],
+          ["endZoom", endZoom],
+          ["startX", startX],
+          ["startY", startY],
+          ["endX", endX],
+          ["endY", endY],
+        ];
+
+        numericFields.forEach(([field, value]) => {
+          if (value === undefined) {
+            return;
+          }
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_TYPE,
+                `${path}.kenBurns.${field}`,
+                `kenBurns.${field} must be a finite number`,
+                value
+              )
+            );
+            return;
+          }
+
+          if ((field === "startZoom" || field === "endZoom") && value <= 0) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_RANGE,
+                `${path}.kenBurns.${field}`,
+                `kenBurns.${field} must be > 0`,
+                value
+              )
+            );
+          }
+
+          if (
+            (field === "startX" ||
+              field === "startY" ||
+              field === "endX" ||
+              field === "endY") &&
+            (value < 0 || value > 1)
+          ) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_RANGE,
+                `${path}.kenBurns.${field}`,
+                `kenBurns.${field} must be between 0 and 1`,
+                value
+              )
+            );
+          }
+        });
       }
 
       // Check if image dimensions are provided and sufficient for project dimensions

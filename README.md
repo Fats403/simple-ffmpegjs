@@ -406,13 +406,13 @@ await SIMPLEFFMPEG.snapshot("./video.mp4", {
 
 **Snapshot Options:**
 
-| Option       | Type     | Default | Description                                                                 |
-| ------------ | -------- | ------- | --------------------------------------------------------------------------- |
-| `outputPath` | `string` | -       | **Required.** Output image path (extension determines format)               |
-| `time`       | `number` | `0`     | Time in seconds to capture the frame at                                     |
-| `width`      | `number` | -       | Output width in pixels (maintains aspect ratio if height omitted)           |
-| `height`     | `number` | -       | Output height in pixels (maintains aspect ratio if width omitted)           |
-| `quality`    | `number` | `2`     | JPEG quality 1-31, lower is better (only applies to `.jpg`/`.jpeg` output)  |
+| Option       | Type     | Default | Description                                                                |
+| ------------ | -------- | ------- | -------------------------------------------------------------------------- |
+| `outputPath` | `string` | -       | **Required.** Output image path (extension determines format)              |
+| `time`       | `number` | `0`     | Time in seconds to capture the frame at                                    |
+| `width`      | `number` | -       | Output width in pixels (maintains aspect ratio if height omitted)          |
+| `height`     | `number` | -       | Output height in pixels (maintains aspect ratio if width omitted)          |
+| `quality`    | `number` | `2`     | JPEG quality 1-31, lower is better (only applies to `.jpg`/`.jpeg` output) |
 
 **Supported formats:** `.jpg` / `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`
 
@@ -552,7 +552,22 @@ await project.load([
   position?: number;        // Omit to auto-sequence after previous video/image clip
   end?: number;             // Use end OR duration, not both
   duration?: number;        // Duration in seconds (alternative to end)
-  kenBurns?: "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down";
+  width?: number;           // Optional: source image width (skip probe / override)
+  height?: number;          // Optional: source image height (skip probe / override)
+  kenBurns?:
+    | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down"
+    | "smart" | "custom"
+    | {
+        type?: "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down" | "smart" | "custom";
+        startZoom?: number;
+        endZoom?: number;
+        startX?: number;     // 0 = left, 1 = right
+        startY?: number;     // 0 = top, 1 = bottom
+        endX?: number;
+        endY?: number;
+        anchor?: "top" | "bottom" | "left" | "right";
+        easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out";
+      };
 }
 ```
 
@@ -762,7 +777,7 @@ onProgress: ({ percent, phase }) => {
   } else {
     console.log(`${percent}%`);
   }
-}
+};
 ```
 
 ### Logging
@@ -798,10 +813,10 @@ try {
   if (error.name === "ValidationError") {
     // Structured validation errors
     error.errors.forEach((e) =>
-      console.error(`[${e.code}] ${e.path}: ${e.message}`)
+      console.error(`[${e.code}] ${e.path}: ${e.message}`),
     );
     error.warnings.forEach((w) =>
-      console.warn(`[${w.code}] ${w.path}: ${w.message}`)
+      console.warn(`[${w.code}] ${w.path}: ${w.message}`),
     );
   } else if (error.name === "FFmpegError") {
     // Structured details for bug reports (last 50 lines of stderr, command, exitCode)
@@ -880,9 +895,43 @@ await project.load([
 ]);
 ```
 
+**Custom Ken Burns (smart anchor + explicit endpoints):**
+
+```ts
+await project.load([
+  {
+    type: "image",
+    url: "./portrait.jpg",
+    duration: 5,
+    kenBurns: {
+      type: "smart",
+      anchor: "bottom",
+      startZoom: 1.05,
+      endZoom: 1.2,
+      easing: "ease-in-out",
+    },
+  },
+  {
+    type: "image",
+    url: "./wide.jpg",
+    duration: 4,
+    kenBurns: {
+      type: "custom",
+      startX: 0.15,
+      startY: 0.7,
+      endX: 0.85,
+      endY: 0.2,
+      easing: "ease-in-out",
+    },
+  },
+]);
+```
+
 When `position` is omitted, clips are placed sequentially — each one starts where the previous one ended. `duration` is an alternative to `end`: the library computes `end = position + duration`. The explicit form (`position: 0, end: 3`) still works identically.
 
 > **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
+> If you pass `width`/`height`, they override probed dimensions (useful for remote or generated images).
+> `smart` mode uses source vs output aspect (when known) to choose pan direction.
 
 ### Text & Animations
 
@@ -1244,7 +1293,7 @@ async function generateVideo(userPrompt, media) {
         `Your previous output had validation errors:\n${errorFeedback}`,
         `\nOriginal request: ${userPrompt}`,
         "\nPlease fix the errors and return the corrected clips array.",
-      ].join("\n")
+      ].join("\n"),
     );
 
     result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
@@ -1254,7 +1303,7 @@ async function generateVideo(userPrompt, media) {
   if (!result.valid) {
     throw new Error(
       `Failed to generate valid config after ${attempts} attempts:\n` +
-        SIMPLEFFMPEG.formatValidationResult(result)
+        SIMPLEFFMPEG.formatValidationResult(result),
     );
   }
 
@@ -1340,43 +1389,11 @@ npm run test:watch
 
 ### Manual Verification
 
-For visual verification of output quality, run the examples script which generates test media and demonstrates all major features:
+For visual verification, run the examples script to generate sample videos demonstrating all major features (transitions, text animations, Ken Burns, karaoke, watermarks, subtitles, and more):
 
 ```bash
 node examples/run-examples.js
-```
 
-This creates example videos in `examples/output/` covering:
-
-- Basic video concatenation
-- Crossfade transitions
-- Text overlays with animations
-- Background music mixing
-- Ken Burns effects on images
-- Gap filling with black frames
-- Quality settings (CRF, preset)
-- Resolution scaling
-- Metadata embedding
-- Thumbnail generation
-- Complex multi-track compositions
-- Word-by-word text
-- Platform presets (TikTok, YouTube, etc.)
-- Typewriter text animation
-- Scale-in text animation
-- Pulse text animation
-- Fade-out text animation
-- Text watermarks
-- Image watermarks
-- Timed watermarks
-- Karaoke text (word-by-word highlighting)
-- SRT/VTT subtitle import
-
-View the outputs to confirm everything renders correctly:
-
-```bash
-open examples/output/   # macOS
-xdg-open examples/output/   # Linux
-```
 
 ## Contributing
 
@@ -1395,3 +1412,4 @@ Inspired by [ezffmpeg](https://github.com/ezffmpeg/ezffmpeg) by John Chen.
 ## License
 
 MIT
+```

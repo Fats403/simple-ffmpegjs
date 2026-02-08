@@ -88,16 +88,37 @@ declare namespace SIMPLEFFMPEG {
     loop?: boolean;
   }
 
+  type KenBurnsEffect =
+    | "zoom-in"
+    | "zoom-out"
+    | "pan-left"
+    | "pan-right"
+    | "pan-up"
+    | "pan-down"
+    | "smart"
+    | "custom";
+
+  type KenBurnsAnchor = "top" | "bottom" | "left" | "right";
+  type KenBurnsEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
+  interface KenBurnsSpec {
+    type?: KenBurnsEffect;
+    startZoom?: number;
+    endZoom?: number;
+    startX?: number;
+    startY?: number;
+    endX?: number;
+    endY?: number;
+    anchor?: KenBurnsAnchor;
+    easing?: KenBurnsEasing;
+  }
+
   interface ImageClip extends BaseClip {
     type: "image";
     url: string;
-    kenBurns?:
-      | "zoom-in"
-      | "zoom-out"
-      | "pan-left"
-      | "pan-right"
-      | "pan-up"
-      | "pan-down";
+    width?: number;
+    height?: number;
+    kenBurns?: KenBurnsEffect | KenBurnsSpec;
   }
 
   type TextMode = "static" | "word-replace" | "word-sequential" | "karaoke";

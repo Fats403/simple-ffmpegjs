@@ -280,6 +280,69 @@ async function example05_KenBurnsImages() {
     { name: "pan-down", start: 25 },
   ];
 
+  const kenBurnsPresets = {
+    "zoom-in": {
+      type: "custom",
+      startZoom: 1.0,
+      endZoom: 1.12,
+      startX: 0.5,
+      endX: 0.55,
+      startY: 0.55,
+      endY: 0.45,
+      easing: "ease-in-out",
+    },
+    "zoom-out": {
+      type: "custom",
+      startZoom: 1.12,
+      endZoom: 1.0,
+      startX: 0.5,
+      endX: 0.45,
+      startY: 0.5,
+      endY: 0.55,
+      easing: "ease-in-out",
+    },
+    "pan-left": {
+      type: "custom",
+      startZoom: 1.08,
+      endZoom: 1.08,
+      startX: 0.85,
+      endX: 0.15,
+      startY: 0.55,
+      endY: 0.45,
+      easing: "ease-in-out",
+    },
+    "pan-right": {
+      type: "custom",
+      startZoom: 1.08,
+      endZoom: 1.08,
+      startX: 0.15,
+      endX: 0.85,
+      startY: 0.45,
+      endY: 0.55,
+      easing: "ease-in-out",
+    },
+    "pan-up": {
+      type: "custom",
+      startZoom: 1.08,
+      endZoom: 1.08,
+      startX: 0.55,
+      endX: 0.45,
+      startY: 0.85,
+      endY: 0.15,
+      easing: "ease-in-out",
+    },
+    "pan-down": {
+      type: "custom",
+      startZoom: 1.08,
+      endZoom: 1.08,
+      startX: 0.45,
+      endX: 0.55,
+      startY: 0.15,
+      endY: 0.85,
+      easing: "ease-in-out",
+    },
+  };
+
   const project = new SIMPLEFFMPEG({
     width: 640,
     height: 480,
@@ -297,7 +360,7 @@ async function example05_KenBurnsImages() {
       url: path.join(FIXTURES_DIR, "test-image.jpg"),
       position: effect.start,
       end: effect.start + 4,
-      kenBurns: effect.name,
+      kenBurns: kenBurnsPresets[effect.name],
     });
 
     // Label showing which effect is playing
@@ -370,6 +433,59 @@ async function example05b_ImageSlideshow() {
   ]);
 
   const output = path.join(OUTPUT_DIR, "05b-slideshow.mp4");
+  await project.export({
+    outputPath: output,
+    preset: "ultrafast",
+    onProgress: ({ percent }) =>
+      process.stdout.write(`\r  Progress: ${percent || 0}%`),
+  });
+
+  console.log(`\n  Output: ${output}`);
+}
+
+async function example05c_AdvancedKenBurns() {
+  log("Example 05c: Advanced Ken Burns (smart + custom)");
+
+  const project = new SIMPLEFFMPEG({
+    width: 640,
+    height: 360, // 16:9 output to show smart aspect-aware pan
+    fps: 30,
+    fillGaps: "black",
+  });
+
+  await project.load([
+    {
+      type: "image",
+      url: path.join(FIXTURES_DIR, "test-image.jpg"),
+      position: 0,
+      end: 4,
+      width: 640, // override/provide dims for smart mode
+      height: 480,
+      kenBurns: {
+        type: "smart",
+        anchor: "top",
+        startZoom: 1.05,
+        endZoom: 1.2,
+        easing: "ease-in-out",
+      },
+    },
+    {
+      type: "image",
+      url: path.join(FIXTURES_DIR, "test-image.jpg"),
+      position: 5,
+      end: 9,
+      kenBurns: {
+        type: "custom",
+        startX: 0.2,
+        startY: 0.8,
+        endX: 0.8,
+        endY: 0.2,
+        easing: "ease-in-out",
+      },
+    },
+  ]);
+
+  const output = path.join(OUTPUT_DIR, "05c-ken-burns-advanced.mp4");
   await project.export({
     outputPath: output,
     preset: "ultrafast",
@@ -1326,6 +1442,7 @@ async function main() {
     example04_BackgroundMusic,
     example05_KenBurnsImages,
     example05b_ImageSlideshow,
+    example05c_AdvancedKenBurns,
     example06_GapFilling,
     example07_QualitySettings,
     example08_ResolutionScaling,
