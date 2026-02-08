@@ -28,6 +28,7 @@
   - [Platform Presets](#platform-presets)
   - [Watermarks](#watermarks)
   - [Progress Information](#progress-information)
+  - [Logging](#logging)
   - [Error Handling](#error-handling)
   - [Cancellation](#cancellation)
   - [Gap Handling](#gap-handling)
@@ -390,6 +391,47 @@ console.log(audio.duration); // 180.5
 console.log(audio.sampleRate); // 44100
 ```
 
+#### `SIMPLEFFMPEG.snapshot(filePath, options)`
+
+Capture a single frame from a video file and save it as an image. This is a static method — no project instance needed.
+
+The output format is determined by the `outputPath` file extension. FFmpeg handles format detection internally, so `.jpg` produces JPEG, `.png` produces PNG, `.webp` produces WebP, etc.
+
+```ts
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./frame.png",
+  time: 5,
+});
+```
+
+**Snapshot Options:**
+
+| Option       | Type     | Default | Description                                                                 |
+| ------------ | -------- | ------- | --------------------------------------------------------------------------- |
+| `outputPath` | `string` | -       | **Required.** Output image path (extension determines format)               |
+| `time`       | `number` | `0`     | Time in seconds to capture the frame at                                     |
+| `width`      | `number` | -       | Output width in pixels (maintains aspect ratio if height omitted)           |
+| `height`     | `number` | -       | Output height in pixels (maintains aspect ratio if width omitted)           |
+| `quality`    | `number` | `2`     | JPEG quality 1-31, lower is better (only applies to `.jpg`/`.jpeg` output)  |
+
+**Supported formats:** `.jpg` / `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`
+
+```ts
+// Save as JPEG with quality control and resize
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./thumb.jpg",
+  time: 10,
+  width: 640,
+  quality: 4,
+});
+
+// Save as WebP
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./preview.webp",
+  time: 0,
+});
+```
+
 #### `project.export(options)`
 
 Build and execute the FFmpeg command to render the final video.
@@ -421,6 +463,7 @@ await project.export(options?: ExportOptions): Promise<string>
 | `verbose`               | `boolean`     | `false`          | Enable verbose logging                                                           |
 | `saveCommand`           | `string`      | -                | Save FFmpeg command to file                                                      |
 | `onProgress`            | `function`    | -                | Progress callback                                                                |
+| `onLog`                 | `function`    | -                | FFmpeg log callback (see [Logging](#logging) section)                            |
 | `signal`                | `AbortSignal` | -                | Cancellation signal                                                              |
 | `watermark`             | `object`      | -                | Add watermark overlay (see Watermarks section)                                   |
 | `compensateTransitions` | `boolean`     | `true`           | Auto-adjust text timings for transition overlap (see below)                      |
@@ -722,6 +765,21 @@ onProgress: ({ percent, phase }) => {
 }
 ```
 
+### Logging
+
+Use the `onLog` callback to receive real-time FFmpeg output. Each log entry includes a `level` (`"stderr"` or `"stdout"`) and the raw `message` string. This is useful for debugging, monitoring, or piping FFmpeg output to your own logging system.
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  onLog: ({ level, message }) => {
+    console.log(`[ffmpeg:${level}] ${message}`);
+  },
+});
+```
+
+The callback fires for every data chunk FFmpeg writes, including encoding stats, warnings, and codec information. It works alongside `onProgress` — both can be used simultaneously.
+
 ### Error Handling
 
 The library provides custom error classes for structured error handling:
@@ -729,7 +787,7 @@ The library provides custom error classes for structured error handling:
 | Error Class            | When Thrown                | Properties                                                                  |
 | ---------------------- | -------------------------- | --------------------------------------------------------------------------- |
 | `ValidationError`      | Invalid clip configuration | `errors[]`, `warnings[]` (structured issues with `code`, `path`, `message`) |
-| `FFmpegError`          | FFmpeg command fails       | `stderr`, `command`, `exitCode`                                             |
+| `FFmpegError`          | FFmpeg command fails       | `stderr`, `command`, `exitCode`, `details`                                  |
 | `MediaNotFoundError`   | File not found             | `path`                                                                      |
 | `ExportCancelledError` | Export aborted             | -                                                                           |
 
@@ -746,8 +804,9 @@ try {
       console.warn(`[${w.code}] ${w.path}: ${w.message}`)
     );
   } else if (error.name === "FFmpegError") {
-    console.error("FFmpeg failed:", error.stderr);
-    console.error("Command was:", error.command);
+    // Structured details for bug reports (last 50 lines of stderr, command, exitCode)
+    console.error("FFmpeg failed:", error.details);
+    // { stderrTail: "...", command: "ffmpeg ...", exitCode: 1 }
   } else if (error.name === "MediaNotFoundError") {
     console.error("File not found:", error.path);
   } else if (error.name === "ExportCancelledError") {

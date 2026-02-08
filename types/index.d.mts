@@ -21,6 +21,12 @@ declare namespace SIMPLEFFMPEG {
     stderr: string;
     command: string;
     exitCode: number | null;
+    /** Structured error details for bug reporting */
+    readonly details: {
+      stderrTail: string;
+      command: string;
+      exitCode: number | null;
+    };
   }
 
   /** Thrown when a media file cannot be found or accessed */
@@ -295,6 +301,12 @@ declare namespace SIMPLEFFMPEG {
     fillGaps?: "none" | "black";
   }
 
+  /** Log entry passed to onLog callback */
+  interface LogEntry {
+    level: "stderr" | "stdout";
+    message: string;
+  }
+
   /** Progress information passed to onProgress callback */
   interface ProgressInfo {
     /** Current frame number being processed */
@@ -332,6 +344,20 @@ declare namespace SIMPLEFFMPEG {
     time?: number;
     width?: number;
     height?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.snapshot() — capture a single frame from a video */
+  interface SnapshotOptions {
+    /** Output image path (extension determines format: .jpg, .png, .webp, .bmp, .tiff) */
+    outputPath: string;
+    /** Time in seconds to capture the frame at (default: 0) */
+    time?: number;
+    /** Output width in pixels (maintains aspect ratio if height omitted) */
+    width?: number;
+    /** Output height in pixels (maintains aspect ratio if width omitted) */
+    height?: number;
+    /** JPEG quality 1-31, lower is better (default: 2, only applies to JPEG output) */
+    quality?: number;
   }
 
   type HardwareAcceleration =
@@ -483,6 +509,8 @@ declare namespace SIMPLEFFMPEG {
 
     // Callbacks & Control
     onProgress?: (progress: ProgressInfo) => void;
+    /** FFmpeg log callback for real-time stderr/stdout output */
+    onLog?: (entry: LogEntry) => void;
     signal?: AbortSignal;
 
     // Text Batching
@@ -669,6 +697,28 @@ declare class SIMPLEFFMPEG {
    * console.log(info.hasAudio);   // true
    */
   static probe(filePath: string): Promise<SIMPLEFFMPEG.MediaInfo>;
+
+  /**
+   * Capture a single frame from a video file and save it as an image.
+   * The output format is determined by the outputPath file extension
+   * (.jpg, .png, .webp, .bmp, .tiff).
+   *
+   * @param filePath - Path to the source video file
+   * @param options - Snapshot options
+   * @returns The output path
+   * @throws {SIMPLEFFMPEG.SimpleffmpegError} If filePath or outputPath is missing
+   * @throws {SIMPLEFFMPEG.FFmpegError} If FFmpeg fails to extract the frame
+   *
+   * @example
+   * await SIMPLEFFMPEG.snapshot("./video.mp4", {
+   *   outputPath: "./frame.png",
+   *   time: 5,
+   * });
+   */
+  static snapshot(
+    filePath: string,
+    options: SIMPLEFFMPEG.SnapshotOptions
+  ): Promise<string>;
 
   /**
    * Format validation result as human-readable string

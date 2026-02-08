@@ -32,6 +32,20 @@ class FFmpegError extends SimpleffmpegError {
     this.command = command;
     this.exitCode = exitCode;
   }
+
+  /**
+   * Structured error details for easy bug reporting.
+   * Contains the last 50 lines of stderr, the command, and exit code.
+   */
+  get details() {
+    const lines = (this.stderr || "").split("\n");
+    const tail = lines.slice(-50).join("\n");
+    return {
+      stderrTail: tail,
+      command: this.command,
+      exitCode: this.exitCode,
+    };
+  }
 }
 
 /**

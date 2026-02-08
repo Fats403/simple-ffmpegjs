@@ -8,10 +8,11 @@ const { parseFFmpegCommand } = require("../lib/utils");
 /**
  * Run an FFmpeg command using spawn() to avoid command injection.
  * @param {string} cmd - The full FFmpeg command string
+ * @param {Function} [onLog] - Optional log callback receiving { level, message }
  * @returns {Promise<void>}
  * @throws {FFmpegError} If ffmpeg fails
  */
-function runCmd(cmd) {
+function runCmd(cmd, onLog) {
   return new Promise((resolve, reject) => {
     const args = parseFFmpegCommand(cmd);
     const ffmpegPath = args.shift(); // Remove 'ffmpeg' from args
@@ -22,8 +23,19 @@ function runCmd(cmd) {
 
     let stderr = "";
 
+    proc.stdout.on("data", (data) => {
+      const chunk = data.toString();
+      if (onLog && typeof onLog === "function") {
+        onLog({ level: "stdout", message: chunk });
+      }
+    });
+
     proc.stderr.on("data", (data) => {
-      stderr += data.toString();
+      const chunk = data.toString();
+      stderr += chunk;
+      if (onLog && typeof onLog === "function") {
+        onLog({ level: "stderr", message: chunk });
+      }
     });
 
     proc.on("error", (error) => {
@@ -61,6 +73,7 @@ async function runTextPasses({
   intermediatePreset,
   intermediateCrf,
   batchSize = 75,
+  onLog,
 }) {
   const tempOutputs = [];
   let currentInput = baseOutputPath;
@@ -89,7 +102,7 @@ async function runTextPasses({
       intermediateCrf,
       outputPath: batchOutput,
     });
-    await runCmd(cmd);
+    await runCmd(cmd, onLog);
     currentInput = batchOutput;
     passes += 1;
   }

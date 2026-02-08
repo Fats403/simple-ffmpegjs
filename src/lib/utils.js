@@ -76,9 +76,10 @@ function parseFFmpegProgress(line, totalDuration) {
  * @param {number} options.totalDuration - Expected output duration in seconds (for progress %)
  * @param {Function} options.onProgress - Progress callback
  * @param {AbortSignal} options.signal - AbortSignal for cancellation
+ * @param {Function} options.onLog - Log callback receiving { level: "stderr"|"stdout", message: string }
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
-function runFFmpeg({ command, totalDuration = 0, onProgress, signal }) {
+function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
   return new Promise((resolve, reject) => {
     // Parse command into args (simple split, assumes no quoted args with spaces in values)
     // FFmpeg commands from this library don't have spaces in quoted paths handled this way
@@ -115,12 +116,20 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal }) {
     }
 
     proc.stdout.on("data", (data) => {
-      stdout += data.toString();
+      const chunk = data.toString();
+      stdout += chunk;
+      if (onLog && typeof onLog === "function") {
+        onLog({ level: "stdout", message: chunk });
+      }
     });
 
     proc.stderr.on("data", (data) => {
       const chunk = data.toString();
       stderr += chunk;
+
+      if (onLog && typeof onLog === "function") {
+        onLog({ level: "stderr", message: chunk });
+      }
 
       // Parse progress from stderr (FFmpeg outputs progress to stderr)
       if (onProgress && typeof onProgress === "function") {

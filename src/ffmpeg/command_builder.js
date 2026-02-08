@@ -210,6 +210,45 @@ function buildThumbnailCommand({ inputPath, outputPath, time, width, height }) {
 }
 
 /**
+ * Build command to capture a single frame from a video file.
+ * Output format is determined by the outputPath extension (jpg, png, webp, etc.).
+ *
+ * @param {Object} options
+ * @param {string} options.inputPath - Path to source video
+ * @param {string} options.outputPath - Output image path (extension determines format)
+ * @param {number} [options.time=0] - Time in seconds to capture
+ * @param {number} [options.width] - Output width (maintains aspect if height omitted)
+ * @param {number} [options.height] - Output height (maintains aspect if width omitted)
+ * @param {number} [options.quality] - JPEG quality 1-31, lower is better (only applies to JPEG)
+ * @returns {string} FFmpeg command string
+ */
+function buildSnapshotCommand({
+  inputPath,
+  outputPath,
+  time = 0,
+  width,
+  height,
+  quality,
+}) {
+  let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(
+    inputPath
+  )}" -vframes 1 `;
+
+  if (width || height) {
+    const w = width || -1;
+    const h = height || -1;
+    cmd += `-vf "scale=${w}:${h}" `;
+  }
+
+  if (quality != null) {
+    cmd += `-q:v ${quality} `;
+  }
+
+  cmd += `"${escapeFilePath(outputPath)}"`;
+  return cmd;
+}
+
+/**
  * Escape metadata value for FFmpeg
  */
 function escapeMetadata(value) {
@@ -223,5 +262,6 @@ module.exports = {
   buildMainCommand,
   buildTextBatchCommand,
   buildThumbnailCommand,
+  buildSnapshotCommand,
   escapeMetadata,
 };

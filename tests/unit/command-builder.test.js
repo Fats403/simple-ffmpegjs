@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 
-const { buildMainCommand, buildThumbnailCommand, escapeMetadata } =
-  await import("../../src/ffmpeg/command_builder.js");
+const {
+  buildMainCommand,
+  buildThumbnailCommand,
+  buildSnapshotCommand,
+  escapeMetadata,
+} = await import("../../src/ffmpeg/command_builder.js");
 
 describe("Command Builder", () => {
   describe("buildMainCommand", () => {
@@ -221,6 +225,106 @@ describe("Command Builder", () => {
       });
 
       expect(cmd).toContain('-vf "scale=320:-1"');
+    });
+  });
+
+  describe("buildSnapshotCommand", () => {
+    it("should build basic snapshot command", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.png",
+        time: 5,
+      });
+
+      expect(cmd).toContain("ffmpeg -y");
+      expect(cmd).toContain("-ss 5");
+      expect(cmd).toContain('-i "./video.mp4"');
+      expect(cmd).toContain("-vframes 1");
+      expect(cmd).toContain('"./frame.png"');
+    });
+
+    it("should default time to 0", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.jpg",
+      });
+
+      expect(cmd).toContain("-ss 0");
+    });
+
+    it("should include scale filter when width and height provided", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.jpg",
+        time: 2,
+        width: 640,
+        height: 360,
+      });
+
+      expect(cmd).toContain('-vf "scale=640:360"');
+    });
+
+    it("should handle width only (maintain aspect ratio)", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.jpg",
+        time: 0,
+        width: 320,
+      });
+
+      expect(cmd).toContain('-vf "scale=320:-1"');
+    });
+
+    it("should handle height only (maintain aspect ratio)", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.jpg",
+        time: 0,
+        height: 240,
+      });
+
+      expect(cmd).toContain('-vf "scale=-1:240"');
+    });
+
+    it("should include quality flag when provided", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.jpg",
+        time: 3,
+        quality: 4,
+      });
+
+      expect(cmd).toContain("-q:v 4");
+    });
+
+    it("should not include quality flag when not provided", () => {
+      const cmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.png",
+        time: 0,
+      });
+
+      expect(cmd).not.toContain("-q:v");
+    });
+
+    it("should support different output formats via extension", () => {
+      const pngCmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.png",
+      });
+      expect(pngCmd).toContain('"./frame.png"');
+
+      const webpCmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.webp",
+      });
+      expect(webpCmd).toContain('"./frame.webp"');
+
+      const bmpCmd = buildSnapshotCommand({
+        inputPath: "./video.mp4",
+        outputPath: "./frame.bmp",
+      });
+      expect(bmpCmd).toContain('"./frame.bmp"');
     });
   });
 

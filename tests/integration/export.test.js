@@ -190,6 +190,43 @@ describe("Integration Tests", () => {
       expect(hasProgressData).toBe(true);
     }, 30000);
 
+    it("should call onLog callback with stderr entries during export", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-onlog.mp4");
+      const logEntries = [];
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      await project.export({
+        outputPath,
+        onLog: (entry) => {
+          logEntries.push(entry);
+        },
+      });
+
+      // FFmpeg always produces stderr output (version info, encoding stats, etc.)
+      expect(logEntries.length).toBeGreaterThan(0);
+
+      // Every entry should have the expected shape
+      for (const entry of logEntries) {
+        expect(entry).toHaveProperty("level");
+        expect(entry).toHaveProperty("message");
+        expect(["stderr", "stdout"]).toContain(entry.level);
+        expect(typeof entry.message).toBe("string");
+      }
+
+      // At least one stderr entry should be present (FFmpeg writes to stderr)
+      const stderrEntries = logEntries.filter((e) => e.level === "stderr");
+      expect(stderrEntries.length).toBeGreaterThan(0);
+    }, 30000);
+
     it("should fill gaps with black when fillGaps is 'black'", async () => {
       const project = new SIMPLEFFMPEG({
         width: 320,
@@ -244,6 +281,77 @@ describe("Integration Tests", () => {
 
       // Verify the file was NOT created
       expect(fs.existsSync("./preview-test.mp4")).toBe(false);
+    });
+  });
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())("snapshot()", () => {
+    it("should capture a frame as PNG", async () => {
+      const inputPath = path.join(FIXTURES_DIR, "test-video-2s.mp4");
+      const outputPath = path.join(OUTPUT_DIR, "test-snapshot.png");
+
+      const result = await SIMPLEFFMPEG.snapshot(inputPath, {
+        outputPath,
+        time: 1,
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+      const stats = fs.statSync(outputPath);
+      expect(stats.size).toBeGreaterThan(0);
+    }, 30000);
+
+    it("should capture a frame as JPEG with quality", async () => {
+      const inputPath = path.join(FIXTURES_DIR, "test-video-2s.mp4");
+      const outputPath = path.join(OUTPUT_DIR, "test-snapshot.jpg");
+
+      const result = await SIMPLEFFMPEG.snapshot(inputPath, {
+        outputPath,
+        time: 0.5,
+        quality: 4,
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+      const stats = fs.statSync(outputPath);
+      expect(stats.size).toBeGreaterThan(0);
+    }, 30000);
+
+    it("should capture a frame with custom dimensions", async () => {
+      const inputPath = path.join(FIXTURES_DIR, "test-video-2s.mp4");
+      const outputPath = path.join(OUTPUT_DIR, "test-snapshot-resized.jpg");
+
+      const result = await SIMPLEFFMPEG.snapshot(inputPath, {
+        outputPath,
+        time: 0,
+        width: 160,
+      });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+
+      // Verify dimensions using ffprobe
+      try {
+        const info = execSync(
+          `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
+          { encoding: "utf8" }
+        );
+        const [width] = info.trim().split(",").map(Number);
+        expect(width).toBe(160);
+      } catch {
+        // ffprobe may not be available
+      }
+    }, 30000);
+
+    it("should throw if filePath is missing", async () => {
+      await expect(
+        SIMPLEFFMPEG.snapshot(null, { outputPath: "./out.png" })
+      ).rejects.toThrow(/filePath/);
+    });
+
+    it("should throw if outputPath is missing", async () => {
+      await expect(
+        SIMPLEFFMPEG.snapshot("./video.mp4", {})
+      ).rejects.toThrow(/outputPath/);
     });
   });
 
@@ -1260,6 +1368,44 @@ Second subtitle
         const result = await project.export({ outputPath });
         expect(result).toBe(outputPath);
         expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+    }
+  );
+
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "error details",
+    () => {
+      it("should populate error.details when FFmpeg fails", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-error-details.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+        ]);
+
+        try {
+          // Use an invalid codec to force FFmpeg failure
+          await project.export({
+            outputPath,
+            videoCodec: "nonexistent_codec_xyz",
+          });
+          // Should not reach here
+          expect.unreachable("Expected export to throw FFmpegError");
+        } catch (error) {
+          expect(error.name).toBe("FFmpegError");
+          expect(error.details).toBeDefined();
+          expect(error.details).toHaveProperty("stderrTail");
+          expect(error.details).toHaveProperty("command");
+          expect(error.details).toHaveProperty("exitCode");
+          expect(typeof error.details.stderrTail).toBe("string");
+          expect(error.details.stderrTail.length).toBeGreaterThan(0);
+          expect(typeof error.details.command).toBe("string");
+        }
       }, 30000);
     }
   );

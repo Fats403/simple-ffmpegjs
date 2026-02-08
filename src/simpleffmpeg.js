@@ -28,6 +28,7 @@ const C = require("./core/constants");
 const {
   buildMainCommand,
   buildThumbnailCommand,
+  buildSnapshotCommand,
 } = require("./ffmpeg/command_builder");
 const { runTextPasses } = require("./ffmpeg/text_passes");
 const { formatBytes, runFFmpeg } = require("./lib/utils");
@@ -860,7 +861,7 @@ class SIMPLEFFMPEG {
 
     this._isExporting = true;
     const t0 = Date.now();
-    const { onProgress, signal } = options;
+    const { onProgress, signal, onLog } = options;
 
     let prepared;
     try {
@@ -948,6 +949,7 @@ class SIMPLEFFMPEG {
           command: pass1Command,
           totalDuration,
           signal,
+          onLog,
         });
 
         // Second pass
@@ -984,6 +986,7 @@ class SIMPLEFFMPEG {
           totalDuration,
           onProgress,
           signal,
+          onLog,
         });
 
         // Clean up pass log files
@@ -998,6 +1001,7 @@ class SIMPLEFFMPEG {
           totalDuration,
           onProgress,
           signal,
+          onLog,
         });
       }
 
@@ -1020,6 +1024,7 @@ class SIMPLEFFMPEG {
           intermediatePreset: exportOptions.intermediatePreset,
           intermediateCrf: exportOptions.intermediateCrf,
           batchSize: exportOptions.textMaxNodesPerPass,
+          onLog,
         });
         passes = textPasses;
         if (finalPath !== exportOptions.outputPath) {
@@ -1047,7 +1052,7 @@ class SIMPLEFFMPEG {
           console.log("simple-ffmpeg: Generating thumbnail...");
         }
 
-        await runFFmpeg({ command: thumbCommand });
+        await runFFmpeg({ command: thumbCommand, onLog });
         console.log(`simple-ffmpeg: Thumbnail -> ${thumbOptions.outputPath}`);
       }
 
@@ -1209,6 +1214,72 @@ class SIMPLEFFMPEG {
    */
   static async probe(filePath) {
     return probeMedia(filePath);
+  }
+
+  /**
+   * Capture a single frame from a video file and save it as an image.
+   *
+   * The output format is determined by the `outputPath` file extension.
+   * Supported formats include: `.jpg`/`.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`.
+   *
+   * @param {string} filePath - Path to the source video file
+   * @param {Object} options - Snapshot options
+   * @param {string} options.outputPath - Output image path (extension determines format)
+   * @param {number} [options.time=0] - Time in seconds to capture the frame at
+   * @param {number} [options.width] - Output width in pixels (maintains aspect ratio if height omitted)
+   * @param {number} [options.height] - Output height in pixels (maintains aspect ratio if width omitted)
+   * @param {number} [options.quality] - JPEG quality 1-31, lower is better (default: 2, only applies to JPEG)
+   * @returns {Promise<string>} The resolved output path
+   * @throws {SimpleffmpegError} If filePath or outputPath is missing
+   * @throws {FFmpegError} If FFmpeg fails to extract the frame
+   *
+   * @example
+   * // Save as PNG
+   * await SIMPLEFFMPEG.snapshot("./video.mp4", {
+   *   outputPath: "./frame.png",
+   *   time: 5,
+   * });
+   *
+   * @example
+   * // Save as JPEG with quality and resize
+   * await SIMPLEFFMPEG.snapshot("./video.mp4", {
+   *   outputPath: "./thumb.jpg",
+   *   time: 10,
+   *   width: 640,
+   *   quality: 4,
+   * });
+   */
+  static async snapshot(filePath, options = {}) {
+    if (!filePath) {
+      throw new SimpleffmpegError(
+        "snapshot() requires a filePath as the first argument"
+      );
+    }
+    if (!options.outputPath) {
+      throw new SimpleffmpegError(
+        "snapshot() requires options.outputPath to be specified"
+      );
+    }
+
+    const {
+      outputPath,
+      time = 0,
+      width,
+      height,
+      quality,
+    } = options;
+
+    const command = buildSnapshotCommand({
+      inputPath: filePath,
+      outputPath,
+      time,
+      width,
+      height,
+      quality,
+    });
+
+    await runFFmpeg({ command });
+    return outputPath;
   }
 
   /**

@@ -76,6 +76,44 @@ describe("Custom Error Classes", () => {
       expect(error.command).toBe("");
       expect(error.exitCode).toBeNull();
     });
+
+    it("should return structured details via getter", () => {
+      const error = new FFmpegError("ffmpeg failed", {
+        stderr: "line1\nline2\nline3",
+        command: "ffmpeg -i input.mp4 output.mp4",
+        exitCode: 1,
+      });
+
+      const details = error.details;
+      expect(details).toEqual({
+        stderrTail: "line1\nline2\nline3",
+        command: "ffmpeg -i input.mp4 output.mp4",
+        exitCode: 1,
+      });
+    });
+
+    it("should truncate stderr to last 50 lines in details", () => {
+      const lines = Array.from({ length: 100 }, (_, i) => `line ${i + 1}`);
+      const error = new FFmpegError("ffmpeg failed", {
+        stderr: lines.join("\n"),
+        command: "ffmpeg -i in.mp4 out.mp4",
+        exitCode: 2,
+      });
+
+      const details = error.details;
+      const tailLines = details.stderrTail.split("\n");
+      expect(tailLines.length).toBe(50);
+      expect(tailLines[0]).toBe("line 51");
+      expect(tailLines[49]).toBe("line 100");
+    });
+
+    it("should handle empty stderr in details", () => {
+      const error = new FFmpegError("ffmpeg failed");
+      const details = error.details;
+      expect(details.stderrTail).toBe("");
+      expect(details.command).toBe("");
+      expect(details.exitCode).toBeNull();
+    });
   });
 
   describe("MediaNotFoundError", () => {
