@@ -989,6 +989,281 @@ Second subtitle
     }
   );
 
+  // ========================================================================
+  // Filter escaping regression tests
+  //
+  // These tests reproduce the exact patterns that caused the
+  // "No such filter: '0'" FFmpeg error. The root cause was incorrect
+  // escaping of single quotes in drawtext text values, combined with
+  // zoompan expressions containing commas inside single-quoted parameters.
+  // ========================================================================
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
+    "filter escaping edge cases (regression)",
+    () => {
+      it("should export text with apostrophe (the original crash trigger)", async () => {
+        // This was the EXACT pattern that caused the "No such filter: '0'" error.
+        // Text "Let's Go!" with a pop animation (which uses fontsize=if(lt(t,...)))
+        // on top of a video clip.
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-apostrophe-text.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Let's Go!",
+            position: 0,
+            end: 2,
+            fontSize: 48,
+            fontColor: "#FFFFFF",
+            borderColor: "#000000",
+            borderWidth: 2,
+            animation: { type: "pop", in: 0.5 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export multiple apostrophe texts with different animations", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-multi-apostrophe.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+            position: 0,
+            end: 3,
+          },
+          {
+            type: "text",
+            text: "Let's Go!",
+            position: 0,
+            end: 2,
+            fontSize: 72,
+            fontColor: "#FFFFFF",
+            xPercent: 0.5,
+            yPercent: 0.2,
+            borderColor: "#000000",
+            borderWidth: 2,
+            animation: { type: "pop-bounce", in: 0.3 },
+          },
+          {
+            type: "text",
+            text: "Don't Stop!",
+            position: 0.5,
+            end: 2.5,
+            fontSize: 48,
+            fontColor: "#FFFF00",
+            xPercent: 0.5,
+            yPercent: 0.5,
+            animation: { type: "fade-in-out", in: 0.5, out: 0.5 },
+          },
+          {
+            type: "text",
+            text: "It's a boy's world",
+            position: 1,
+            end: 3,
+            fontSize: 36,
+            fontColor: "#00FF00",
+            xPercent: 0.5,
+            yPercent: 0.8,
+            animation: { type: "scale-in", in: 0.4, intensity: 0.5 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export image with kenBurns + apostrophe text overlay", async () => {
+        // This tests the exact combination from the bug report: images with
+        // kenBurns zoom effects (zoompan filter with comma expressions) plus
+        // text overlays containing apostrophes.
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-kenburns-apostrophe.mp4");
+        const watermarkPath = path.join(FIXTURES_DIR, "test-watermark.png");
+
+        await project.load([
+          {
+            type: "image",
+            url: watermarkPath, // Any image will do
+            position: 0,
+            end: 3,
+            kenBurns: "zoom-in",
+          },
+          {
+            type: "text",
+            text: "Let's Go!",
+            position: 0.5,
+            end: 2.5,
+            fontSize: 48,
+            fontColor: "#FFFFFF",
+            borderColor: "#000000",
+            borderWidth: 2,
+            animation: { type: "pop", in: 0.5 },
+          },
+          {
+            type: "text",
+            text: "It's Amazing!",
+            position: 1,
+            end: 3,
+            fontSize: 36,
+            fontColor: "#FFFF00",
+            animation: { type: "fade-in-out", in: 0.3, out: 0.3 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export kenBurns images with transitions + apostrophe text", async () => {
+        // Multiple Ken Burns images with transitions between them, plus text
+        // overlays with apostrophes — the full complexity of the original bug.
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-kenburns-transition-apostrophe.mp4");
+        const imgPath = path.join(FIXTURES_DIR, "test-watermark.png");
+
+        await project.load([
+          {
+            type: "image",
+            url: imgPath,
+            position: 0,
+            end: 2,
+            kenBurns: "zoom-in",
+          },
+          {
+            type: "image",
+            url: imgPath,
+            position: 1.5,
+            end: 3.5,
+            kenBurns: "pan-right",
+            transition: { type: "fade", duration: 0.5 },
+          },
+          {
+            type: "text",
+            text: "Let's Go!",
+            position: 0,
+            end: 2,
+            fontSize: 48,
+            fontColor: "#FFFFFF",
+            borderColor: "#000000",
+            borderWidth: 2,
+            animation: { type: "pop", in: 0.5 },
+          },
+          {
+            type: "text",
+            text: "Don't Miss This!",
+            position: 1.5,
+            end: 3.5,
+            fontSize: 36,
+            fontColor: "#FFFF00",
+            animation: { type: "scale-in", in: 0.3 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export typewriter animation with apostrophe text", async () => {
+        // Typewriter builds progressive substrings (I, It, It', It's, ...)
+        // which can't use the textfile approach — tests escapeDrawtextText directly.
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-typewriter-apostrophe.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "It's go time!",
+            position: 0,
+            end: 2,
+            mode: "static",
+            fontSize: 32,
+            fontColor: "#FFFFFF",
+            animation: { type: "typewriter", speed: 0.1 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export text with colons (drawtext option separator)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-colon-text.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Time: 12:30:45 PM",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export text with commas and brackets (filter separators)", async () => {
+        // Commas, semicolons, brackets are filter_complex special characters.
+        // These trigger the textfile approach via hasProblematicChars.
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-special-chars-text.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Hello, [World]; {Test}!",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+    }
+  );
+
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("cancellation", () => {
     it("should handle abort signal (may complete before abort for short videos)", async () => {
       const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });

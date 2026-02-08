@@ -147,7 +147,7 @@ function buildDrawtextParams(
   end
 ) {
   const fontSpec = baseClip.fontFile
-    ? `fontfile=${baseClip.fontFile}`
+    ? `fontfile='${Strings.escapeTextFilePath(baseClip.fontFile)}'`
     : baseClip.fontFamily
     ? `font=${baseClip.fontFamily}`
     : `font=Sans`;

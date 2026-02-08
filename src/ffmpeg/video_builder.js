@@ -29,7 +29,7 @@ function buildVideoFilter(project, videoClips) {
     if (gaps.length > 0) {
       const blackClips = createBlackClipsForGaps(gaps, fps, width, height);
       allVisualClips = [...videoClips, ...blackClips].sort(
-        (a, b) => (a.position || 0) - (b.position || 0)
+        (a, b) => (a.position || 0) - (b.position || 0),
       );
     }
   }
@@ -41,7 +41,7 @@ function buildVideoFilter(project, videoClips) {
 
     const requestedDuration = Math.max(
       0,
-      (clip.end || 0) - (clip.position || 0)
+      (clip.end || 0) - (clip.position || 0),
     );
 
     // Handle synthetic black fill clips
@@ -85,12 +85,12 @@ function buildVideoFilter(project, videoClips) {
       if (type === "zoom-in") {
         const inc = (zoomAmount / framesMinusOne).toFixed(6);
         // Ensure first frame starts exactly at base zoom=1 (on==0)
-        zoomExpr = `if(eq(on\\,0)\\,1\\,zoom+${inc})`;
+        zoomExpr = `if(eq(on,0),1,zoom+${inc})`;
       } else if (type === "zoom-out") {
         const start = (1 + zoomAmount).toFixed(4);
         const dec = (zoomAmount / framesMinusOne).toFixed(6);
         // Start pre-zoomed on first frame to avoid jump
-        zoomExpr = `if(eq(on\\,0)\\,${start}\\,zoom-${dec})`;
+        zoomExpr = `if(eq(on,0),${start},zoom-${dec})`;
       } else {
         const panZoom = 1.12;
         zoomExpr = `${panZoom}`;
@@ -113,7 +113,9 @@ function buildVideoFilter(project, videoClips) {
 
       // Scale to cover target dimensions (upscaling if needed), then center crop
       // force_original_aspect_ratio=increase ensures image covers the target area
-      filterComplex += `[${inputIndex}:v]select=eq(n\\,0),setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
+      // select='eq(n,0)' uses single quotes to protect the comma from the graph parser.
+      // zoompan z/x/y values are also single-quoted — commas inside are literal.
+      filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s},fps=${fps},settb=1/${fps}${scaledLabel};`;
     } else {
       filterComplex += `[${inputIndex}:v]trim=start=${
         clip.cutFrom || 0
@@ -134,7 +136,7 @@ function buildVideoFilter(project, videoClips) {
   }
 
   const hasTransitions = scaledStreams.some(
-    (s, i) => i > 0 && s.clip.transition
+    (s, i) => i > 0 && s.clip.transition,
   );
 
   if (!hasTransitions) {

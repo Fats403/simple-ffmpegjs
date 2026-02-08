@@ -164,8 +164,22 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal }) {
 }
 
 /**
- * Parse a command string into an array of arguments
- * Handles quoted strings and escaped characters
+ * Parse a command string into an array of arguments.
+ *
+ * Inside quoted strings (single or double):
+ *   - All characters are literal (no escape processing).
+ *   - The matching closing quote ends the argument segment.
+ *
+ * This deliberately avoids backslash-escape handling because the
+ * filter_complex value relies on \\, \, and \: being passed through
+ * verbatim to FFmpeg.  For example drawtext's fontsize expressions
+ * use \\, (which drawtext decodes as \, → escaped comma) and text
+ * values use \\\\ (which drawtext decodes as \\ → literal backslash).
+ * Any unescaping here would corrupt those sequences.
+ *
+ * Outside quotes:
+ *   - Whitespace separates arguments.
+ *   - All other characters (including backslash) are literal.
  */
 function parseFFmpegCommand(command) {
   const args = [];
@@ -179,14 +193,12 @@ function parseFFmpegCommand(command) {
     if (inQuote) {
       if (char === quoteChar) {
         inQuote = false;
-        // Don't add the closing quote to the argument
       } else {
         current += char;
       }
     } else if (char === '"' || char === "'") {
       inQuote = true;
       quoteChar = char;
-      // Don't add the opening quote to the argument
     } else if (char === " " || char === "\t") {
       if (current.length > 0) {
         args.push(current);

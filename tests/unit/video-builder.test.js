@@ -212,6 +212,66 @@ describe("buildVideoFilter", () => {
       expect(result.filter).toContain("zoompan=");
     });
 
+    it("should use unescaped commas inside single-quoted zoompan expressions", () => {
+      // Commas inside single-quoted zoompan z/x/y values should NOT use \,
+      // because FFmpeg's av_get_token does not unescape inside single quotes.
+      // \, would produce literal backslash+comma in the expression evaluator.
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-in",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // The zoompan z expression should have plain commas (not \,) inside quotes
+      expect(result.filter).toContain("z='if(eq(on,0),1,zoom+");
+      // Should NOT have \\, inside the quoted expression
+      expect(result.filter).not.toMatch(/z='[^']*\\\\,[^']*'/);
+      expect(result.filter).not.toMatch(/z='[^']*\\,[^']*'/);
+    });
+
+    it("should use single-quoted select for image kenBurns", () => {
+      // select expression should be quoted to protect commas
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-out",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // select should use single quotes
+      expect(result.filter).toContain("select='eq(n,0)'");
+      // Should NOT have the old \, pattern
+      expect(result.filter).not.toContain("select=eq(n\\,0)");
+    });
+
+    it("should use unescaped commas in zoom-out expression", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-out",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // zoom-out expression: if(eq(on,0),START,zoom-DEC)
+      expect(result.filter).toMatch(/z='if\(eq\(on,0\),[^']+,zoom-[^']+\)'/);
+    });
+
     it("should handle image without Ken Burns", () => {
       const project = createProject();
       const clip = {

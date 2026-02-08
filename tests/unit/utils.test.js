@@ -151,5 +151,83 @@ describe("Utils", () => {
       const args = parseFFmpegCommand("");
       expect(args).toEqual([]);
     });
+
+    it("should pass through backslash literally inside double-quoted strings", () => {
+      // In v0.3.3 parseFFmpegCommand, everything inside quotes is literal.
+      // \" does NOT unescape — the backslash is literal and the " ends the quote.
+      // This works because our filter_complex values never contain literal " characters.
+      const args = parseFFmpegCommand(
+        'ffmpeg -filter_complex "text=\\"hello world\\"" output.mp4'
+      );
+      // The " after \ closes the double-quoted segment (text=\), then hello is unquoted,
+      // space splits, world\ continues unquoted, "" is an empty quoted segment, space splits.
+      expect(args).toEqual([
+        "ffmpeg",
+        "-filter_complex",
+        "text=\\hello",
+        "world\\",
+        "output.mp4",
+      ]);
+    });
+
+    it("should preserve double-backslash inside double-quoted strings verbatim", () => {
+      // \\\\ in JS source = \\ in the command string — preserved as-is (no unescaping)
+      // This is critical: filter_complex uses \\\\ to produce \\ for drawtext,
+      // which drawtext decodes as a literal backslash.
+      const args = parseFFmpegCommand(
+        'ffmpeg -i "path\\\\to\\\\file.mp4" output.mp4'
+      );
+      expect(args).toEqual([
+        "ffmpeg",
+        "-i",
+        "path\\\\to\\\\file.mp4",
+        "output.mp4",
+      ]);
+    });
+
+    it("should preserve backslash-comma inside double-quoted strings", () => {
+      // \\, in JS source = \, in command string; backslash must be preserved
+      // so FFmpeg sees escaped commas inside expressions.
+      const args = parseFFmpegCommand(
+        'ffmpeg -filter_complex "select=eq(n\\,0),setpts=PTS" output.mp4'
+      );
+      expect(args).toEqual([
+        "ffmpeg",
+        "-filter_complex",
+        "select=eq(n\\,0),setpts=PTS",
+        "output.mp4",
+      ]);
+    });
+
+    it("should handle single quotes inside double-quoted filter_complex", () => {
+      // Single quotes inside double quotes are literal characters
+      const args = parseFFmpegCommand(
+        `ffmpeg -filter_complex "drawtext=text='Hello':enable='between(t,0,2)'" output.mp4`
+      );
+      expect(args).toEqual([
+        "ffmpeg",
+        "-filter_complex",
+        "drawtext=text='Hello':enable='between(t,0,2)'",
+        "output.mp4",
+      ]);
+    });
+
+    it("should preserve backslash-quote inside double-quoted strings", () => {
+      // \\' in JS source = \' in command string; backslash must be preserved
+      // so FFmpeg can parse the end-quote / escaped-quote / reopen pattern.
+      const filterComplex = `drawtext=text='Let'\\''s Go!':enable='between(t,0,2)'`;
+      const cmd = `ffmpeg -filter_complex "${filterComplex}" output.mp4`;
+      const args = parseFFmpegCommand(cmd);
+      expect(args[2]).toBe(filterComplex);
+    });
+
+    it("should not split filter_complex with zoompan expressions", () => {
+      // Zoompan expressions inside single quotes (which are inside outer double quotes)
+      const filter =
+        "[0:v]zoompan=z='if(eq(on,0),1,zoom+0.001)':x='round(iw/2 - (iw/zoom)/2)':y='round(ih/2 - (ih/zoom)/2)'[out]";
+      const cmd = `ffmpeg -filter_complex "${filter}" output.mp4`;
+      const args = parseFFmpegCommand(cmd);
+      expect(args[2]).toBe(filter);
+    });
   });
 });

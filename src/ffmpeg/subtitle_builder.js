@@ -637,11 +637,11 @@ function loadSubtitleFile(filePath, options, canvasWidth, canvasHeight) {
  * @returns {{ filter: string, finalLabel: string }}
  */
 function buildASSFilter(assFilePath, inputLabel) {
-  // Escape path for FFmpeg filter
+  // Escape path for FFmpeg filter (must survive two levels of av_get_token)
   const escapedPath = assFilePath
     .replace(/\\/g, "/")
     .replace(/:/g, "\\:")
-    .replace(/'/g, "'\\''");
+    .replace(/'/g, "'\\\\\\''" );
 
   const outputLabel = "[outass]";
   const filter = `${inputLabel}ass='${escapedPath}'${outputLabel}`;

@@ -352,7 +352,7 @@ describe("watermark_builder", () => {
         totalDuration
       );
 
-      expect(result.filter).toContain("fontfile=/path/to/font.ttf");
+      expect(result.filter).toContain("fontfile='/path/to/font.ttf'");
     });
 
     it("should escape special characters in text", () => {

@@ -1,17 +1,6 @@
 const Strings = require("./strings");
 
 /**
- * Position presets for watermarks
- */
-const POSITION_PRESETS = {
-  "top-left": (margin) => ({ x: margin, y: margin }),
-  "top-right": (margin) => ({ x: `W-w-${margin}`, y: margin }),
-  "bottom-left": (margin) => ({ x: margin, y: `H-h-${margin}` }),
-  "bottom-right": (margin) => ({ x: `W-w-${margin}`, y: `H-h-${margin}` }),
-  center: () => ({ x: "(W-w)/2", y: "(H-h)/2" }),
-};
-
-/**
  * Calculate position expressions for overlay/drawtext
  * @param {Object} config - Watermark config with position, margin
  * @param {number} canvasWidth - Video width
@@ -91,7 +80,7 @@ function buildImageWatermark(
   watermarkInputIndex,
   canvasWidth,
   canvasHeight,
-  totalDuration
+  totalDuration,
 ) {
   const scale = typeof config.scale === "number" ? config.scale : 0.15;
   const opacity = typeof config.opacity === "number" ? config.opacity : 1;
@@ -144,7 +133,7 @@ function buildTextWatermark(
   videoLabel,
   canvasWidth,
   canvasHeight,
-  totalDuration
+  totalDuration,
 ) {
   const text = config.text || "";
   const fontSize = typeof config.fontSize === "number" ? config.fontSize : 24;
@@ -158,9 +147,8 @@ function buildTextWatermark(
   // Escape text for drawtext
   const escapedText = Strings.escapeDrawtextText(text);
 
-  // Font specification
   const fontSpec = config.fontFile
-    ? `fontfile=${config.fontFile}`
+    ? `fontfile='${Strings.escapeTextFilePath(config.fontFile)}'`
     : `font=${fontFamily}`;
 
   // Calculate position (for text)
@@ -257,7 +245,7 @@ function buildWatermarkFilter(
   watermarkInputIndex,
   canvasWidth,
   canvasHeight,
-  totalDuration
+  totalDuration,
 ) {
   if (!config || typeof config !== "object") {
     return { filter: "", finalLabel: videoLabel, needsInput: false };
@@ -271,7 +259,7 @@ function buildWatermarkFilter(
       videoLabel,
       canvasWidth,
       canvasHeight,
-      totalDuration
+      totalDuration,
     );
     return { ...result, needsInput: false };
   }
@@ -288,7 +276,7 @@ function buildWatermarkFilter(
       watermarkInputIndex,
       canvasWidth,
       canvasHeight,
-      totalDuration
+      totalDuration,
     );
     return { ...result, needsInput: true };
   }
@@ -369,8 +357,8 @@ function validateWatermarkConfig(config) {
     if (!validPositions.includes(config.position)) {
       errors.push(
         `watermark.position must be one of: ${validPositions.join(
-          ", "
-        )}; got '${config.position}'`
+          ", ",
+        )}; got '${config.position}'`,
       );
     }
   } else if (typeof config.position === "object" && config.position !== null) {

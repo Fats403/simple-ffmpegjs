@@ -239,6 +239,64 @@ describe("TextRenderer", () => {
       expect(result.filterString).toContain(":y=864-text_h/2");
     });
 
+    it("should escape apostrophes in text using end-quote-escape-reopen pattern", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Let's Go!",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // The apostrophe must survive two levels of av_get_token parsing.
+      // Escaped as '\\\'' (end quote, \\, \', re-open quote)
+      // so the full text parameter is: text='Let'\\\''s Go!'
+      expect(result.filterString).toContain("text='Let'\\\\\\''" + "s Go!'");
+      // The enable expression should NOT be consumed by the text value
+      expect(result.filterString).toContain("enable='between(t,0,2)'");
+    });
+
+    it("should handle text with colons", () => {
+      const textClips = [
+        {
+          type: "text",
+          text: "Time: 10:30",
+          position: 0,
+          end: 2,
+          mode: "static",
+          fontFamily: "Sans",
+          fontSize: 48,
+          fontColor: "#FFFFFF",
+          xPercent: 0.5,
+          yPercent: 0.5,
+        },
+      ];
+
+      const result = TextRenderer.buildTextFilters(
+        textClips,
+        canvasWidth,
+        canvasHeight,
+        initialVideoLabel
+      );
+
+      // Colons should be escaped with \: for the drawtext filter
+      expect(result.filterString).toContain("text='Time\\: 10\\:30'");
+    });
+
     it("should handle fontFile parameter", () => {
       const textClips = [
         {
@@ -262,7 +320,7 @@ describe("TextRenderer", () => {
         initialVideoLabel
       );
 
-      expect(result.filterString).toContain("fontfile=/path/to/font.ttf");
+      expect(result.filterString).toContain("fontfile='/path/to/font.ttf'");
     });
 
     it("should handle border and shadow styling", () => {
