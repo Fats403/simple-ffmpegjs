@@ -1,20 +1,3 @@
-const { detectVisualGaps } = require("../core/gaps");
-
-/**
- * Create synthetic clips to fill visual gaps.
- * The actual fill color is determined by the project's fillGaps option
- * and applied when building the filter graph.
- */
-function createGapFillClips(gaps) {
-  return gaps.map((gap, index) => ({
-    type: "_gapfill",
-    position: gap.start,
-    end: gap.end,
-    _gapIndex: index,
-    _isGapFill: true,
-  }));
-}
-
 const DEFAULT_KEN_BURNS_ZOOM = 0.15;
 const DEFAULT_PAN_ZOOM = 1.12;
 
@@ -197,30 +180,31 @@ function computeOverscanWidth(width, startZoom, endZoom) {
   return overscan;
 }
 
-function buildVideoFilter(project, videoClips, options = {}) {
+function buildVideoFilter(project, videoClips) {
   let filterComplex = "";
   let videoIndex = 0;
-  let blackGapIndex = 0;
   const fps = project.options.fps;
   const width = project.options.width;
   const height = project.options.height;
-  const fillGaps = project.options.fillGaps || "none";
 
-  // Detect and fill gaps if fillGaps is enabled (any value other than "none")
-  let allVisualClips = [...videoClips];
-  if (fillGaps !== "none") {
-    const gaps = detectVisualGaps(videoClips, { timelineEnd: options.timelineEnd });
-    if (gaps.length > 0) {
-      const gapClips = createGapFillClips(gaps);
-      allVisualClips = [...videoClips, ...gapClips].sort(
-        (a, b) => (a.position || 0) - (b.position || 0),
-      );
+  // Use the project-level input index map (built in _prepareExport) when available,
+  // otherwise build a local one for standalone usage (e.g. unit tests).
+  let inputIndexMap = project._inputIndexMap;
+  if (!inputIndexMap) {
+    inputIndexMap = new Map();
+    let inputIdx = 0;
+    for (const clip of project.videoOrAudioClips) {
+      if (clip.type === "color" && clip._isFlatColor) {
+        continue;
+      }
+      inputIndexMap.set(clip, inputIdx);
+      inputIdx++;
     }
   }
 
   // Build scaled streams
   const scaledStreams = [];
-  allVisualClips.forEach((clip) => {
+  videoClips.forEach((clip) => {
     const scaledLabel = `[scaled${videoIndex}]`;
 
     const requestedDuration = Math.max(
@@ -228,10 +212,10 @@ function buildVideoFilter(project, videoClips, options = {}) {
       (clip.end || 0) - (clip.position || 0),
     );
 
-    // Handle synthetic gap fill clips
-    if (clip._isGapFill) {
-      // Generate a color source for the gap duration
-      filterComplex += `color=c=${fillGaps}:s=${width}x${height}:d=${requestedDuration},fps=${fps},settb=1/${fps}${scaledLabel};`;
+    // Handle flat color clips — generate using color= filter source
+    if (clip.type === "color" && clip._isFlatColor) {
+      const colorValue = clip.color;
+      filterComplex += `color=c=${colorValue}:s=${width}x${height}:d=${requestedDuration},fps=${fps},settb=1/${fps}${scaledLabel};`;
       scaledStreams.push({
         label: scaledLabel,
         clip,
@@ -239,11 +223,10 @@ function buildVideoFilter(project, videoClips, options = {}) {
         duration: requestedDuration,
       });
       videoIndex++;
-      blackGapIndex++;
       return;
     }
 
-    const inputIndex = project.videoOrAudioClips.indexOf(clip);
+    const inputIndex = inputIndexMap.get(clip);
     const maxAvailable =
       typeof clip.mediaDuration === "number" && typeof clip.cutFrom === "number"
         ? Math.max(0, clip.mediaDuration - clip.cutFrom)

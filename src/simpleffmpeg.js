@@ -16,7 +16,6 @@ const {
   validateConfig,
   formatValidationResult,
   ValidationCodes,
-  normalizeFillGaps,
 } = require("./core/validation");
 const {
   SimpleffmpegError,
@@ -45,7 +44,6 @@ const {
 const { getSchema, getSchemaModules } = require("./schema");
 const { resolveClips } = require("./core/resolve");
 const { probeMedia } = require("./core/media_info");
-const { detectVisualGaps } = require("./core/gaps");
 
 class SIMPLEFFMPEG {
   /**
@@ -57,7 +55,6 @@ class SIMPLEFFMPEG {
    * @param {number} options.fps - Frames per second (default: 30)
    * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
-   * @param {string|boolean} options.fillGaps - Gap handling: 'none'/false (disabled), true/'black' (black fill), or any valid FFmpeg color (default: 'none')
    *
    * @example
    * const project = new SIMPLEFFMPEG({ preset: 'tiktok' });
@@ -66,16 +63,7 @@ class SIMPLEFFMPEG {
    * const project = new SIMPLEFFMPEG({
    *   width: 1920,
    *   height: 1080,
-   *   fps: 30,
-   *   fillGaps: 'black'
-   * });
-   *
-   * @example
-   * // Fill gaps with a custom color
-   * const project = new SIMPLEFFMPEG({
-   *   width: 1920,
-   *   height: 1080,
-   *   fillGaps: '#1a1a2e'  // dark blue-gray
+   *   fps: 30
    * });
    */
   constructor(options = {}) {
@@ -91,19 +79,12 @@ class SIMPLEFFMPEG {
       );
     }
 
-    // Normalise and validate fillGaps
-    const fillGapsResult = normalizeFillGaps(options.fillGaps);
-    if (fillGapsResult.error) {
-      throw new ValidationError(fillGapsResult.error);
-    }
-
     // Explicit options override preset values
     this.options = {
       fps: options.fps || presetConfig.fps || C.DEFAULT_FPS,
       width: options.width || presetConfig.width || C.DEFAULT_WIDTH,
       height: options.height || presetConfig.height || C.DEFAULT_HEIGHT,
       validationMode: options.validationMode || C.DEFAULT_VALIDATION_MODE,
-      fillGaps: fillGapsResult.color, // "none" | valid FFmpeg color
       preset: options.preset || null,
     };
     this.videoOrAudioClips = [];
@@ -121,9 +102,15 @@ class SIMPLEFFMPEG {
    */
   _getInputStreams() {
     return this.videoOrAudioClips
+      .filter((clip) => {
+        // Flat color clips use the color= filter source — no file input needed
+        if (clip.type === "color" && clip._isFlatColor) return false;
+        return true;
+      })
       .map((clip) => {
         const escapedUrl = escapeFilePath(clip.url);
-        if (clip.type === "image") {
+        // Gradient color clips and image clips are looped images
+        if (clip.type === "image" || (clip.type === "color" && !clip._isFlatColor)) {
           const duration = Math.max(0, clip.end - clip.position || 0);
           return `-loop 1 -t ${duration} -i "${escapedUrl}"`;
         }
@@ -239,7 +226,6 @@ class SIMPLEFFMPEG {
 
       // Merge resolution errors into validation
       const result = validateConfig(resolved.clips, {
-        fillGaps: this.options.fillGaps,
         width: this.options.width,
         height: this.options.height,
       });
@@ -271,12 +257,16 @@ class SIMPLEFFMPEG {
           if (clipObj.type === "video" || clipObj.type === "audio") {
             clipObj.volume = clipObj.volume != null ? clipObj.volume : 1;
             clipObj.cutFrom = clipObj.cutFrom || 0;
-            if (clipObj.type === "video" && clipObj.transition) {
-              clipObj.transition = {
-                type: clipObj.transition.type || clipObj.transition,
-                duration: clipObj.transition.duration || 0.5,
-              };
-            }
+          }
+          // Normalize transitions for all visual clip types
+          if (
+            (clipObj.type === "video" || clipObj.type === "image" || clipObj.type === "color") &&
+            clipObj.transition
+          ) {
+            clipObj.transition = {
+              type: clipObj.transition.type || clipObj.transition,
+              duration: clipObj.transition.duration || 0.5,
+            };
           }
           if (clipObj.type === "video") {
             return Loaders.loadVideo(this, clipObj);
@@ -289,6 +279,9 @@ class SIMPLEFFMPEG {
           }
           if (clipObj.type === "image") {
             return Loaders.loadImage(this, clipObj);
+          }
+          if (clipObj.type === "color") {
+            return Loaders.loadColor(this, clipObj);
           }
           if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
             return Loaders.loadBackgroundAudio(this, clipObj);
@@ -397,8 +390,22 @@ class SIMPLEFFMPEG {
       })
     );
 
+    // Build a mapping from clip to its FFmpeg input stream index.
+    // Flat color clips use the color= filter source and do not have file inputs,
+    // so they are skipped by _getInputStreams(). All other clips' indices must
+    // account for this offset.
+    this._inputIndexMap = new Map();
+    let _inputIdx = 0;
+    for (const clip of this.videoOrAudioClips) {
+      if (clip.type === "color" && clip._isFlatColor) {
+        continue; // No file input for flat color clips
+      }
+      this._inputIndexMap.set(clip, _inputIdx);
+      _inputIdx++;
+    }
+
     const videoClips = this.videoOrAudioClips.filter(
-      (clip) => clip.type === "video" || clip.type === "image"
+      (clip) => clip.type === "video" || clip.type === "image" || clip.type === "color"
     );
     const audioClips = this.videoOrAudioClips.filter(
       (clip) => clip.type === "audio"
@@ -442,56 +449,6 @@ class SIMPLEFFMPEG {
       .map((c) => (typeof c.end === "number" ? c.end : 0));
     const bgOrAudioEnd = audioEnds.length > 0 ? Math.max(...audioEnds) : 0;
 
-    // Compute desired timeline end for trailing gap filling.
-    // When fillGaps is enabled, extend the video to cover text/audio clips
-    // that extend past the last visual clip (e.g. ending with text on black).
-    //
-    // The trailing gap duration must be precise so the video output ends
-    // exactly when the last content ends.  Two factors affect this:
-    //
-    // 1. Transition compensation — when active (default), text timestamps
-    //    shift left by the cumulative transition overlap, so the target end
-    //    is the compensated value.  When off, use the raw overall end.
-    //
-    // 2. Existing gaps — leading/middle gaps that will also be filled add
-    //    to the video output but are NOT included in totalVideoDuration.
-    //    We must subtract them so the trailing gap isn't oversized.
-    let timelineEnd;
-    if (this.options.fillGaps !== "none" && videoClips.length > 0) {
-      const visualEnd = Math.max(...videoClips.map((c) => c.end || 0));
-      const overallEnd = Math.max(visualEnd, textEnd, bgOrAudioEnd);
-      if (overallEnd - visualEnd > 1e-3) {
-        // Target output duration depends on whether text is compensated
-        let desiredOutputDuration;
-        if (exportOptions.compensateTransitions && videoClips.length > 1) {
-          const transitionOverlap = this._getTransitionOffsetAt(
-            videoClips,
-            overallEnd
-          );
-          desiredOutputDuration = overallEnd - transitionOverlap;
-        } else {
-          desiredOutputDuration = overallEnd;
-        }
-
-        // Account for existing gaps (leading + middle) that will also be
-        // filled — these add to the video output but aren't reflected in
-        // totalVideoDuration (which only sums clip durations − transitions).
-        const existingGaps = detectVisualGaps(videoClips);
-        const existingGapDuration = existingGaps.reduce(
-          (sum, g) => sum + g.duration,
-          0
-        );
-        const videoOutputBeforeTrailing =
-          totalVideoDuration + existingGapDuration;
-
-        const trailingGapDuration =
-          desiredOutputDuration - videoOutputBeforeTrailing;
-        if (trailingGapDuration > 1e-3) {
-          timelineEnd = visualEnd + trailingGapDuration;
-        }
-      }
-    }
-
     let finalVisualEnd =
       videoClips.length > 0
         ? Math.max(...videoClips.map((c) => c.end))
@@ -499,21 +456,18 @@ class SIMPLEFFMPEG {
 
     // Build video filter
     if (videoClips.length > 0) {
-      const vres = buildVideoFilter(this, videoClips, { timelineEnd });
+      const vres = buildVideoFilter(this, videoClips);
       filterComplex += vres.filter;
       finalVideoLabel = vres.finalVideoLabel;
       hasVideo = vres.hasVideo;
 
-      // Update durations to account for gap fills (including trailing gaps).
-      // videoDuration reflects the actual output length of the video filter
-      // chain, which includes any black gap-fill clips.
-      if (typeof vres.videoDuration === "number" && vres.videoDuration > 0) {
-        totalVideoDuration = vres.videoDuration;
-      }
       // Use the actual video output length for finalVisualEnd so that
       // audio trim and BGM duration match the real video stream length,
       // rather than an original-timeline position that may differ due to
       // transition compression.
+      if (typeof vres.videoDuration === "number" && vres.videoDuration > 0) {
+        totalVideoDuration = vres.videoDuration;
+      }
       if (
         typeof vres.videoDuration === "number" &&
         vres.videoDuration > finalVisualEnd
@@ -545,7 +499,9 @@ class SIMPLEFFMPEG {
       let audioString = "";
       let audioConcatInputs = [];
       audioClips.forEach((clip) => {
-        const inputIndex = this.videoOrAudioClips.indexOf(clip);
+        const inputIndex = this._inputIndexMap
+          ? this._inputIndexMap.get(clip)
+          : this.videoOrAudioClips.indexOf(clip);
         const { audioStringPart, audioConcatInput } = getClipAudioString(
           clip,
           inputIndex
@@ -1203,7 +1159,6 @@ class SIMPLEFFMPEG {
    * @param {Array} clips - Array of clip objects to validate
    * @param {Object} options - Validation options
    * @param {boolean} options.skipFileChecks - Skip file existence checks (useful for AI)
-   * @param {string|boolean} options.fillGaps - Gap handling ('none'/false to disable, or any valid FFmpeg color) - affects gap validation
    * @returns {Object} Validation result { valid, errors, warnings }
    *
    * @example
@@ -1250,9 +1205,9 @@ class SIMPLEFFMPEG {
     // Resolve shorthand (duration → end, auto-sequencing)
     const { clips: resolved } = resolveClips(clips);
 
-    // Filter to visual clips (video + image)
+    // Filter to visual clips (video + image + color)
     const visual = resolved.filter(
-      (c) => c.type === "video" || c.type === "image"
+      (c) => c.type === "video" || c.type === "image" || c.type === "color"
     );
 
     if (visual.length === 0) return 0;

@@ -17,7 +17,7 @@
 /**
  * Types that auto-sequence on the visual track (video + image share a timeline).
  */
-const VISUAL_TYPES = ["video", "image"];
+const VISUAL_TYPES = ["video", "image", "color"];
 
 /**
  * Types that auto-sequence on the audio track.

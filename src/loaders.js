@@ -1,8 +1,10 @@
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { probeMedia } = require("./core/media_info");
 const { ValidationError, MediaNotFoundError } = require("./core/errors");
 const C = require("./core/constants");
+const { generateGradientPPM } = require("./lib/gradient");
 
 async function loadVideo(project, clipObj) {
   const metadata = await probeMedia(clipObj.url);
@@ -209,6 +211,37 @@ function loadSubtitle(project, clipObj) {
   project.subtitleClips.push(clip);
 }
 
+async function loadColor(project, clipObj) {
+  if (typeof clipObj.color === "string") {
+    // Flat color — no file needed, uses FFmpeg color= filter source directly
+    project.videoOrAudioClips.push({
+      ...clipObj,
+      hasAudio: false,
+      _isFlatColor: true,
+    });
+  } else {
+    // Gradient — generate a temp PPM image and treat as an image clip
+    const width = project.options.width || C.DEFAULT_WIDTH;
+    const height = project.options.height || C.DEFAULT_HEIGHT;
+    const ppmBuffer = generateGradientPPM(width, height, clipObj.color);
+
+    const tempPath = path.join(
+      os.tmpdir(),
+      `simpleffmpeg-gradient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ppm`
+    );
+    fs.writeFileSync(tempPath, ppmBuffer);
+
+    // Register for cleanup
+    project.filesToClean.push(tempPath);
+
+    project.videoOrAudioClips.push({
+      ...clipObj,
+      url: tempPath,
+      hasAudio: false,
+    });
+  }
+}
+
 module.exports = {
   loadVideo,
   loadAudio,
@@ -216,4 +249,5 @@ module.exports = {
   loadBackgroundAudio,
   loadText,
   loadSubtitle,
+  loadColor,
 };

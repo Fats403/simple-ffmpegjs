@@ -11,7 +11,9 @@ function buildAudioForVideoClips(project, videoClips, transitionOffsets) {
 
   videoClips.forEach((clip) => {
     if (!clip.hasAudio) return;
-    const inputIndex = project.videoOrAudioClips.indexOf(clip);
+    const inputIndex = project._inputIndexMap
+      ? project._inputIndexMap.get(clip)
+      : project.videoOrAudioClips.indexOf(clip);
     const requestedDuration = Math.max(
       0,
       (clip.end || 0) - (clip.position || 0)

@@ -31,7 +31,7 @@
   - [Logging](#logging)
   - [Error Handling](#error-handling)
   - [Cancellation](#cancellation)
-  - [Gap Handling](#gap-handling)
+  - [Color Clips](#color-clips)
 - [Examples](#examples)
   - [Clips & Transitions](#clips--transitions)
   - [Text & Animations](#text--animations)
@@ -77,7 +77,7 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 - **Image Support** — Ken Burns effects (zoom, pan) for static images
 - **Progress Tracking** — Real-time export progress callbacks
 - **Cancellation** — AbortController support for stopping exports
-- **Gap Handling** — Auto-fill timeline gaps with any color (including trailing gaps for text-on-background endings)
+- **Color Clips** — Flat colors and gradients (linear, radial) as first-class timeline clips with full transition support
 - **Auto-Batching** — Automatically splits complex filter graphs to avoid OS command limits
 - **Schema Export** — Generate a structured description of the clip format for documentation, code generation, or AI context
 - **Pre-Validation** — Validate clip configurations before processing with structured, machine-readable error codes
@@ -237,7 +237,7 @@ const schema = SIMPLEFFMPEG.getSchema({ exclude: ["text", "subtitle"] });
 
 // See all available module IDs
 SIMPLEFFMPEG.getSchemaModules();
-// ['video', 'audio', 'image', 'text', 'subtitle', 'music']
+// ['video', 'audio', 'image', 'color', 'text', 'subtitle', 'music']
 ```
 
 Available modules:
@@ -247,6 +247,7 @@ Available modules:
 | `video`    | Video clips, transitions, volume, trimming                  |
 | `audio`    | Standalone audio clips                                      |
 | `image`    | Image clips, Ken Burns effects                              |
+| `color`    | Color clips — flat colors, linear/radial gradients          |
 | `text`     | Text overlays — all modes, animations, positioning, styling |
 | `subtitle` | Subtitle file import (SRT, VTT, ASS, SSA)                   |
 | `music`    | Background music / background audio, looping                |
@@ -284,7 +285,6 @@ new SIMPLEFFMPEG(options?: {
   height?: number;          // Output height (default: 1080)
   fps?: number;             // Frame rate (default: 30)
   validationMode?: 'warn' | 'strict';  // Validation behavior (default: 'warn')
-  fillGaps?: boolean | string;         // Gap handling: true/"black", any FFmpeg color, or "none"/false (default: "none")
   preset?: string;          // Platform preset (e.g., 'tiktok', 'youtube', 'instagram-post')
 })
 ```
@@ -571,6 +571,26 @@ await project.load([
 }
 ```
 
+#### Color Clip
+
+```ts
+{
+  type: "color";
+  color: string | {                // Flat color string or gradient spec
+    type: "linear-gradient" | "radial-gradient";
+    colors: string[];              // 2+ color stops (named, hex, or 0x hex)
+    direction?: "vertical" | "horizontal";  // For linear gradients (default: "vertical")
+  };
+  position?: number;               // Timeline start (seconds). Omit to auto-sequence.
+  end?: number;                    // Timeline end. Use end OR duration, not both.
+  duration?: number;               // Duration in seconds (alternative to end).
+  transition?: {
+    type: string;                  // Any xfade transition (e.g., 'fade', 'wipeleft')
+    duration: number;
+  };
+}
+```
+
 #### Text Clip
 
 ```ts
@@ -852,46 +872,89 @@ try {
 }
 ```
 
-### Gap Handling
+### Color Clips
 
-By default, timeline gaps (periods with no video/image content) produce a validation warning. Enable automatic gap filling to insert solid-color frames wherever there's no visual media — leading gaps, middle gaps, and trailing gaps are all handled:
+Color clips let you add flat colors or gradients as first-class visual elements in your timeline. They support transitions, text overlays, and all the same timeline features as video and image clips. Use them for intros, outros, title cards, or anywhere you need a background:
+
+**Flat color:**
 
 ```ts
-const project = new SIMPLEFFMPEG({
-  fillGaps: "black", // Fill gaps with black frames
-});
-
 await project.load([
-  { type: "video", url: "./clip.mp4", position: 2, end: 5 }, // Leading gap from 0-2s filled with black
+  // Black intro screen for 2 seconds
+  { type: "color", color: "black", position: 0, end: 2 },
+  // Video starts at 2s
+  { type: "video", url: "./clip.mp4", position: 2, end: 7 },
 ]);
 ```
 
-`fillGaps` accepts any valid FFmpeg color — named colors, hex codes, or `true` as shorthand for `"black"`:
+`color` accepts any valid FFmpeg color name or hex code:
 
 ```ts
-// Custom color fill
-const project = new SIMPLEFFMPEG({ fillGaps: "#0a0a2e" }); // dark navy
-const project = new SIMPLEFFMPEG({ fillGaps: "navy" });     // named color
-const project = new SIMPLEFFMPEG({ fillGaps: true });        // same as "black"
+{ type: "color", color: "navy", position: 0, end: 3 }
+{ type: "color", color: "#1a1a2e", position: 0, end: 3 }
 ```
 
-All three gap types are supported:
-
-- **Leading gaps** — no visual media at the start of the timeline (e.g. video starts at 2s, gap from 0-2s)
-- **Middle gaps** — periods between visual clips with no media
-- **Trailing gaps** — text or audio extends past the last visual clip, so the video is extended with the fill color
-
-Trailing gaps are useful for ending a video with text on a solid background:
+**Gradients:**
 
 ```ts
-const project = new SIMPLEFFMPEG({ fillGaps: "#1a1a2e" });
+// Linear gradient (vertical by default)
+{
+  type: "color",
+  color: { type: "linear-gradient", colors: ["#0a0a2e", "#4a148c"] },
+  position: 0,
+  end: 4,
+}
 
+// Horizontal linear gradient
+{
+  type: "color",
+  color: { type: "linear-gradient", colors: ["#e74c3c", "#f1c40f", "#2ecc71"], direction: "horizontal" },
+  position: 0,
+  end: 4,
+}
+
+// Radial gradient
+{
+  type: "color",
+  color: { type: "radial-gradient", colors: ["#ff8c00", "#1a0000"] },
+  position: 0,
+  end: 3,
+}
+```
+
+**With transitions:**
+
+Color clips support the same `transition` property as video and image clips:
+
+```ts
 await project.load([
-  { type: "video", url: "./clip.mp4", position: 0, end: 5 },
-  // Text extends 5 seconds past the video — dark blue fill from 5-10s
-  { type: "text", text: "The End", position: 4, end: 10, fontSize: 64, fontColor: "white" },
+  { type: "color", color: "black", position: 0, end: 3 },
+  {
+    type: "video",
+    url: "./main.mp4",
+    position: 3,
+    end: 8,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  {
+    type: "color",
+    color: { type: "radial-gradient", colors: ["#2c3e50", "#000000"] },
+    position: 8,
+    end: 11,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  {
+    type: "text",
+    text: "The End",
+    position: 8.5,
+    end: 10.5,
+    fontSize: 64,
+    fontColor: "white",
+  },
 ]);
 ```
+
+> **Note:** Timeline gaps (periods with no visual content) always produce a validation error. If a gap is intentional, fill it with a `type: "color"` clip or adjust your clip positions to close the gap.
 
 ## Examples
 
@@ -1419,7 +1482,7 @@ npm run test:watch
 For visual verification, run the demo suite to generate sample videos covering all major features. Each demo outputs to its own subfolder under `examples/output/` and includes annotated expected timelines so you know exactly what to look for:
 
 ```bash
-# Run all demos (timeline, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
+# Run all demos (color clips, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
 node examples/run-examples.js
 
 # Run a specific demo by name (partial match)
@@ -1429,16 +1492,16 @@ node examples/run-examples.js torture ken
 
 Available demo scripts (can also be run individually):
 
-| Script | What it tests |
-| --- | --- |
-| `demo-timeline-and-gaps.js` | Leading/middle/trailing gaps, custom fill colors, `fillGaps: true` shorthand |
-| `demo-transitions.js` | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions |
-| `demo-text-and-animations.js` | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
-| `demo-ken-burns.js` | All 6 presets, smart anchors, custom diagonal, slideshow with transitions |
-| `demo-audio-mixing.js` | Volume levels, background music, standalone audio, loop, multi-source mix |
-| `demo-watermarks.js` | Text/image watermarks, all positions, timed appearance, styled over transitions |
-| `demo-karaoke-and-subtitles.js` | Smooth/instant karaoke, word timestamps, multiline, SRT, VTT, mixed text+karaoke |
-| `demo-torture-test.js` | Kitchen sink, many clips+gaps+transitions, 6 simultaneous text animations, edge cases |
+| Script                          | What it tests                                                                          |
+| ------------------------------- | -------------------------------------------------------------------------------------- |
+| `demo-color-clips.js`           | Flat colors, linear/radial gradients, transitions, full composition with color clips   |
+| `demo-transitions.js`           | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions  |
+| `demo-text-and-animations.js`   | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
+| `demo-ken-burns.js`             | All 6 presets, smart anchors, custom diagonal, slideshow with transitions              |
+| `demo-audio-mixing.js`          | Volume levels, background music, standalone audio, loop, multi-source mix              |
+| `demo-watermarks.js`            | Text/image watermarks, all positions, timed appearance, styled over transitions        |
+| `demo-karaoke-and-subtitles.js` | Smooth/instant karaoke, word timestamps, multiline, SRT, VTT, mixed text+karaoke       |
+| `demo-torture-test.js`          | Kitchen sink, many clips+gaps+transitions, 6 simultaneous text animations, edge cases  |
 
 Each script header contains a `WHAT TO CHECK` section describing the expected visual output at every timestamp, making it easy to spot regressions.
 
@@ -1459,4 +1522,3 @@ Inspired by [ezffmpeg](https://github.com/ezffmpeg/ezffmpeg) by John Chen.
 ## License
 
 MIT
-```

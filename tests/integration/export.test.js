@@ -227,49 +227,15 @@ describe("Integration Tests", () => {
       expect(stderrEntries.length).toBeGreaterThan(0);
     }, 30000);
 
-    it("should fill gaps with black when fillGaps is 'black'", async () => {
-      const project = new SIMPLEFFMPEG({
-        width: 320,
-        height: 240,
-        fps: 30,
-        fillGaps: "black",
-      });
-      const outputPath = path.join(OUTPUT_DIR, "test-gaps.mp4");
+    it("should export a flat color clip", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-flat-color.mp4");
 
       await project.load([
         {
-          type: "video",
-          url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-          position: 1, // Gap from 0-1
-          end: 2,
-        },
-      ]);
-
-      const result = await project.export({ outputPath });
-
-      expect(result).toBe(outputPath);
-      expect(fs.existsSync(outputPath)).toBe(true);
-
-      // Output should be ~2 seconds (1s black + 1s video)
-      const duration = getVideoDuration(outputPath);
-      expect(duration).toBeGreaterThan(1.5);
-      expect(duration).toBeLessThan(2.5);
-    }, 30000);
-
-    it("should fill gaps with custom named color", async () => {
-      const project = new SIMPLEFFMPEG({
-        width: 320,
-        height: 240,
-        fps: 30,
-        fillGaps: "navy",
-      });
-      const outputPath = path.join(OUTPUT_DIR, "test-gaps-navy.mp4");
-
-      await project.load([
-        {
-          type: "video",
-          url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-          position: 1,
+          type: "color",
+          color: "black",
+          position: 0,
           end: 2,
         },
       ]);
@@ -284,20 +250,76 @@ describe("Integration Tests", () => {
       expect(duration).toBeLessThan(2.5);
     }, 30000);
 
-    it("should fill gaps with hex color", async () => {
-      const project = new SIMPLEFFMPEG({
-        width: 320,
-        height: 240,
-        fps: 30,
-        fillGaps: "#1a1a2e",
-      });
-      const outputPath = path.join(OUTPUT_DIR, "test-gaps-hex.mp4");
+    it("should export color clip followed by video clip", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-color-then-video.mp4");
 
       await project.load([
+        {
+          type: "color",
+          color: "navy",
+          position: 0,
+          end: 1,
+        },
         {
           type: "video",
           url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
           position: 1,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({ outputPath });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+
+      // Output should be ~2 seconds (1s color + 1s video)
+      const duration = getVideoDuration(outputPath);
+      expect(duration).toBeGreaterThan(1.5);
+      expect(duration).toBeLessThan(2.5);
+    }, 30000);
+
+    it("should export color clip with transition to video", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-color-transition.mp4");
+
+      await project.load([
+        {
+          type: "color",
+          color: "black",
+          position: 0,
+          end: 2,
+        },
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+          position: 1.5,
+          end: 3.5,
+          transition: { type: "fade", duration: 0.5 },
+        },
+      ]);
+
+      const result = await project.export({ outputPath });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+
+      // 2 + 2 - 0.5 = 3.5s
+      const duration = getVideoDuration(outputPath);
+      expect(duration).toBeGreaterThan(3.0);
+      expect(duration).toBeLessThan(4.0);
+    }, 30000);
+
+    it("should export gradient color clip (linear)", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-gradient-linear.mp4");
+
+      await project.load([
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000000", "#ffffff"] },
+          position: 0,
           end: 2,
         },
       ]);
@@ -312,49 +334,43 @@ describe("Integration Tests", () => {
       expect(duration).toBeLessThan(2.5);
     }, 30000);
 
-    it("should accept fillGaps: true as alias for black", async () => {
-      const project = new SIMPLEFFMPEG({
-        width: 320,
-        height: 240,
-        fps: 30,
-        fillGaps: true,
-      });
+    it("should export gradient color clip (radial)", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-gradient-radial.mp4");
 
       await project.load([
         {
-          type: "video",
-          url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-          position: 1,
+          type: "color",
+          color: { type: "radial-gradient", colors: ["#ff0000", "#000000"] },
+          position: 0,
+          end: 2,
+        },
+      ]);
+
+      const result = await project.export({ outputPath });
+
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+
+      const duration = getVideoDuration(outputPath);
+      expect(duration).toBeGreaterThan(1.5);
+      expect(duration).toBeLessThan(2.5);
+    }, 30000);
+
+    it("should include color= filter in preview for flat color clip", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+      await project.load([
+        {
+          type: "color",
+          color: "red",
+          position: 0,
           end: 2,
         },
       ]);
 
       const preview = await project.preview({
-        outputPath: "./test-fillgaps-true.mp4",
-      });
-
-      expect(preview.filterComplex).toContain("color=c=black");
-    });
-
-    it("should use custom color in preview filter", async () => {
-      const project = new SIMPLEFFMPEG({
-        width: 320,
-        height: 240,
-        fps: 30,
-        fillGaps: "red",
-      });
-
-      await project.load([
-        {
-          type: "video",
-          url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-          position: 1,
-          end: 2,
-        },
-      ]);
-
-      const preview = await project.preview({
-        outputPath: "./test-fillgaps-red.mp4",
+        outputPath: "./test-color-preview.mp4",
       });
 
       expect(preview.filterComplex).toContain("color=c=red");
@@ -1611,342 +1627,6 @@ Second subtitle
     }
   );
 
-  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
-    "trailing gap filling",
-    () => {
-      it("should extend video with black when text extends past visual end", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-        const outputPath = path.join(OUTPUT_DIR, "test-trailing-gap-text.mp4");
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "text",
-            text: "Ending Title",
-            position: 1,
-            end: 5, // Text extends 3s past the video
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const result = await project.export({ outputPath });
-
-        expect(result).toBe(outputPath);
-        expect(fs.existsSync(outputPath)).toBe(true);
-
-        // Should be ~5s: 2s video + 3s black with text
-        const duration = getVideoDuration(outputPath);
-        expect(duration).toBeGreaterThan(4.0);
-        expect(duration).toBeLessThan(6.0);
-      }, 30000);
-
-      it("should extend video with black when audio extends past visual end", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-        const outputPath = path.join(OUTPUT_DIR, "test-trailing-gap-audio.mp4");
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-            position: 0,
-            end: 1,
-          },
-          {
-            type: "audio",
-            url: path.join(FIXTURES_DIR, "test-audio-2s.mp3"),
-            position: 0,
-            end: 2, // Audio extends 1s past the video
-          },
-        ]);
-
-        const result = await project.export({ outputPath });
-
-        expect(result).toBe(outputPath);
-        expect(fs.existsSync(outputPath)).toBe(true);
-
-        // Should be ~2s: 1s video + 1s black
-        const duration = getVideoDuration(outputPath);
-        expect(duration).toBeGreaterThan(1.5);
-        expect(duration).toBeLessThan(2.5);
-      }, 30000);
-
-      it("should NOT extend video when fillGaps is 'none' even if text extends past", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          // fillGaps defaults to "none"
-        });
-        const outputPath = path.join(
-          OUTPUT_DIR,
-          "test-no-trailing-gap-text.mp4"
-        );
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "text",
-            text: "Ending Title",
-            position: 1,
-            end: 5,
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const result = await project.export({ outputPath });
-
-        expect(result).toBe(outputPath);
-        expect(fs.existsSync(outputPath)).toBe(true);
-
-        // Should be ~2s: no trailing gap added
-        const duration = getVideoDuration(outputPath);
-        expect(duration).toBeGreaterThan(1.5);
-        expect(duration).toBeLessThan(2.5);
-      }, 30000);
-
-      it("should compute correct totalDuration with trailing gap (preview)", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "text",
-            text: "Extended Text",
-            position: 1,
-            end: 5,
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const preview = await project.preview({
-          outputPath: "./trailing-gap-preview.mp4",
-        });
-
-        // totalDuration should reflect the extended video (~5s)
-        expect(preview.totalDuration).toBeGreaterThanOrEqual(4.5);
-        expect(preview.totalDuration).toBeLessThanOrEqual(5.5);
-        // Filter should contain black fill
-        expect(preview.filterComplex).toContain("color=c=black");
-      });
-
-      it("should compute correct totalDuration with transitions + trailing gap (preview)", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 1.5,
-            end: 3.5,
-            transition: { type: "fade", duration: 0.5 },
-          },
-          {
-            type: "text",
-            text: "Past the end",
-            position: 2,
-            end: 6,
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const preview = await project.preview({
-          outputPath: "./trailing-gap-transitions-preview.mp4",
-        });
-
-        // With compensation (default):
-        // Raw visual end = 3.5, raw overall end = 6
-        // Transition compression = 0.5s
-        // compensated target = 6 - 0.5 = 5.5s
-        // Base video duration = 2 + 2 - 0.5 = 3.5s (no existing gaps)
-        // trailing gap = 5.5 - 3.5 = 2s
-        // Total video output = 3.5 + 2 = 5.5s
-        expect(preview.totalDuration).toBeGreaterThanOrEqual(5.0);
-        expect(preview.totalDuration).toBeLessThanOrEqual(6.0);
-        expect(preview.filterComplex).toContain("color=c=black");
-      });
-
-      it("should compute correct totalDuration with compensateTransitions off (preview)", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 1.5,
-            end: 3.5,
-            transition: { type: "fade", duration: 0.5 },
-          },
-          {
-            type: "text",
-            text: "No compensation",
-            position: 2,
-            end: 6,
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const preview = await project.preview({
-          outputPath: "./trailing-gap-no-compensate-preview.mp4",
-          compensateTransitions: false,
-        });
-
-        // Without compensation:
-        // Raw visual end = 3.5, raw overall end = 6
-        // No transition offset applied
-        // desiredOutputDuration = 6
-        // Base video = 2 + 2 - 0.5 = 3.5, no existing gaps
-        // trailing gap = 6 - 3.5 = 2.5
-        // Total video output = 3.5 + 2.5 = 6
-        expect(preview.totalDuration).toBeGreaterThanOrEqual(5.5);
-        expect(preview.totalDuration).toBeLessThanOrEqual(6.5);
-        expect(preview.filterComplex).toContain("color=c=black");
-      });
-
-      it("should handle leading gap + trailing gap together via export", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-        const outputPath = path.join(
-          OUTPUT_DIR,
-          "test-leading-trailing-gap.mp4"
-        );
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-1s.mp4"),
-            position: 1, // Leading gap from 0-1
-            end: 2,
-          },
-          {
-            type: "text",
-            text: "Extended",
-            position: 0,
-            end: 4, // Trailing gap from 2-4
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const result = await project.export({ outputPath });
-
-        expect(result).toBe(outputPath);
-        expect(fs.existsSync(outputPath)).toBe(true);
-
-        // Should be ~4s: 1s leading black + 1s video + 2s trailing black
-        const duration = getVideoDuration(outputPath);
-        expect(duration).toBeGreaterThan(3.0);
-        expect(duration).toBeLessThan(5.0);
-      }, 30000);
-
-      it("should export with trailing gap + transitions and produce correct duration", async () => {
-        const project = new SIMPLEFFMPEG({
-          width: 320,
-          height: 240,
-          fps: 30,
-          fillGaps: "black",
-        });
-        const outputPath = path.join(
-          OUTPUT_DIR,
-          "test-trailing-gap-transition.mp4"
-        );
-
-        await project.load([
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 0,
-            end: 2,
-          },
-          {
-            type: "video",
-            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
-            position: 1.5,
-            end: 3.5,
-            transition: { type: "fade", duration: 0.5 },
-          },
-          {
-            type: "text",
-            text: "End text",
-            position: 2,
-            end: 6,
-            fontSize: 24,
-            fontColor: "#FFFFFF",
-          },
-        ]);
-
-        const result = await project.export({ outputPath });
-
-        expect(result).toBe(outputPath);
-        expect(fs.existsSync(outputPath)).toBe(true);
-
-        // With compensation: ~5.5s output
-        const duration = getVideoDuration(outputPath);
-        expect(duration).toBeGreaterThan(4.5);
-        expect(duration).toBeLessThan(6.5);
-      }, 30000);
-    }
-  );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
     "error details",

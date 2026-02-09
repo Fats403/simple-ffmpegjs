@@ -15,7 +15,6 @@ const {
   formatValidationResult,
   ValidationCodes,
   isValidFFmpegColor,
-  normalizeFillGaps,
 } = await import("../../src/core/validation.js");
 
 describe("Validation", () => {
@@ -131,6 +130,7 @@ describe("Validation", () => {
           "backgroundAudio",
           "image",
           "subtitle",
+          "color",
         ];
 
         for (const type of types) {
@@ -141,13 +141,15 @@ describe("Validation", () => {
             clip = { type, url: "./test.mp3" };
           } else if (type === "subtitle") {
             clip = { type, url: "./test.srt" };
+          } else if (type === "color") {
+            clip = { type, color: "black", position: 0, end: 5 };
           } else {
             clip = { type, url: "./test.mp4", position: 0, end: 5 };
           }
 
           // Need a visual clip for types that don't fill timeline
           const clips =
-            type === "video" || type === "image"
+            type === "video" || type === "image" || type === "color"
               ? [clip]
               : [{ type: "video", url: "./v.mp4", position: 0, end: 5 }, clip];
 
@@ -313,13 +315,26 @@ describe("Validation", () => {
         ).toBe(true);
       });
 
-      it("should skip gap checking when fillGaps is not none", () => {
+      it("should always error on gaps (no fillGaps skip)", () => {
         const clips = [
           { type: "video", url: "./test.mp4", position: 2, end: 5 },
         ];
-        const result = validateConfig(clips, { fillGaps: "black" });
+        const result = validateConfig(clips);
 
-        expect(result.valid).toBe(true);
+        expect(result.valid).toBe(false);
+        const gapError = result.errors.find(
+          (e) => e.code === ValidationCodes.TIMELINE_GAP
+        );
+        expect(gapError.message).toContain('{ type: "color" }');
+      });
+
+      it("should not report gap where a color clip fills it", () => {
+        const clips = [
+          { type: "color", color: "black", position: 0, end: 2 },
+          { type: "video", url: "./test.mp4", position: 2, end: 5 },
+        ];
+        const result = validateConfig(clips);
+
         expect(
           result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)
         ).toBe(false);
@@ -879,37 +894,161 @@ describe("Validation", () => {
     });
   });
 
-  describe("normalizeFillGaps", () => {
-    it("should return 'none' for disabled values", () => {
-      expect(normalizeFillGaps(undefined)).toEqual({ color: "none", error: null });
-      expect(normalizeFillGaps(null)).toEqual({ color: "none", error: null });
-      expect(normalizeFillGaps(false)).toEqual({ color: "none", error: null });
-      expect(normalizeFillGaps("none")).toEqual({ color: "none", error: null });
-      expect(normalizeFillGaps("off")).toEqual({ color: "none", error: null });
+  describe("color clip validation", () => {
+    it("should accept valid flat color string", () => {
+      const clips = [
+        { type: "color", color: "black", position: 0, end: 5 },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
     });
 
-    it("should return 'black' for true", () => {
-      expect(normalizeFillGaps(true)).toEqual({ color: "black", error: null });
+    it("should accept valid hex color", () => {
+      const clips = [
+        { type: "color", color: "#1a1a2e", position: 0, end: 5 },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
     });
 
-    it("should pass through valid color strings", () => {
-      expect(normalizeFillGaps("black")).toEqual({ color: "black", error: null });
-      expect(normalizeFillGaps("red")).toEqual({ color: "red", error: null });
-      expect(normalizeFillGaps("#FF0000")).toEqual({ color: "#FF0000", error: null });
-      expect(normalizeFillGaps("0xFF0000")).toEqual({ color: "0xFF0000", error: null });
-      expect(normalizeFillGaps("random")).toEqual({ color: "random", error: null });
+    it("should reject invalid flat color string", () => {
+      const clips = [
+        { type: "color", color: "notacolor", position: 0, end: 5 },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].code).toBe(ValidationCodes.INVALID_VALUE);
+      expect(result.errors[0].path).toBe("clips[0].color");
     });
 
-    it("should return error for invalid color strings", () => {
-      const result = normalizeFillGaps("notacolor");
-      expect(result.color).toBeNull();
-      expect(result.error).toContain("not a recognised FFmpeg color");
+    it("should reject missing color property", () => {
+      const clips = [
+        { type: "color", position: 0, end: 5 },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].code).toBe(ValidationCodes.MISSING_REQUIRED);
+      expect(result.errors[0].path).toBe("clips[0].color");
     });
 
-    it("should return error for non-string non-boolean types", () => {
-      const result = normalizeFillGaps(42);
-      expect(result.color).toBeNull();
-      expect(result.error).toContain("must be a string color value");
+    it("should accept valid linear gradient", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000", "#fff"], direction: "vertical" },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should accept valid radial gradient", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "radial-gradient", colors: ["white", "navy"] },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should reject gradient with invalid type", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "conic-gradient", colors: ["#000", "#fff"] },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].color.type");
+    });
+
+    it("should reject gradient with fewer than 2 colors", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000"] },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].color.colors");
+    });
+
+    it("should reject gradient with invalid color in array", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000", "notacolor"] },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].color.colors[1]");
+    });
+
+    it("should reject gradient with invalid direction", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000", "#fff"], direction: "diagonal" },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].color.direction");
+    });
+
+    it("should accept gradient direction as number (angle)", () => {
+      const clips = [
+        {
+          type: "color",
+          color: { type: "linear-gradient", colors: ["#000", "#fff"], direction: 45 },
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should require position/end for color clips", () => {
+      const clips = [
+        { type: "color", color: "black" },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.path === "clips[0].position")).toBe(true);
+      expect(result.errors.some((e) => e.path === "clips[0].end")).toBe(true);
+    });
+
+    it("should validate transitions on color clips", () => {
+      const clips = [
+        {
+          type: "color",
+          color: "black",
+          position: 0,
+          end: 5,
+          transition: { duration: 0 },
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].transition.duration");
     });
   });
 

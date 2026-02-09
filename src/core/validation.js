@@ -1,4 +1,5 @@
 const fs = require("fs");
+const { detectVisualGaps } = require("./gaps");
 
 // ========================================================================
 // FFmpeg named colors (X11/CSS color names accepted by libavutil)
@@ -72,39 +73,6 @@ function isValidFFmpegColor(value) {
 }
 
 /**
- * Normalise a fillGaps option value to either "none" (disabled) or a
- * valid FFmpeg color string.
- *
- * Accepted inputs:
- *   - false / "none" / "off" / undefined → "none"
- *   - true                               → "black"
- *   - "black", "red", "#FF0000", …       → the color string (validated)
- *
- * @param {*} value - Raw fillGaps option value
- * @returns {{ color: string|null, error: string|null }}
- *   color is the normalised value ("none" when disabled), error is a
- *   human-readable message when the value is invalid.
- */
-function normalizeFillGaps(value) {
-  if (value === undefined || value === null || value === false || value === "none" || value === "off") {
-    return { color: "none", error: null };
-  }
-  if (value === true) {
-    return { color: "black", error: null };
-  }
-  if (typeof value !== "string") {
-    return { color: null, error: `fillGaps must be a string color value, boolean, or "none" — got ${typeof value}` };
-  }
-  if (!isValidFFmpegColor(value)) {
-    return {
-      color: null,
-      error: `fillGaps color "${value}" is not a recognised FFmpeg color. Use a named color (e.g. "black", "red", "navy"), hex (#RRGGBB, 0xRRGGBB), or "random".`,
-    };
-  }
-  return { color: value, error: null };
-}
-
-/**
  * Error/warning codes for programmatic handling
  */
 const ValidationCodes = {
@@ -156,6 +124,7 @@ function validateClip(clip, index, options = {}) {
     "backgroundAudio",
     "image",
     "subtitle",
+    "color",
   ];
 
   // Check type
@@ -227,7 +196,7 @@ function validateClip(clip, index, options = {}) {
   }
 
   // Types that require position/end on timeline
-  const requiresTimeline = ["video", "audio", "text", "image"].includes(
+  const requiresTimeline = ["video", "audio", "text", "image", "color"].includes(
     clip.type
   );
 
@@ -896,8 +865,91 @@ function validateClip(clip, index, options = {}) {
     }
   }
 
-  // Video transition validation
-  if (clip.type === "video" && clip.transition) {
+  // Color clip validation
+  if (clip.type === "color") {
+    if (clip.color == null) {
+      errors.push(
+        createIssue(
+          ValidationCodes.MISSING_REQUIRED,
+          `${path}.color`,
+          "Color is required for color clips",
+          clip.color
+        )
+      );
+    } else if (typeof clip.color === "string") {
+      if (!isValidFFmpegColor(clip.color)) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.color`,
+            `Invalid color "${clip.color}". Use a named color (e.g. "black", "navy"), hex (#RRGGBB, 0xRRGGBB), or "random".`,
+            clip.color
+          )
+        );
+      }
+    } else if (typeof clip.color === "object" && clip.color !== null) {
+      const validGradientTypes = ["linear-gradient", "radial-gradient"];
+      if (!clip.color.type || !validGradientTypes.includes(clip.color.type)) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.color.type`,
+            `Invalid gradient type '${clip.color.type}'. Expected: ${validGradientTypes.join(", ")}`,
+            clip.color.type
+          )
+        );
+      }
+      if (!Array.isArray(clip.color.colors) || clip.color.colors.length < 2) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.color.colors`,
+            "Gradient colors must be an array of at least 2 color strings",
+            clip.color.colors
+          )
+        );
+      } else {
+        clip.color.colors.forEach((c, ci) => {
+          if (typeof c !== "string" || !isValidFFmpegColor(c)) {
+            errors.push(
+              createIssue(
+                ValidationCodes.INVALID_VALUE,
+                `${path}.color.colors[${ci}]`,
+                `Invalid gradient color "${c}". Use a named color (e.g. "black", "navy"), hex (#RRGGBB), or "random".`,
+                c
+              )
+            );
+          }
+        });
+      }
+      if (clip.color.direction != null) {
+        const validDirections = ["vertical", "horizontal"];
+        if (typeof clip.color.direction !== "number" && !validDirections.includes(clip.color.direction)) {
+          errors.push(
+            createIssue(
+              ValidationCodes.INVALID_VALUE,
+              `${path}.color.direction`,
+              `Invalid gradient direction '${clip.color.direction}'. Expected: "vertical", "horizontal", or a number (angle in degrees)`,
+              clip.color.direction
+            )
+          );
+        }
+      }
+    } else {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.color`,
+          "Color must be a string (flat color) or an object (gradient spec)",
+          clip.color
+        )
+      );
+    }
+  }
+
+  // Visual clip transition validation (video, image, color)
+  const visualTypes = ["video", "image", "color"];
+  if (visualTypes.includes(clip.type) && clip.transition) {
     if (typeof clip.transition.duration !== "number") {
       errors.push(
         createIssue(
@@ -932,65 +984,60 @@ function validateClip(clip, index, options = {}) {
 }
 
 /**
- * Validate timeline gaps (visual continuity)
+ * Validate timeline gaps (visual continuity).
+ * Uses detectVisualGaps() from gaps.js as the single source of truth
+ * for gap detection logic.
  */
-function validateTimelineGaps(clips, options = {}) {
-  const { fillGaps = "none" } = options;
+function validateTimelineGaps(clips) {
   const errors = [];
 
-  // Skip gap checking if fillGaps is enabled
-  if (fillGaps !== "none") {
+  // Build clip objects with original indices for error messages
+  const indexed = clips.map((c, i) => ({ ...c, _origIndex: i }));
+  const gaps = detectVisualGaps(indexed);
+
+  if (gaps.length === 0) {
     return { errors, warnings: [] };
   }
 
-  // Get visual clips (video and image)
+  // Build a sorted visual clip list so we can reference neighbours in messages
   const visual = clips
     .map((c, i) => ({ clip: c, index: i }))
-    .filter(({ clip }) => clip.type === "video" || clip.type === "image")
+    .filter(({ clip }) => clip.type === "video" || clip.type === "image" || clip.type === "color")
     .filter(
       ({ clip }) =>
         typeof clip.position === "number" && typeof clip.end === "number"
     )
     .sort((a, b) => a.clip.position - b.clip.position);
 
-  if (visual.length === 0) {
-    return { errors, warnings: [] };
-  }
+  for (const gap of gaps) {
+    const isLeading = gap.start === 0 || (visual.length > 0 && gap.end <= visual[0].clip.position + 1e-3);
 
-  const eps = 1e-3;
-
-  // Check for leading gap
-  if (visual[0].clip.position > eps) {
-    errors.push(
-      createIssue(
-        ValidationCodes.TIMELINE_GAP,
-        "timeline",
-        `Gap at start of timeline [0, ${visual[0].clip.position.toFixed(
-          3
-        )}s] - no video/image content. Use fillGaps option (e.g. 'black') to auto-fill.`,
-        { start: 0, end: visual[0].clip.position }
-      )
-    );
-  }
-
-  // Check for gaps between clips
-  for (let i = 1; i < visual.length; i++) {
-    const prev = visual[i - 1].clip;
-    const curr = visual[i].clip;
-    const gapStart = prev.end;
-    const gapEnd = curr.position;
-
-    if (gapEnd - gapStart > eps) {
+    if (isLeading && gap.start < 1e-3) {
       errors.push(
         createIssue(
           ValidationCodes.TIMELINE_GAP,
           "timeline",
-          `Gap in timeline [${gapStart.toFixed(3)}s, ${gapEnd.toFixed(
+          `Gap at start of visual timeline [0, ${gap.end.toFixed(
             3
-          )}s] between clips[${visual[i - 1].index}] and clips[${
-            visual[i].index
-          }]. Use fillGaps option (e.g. 'black') to auto-fill.`,
-          { start: gapStart, end: gapEnd }
+          )}s]. If intentional, fill it with a { type: "color" } clip. Otherwise, start your first clip at position 0.`,
+          { start: gap.start, end: gap.end }
+        )
+      );
+    } else {
+      // Find the surrounding clip indices for a helpful message
+      const before = visual.filter(v => v.clip.end <= gap.start + 1e-3);
+      const after = visual.filter(v => v.clip.position >= gap.end - 1e-3);
+      const prevIdx = before.length > 0 ? before[before.length - 1].index : "?";
+      const nextIdx = after.length > 0 ? after[0].index : "?";
+
+      errors.push(
+        createIssue(
+          ValidationCodes.TIMELINE_GAP,
+          "timeline",
+          `Gap in visual timeline [${gap.start.toFixed(3)}s, ${gap.end.toFixed(
+            3
+          )}s] between clips[${prevIdx}] and clips[${nextIdx}]. If intentional, fill it with a { type: "color" } clip. Otherwise, adjust clip positions to remove the gap.`,
+          { start: gap.start, end: gap.end }
         )
       );
     }
@@ -1005,7 +1052,6 @@ function validateTimelineGaps(clips, options = {}) {
  * @param {Array} clips - Array of clip objects to validate
  * @param {Object} options - Validation options
  * @param {boolean} options.skipFileChecks - Skip file existence checks (useful for AI validation)
- * @param {string} options.fillGaps - Gap handling mode ('none' | 'black')
  * @returns {Object} Validation result { valid, errors, warnings }
  */
 function validateConfig(clips, options = {}) {
@@ -1091,6 +1137,5 @@ module.exports = {
   formatValidationResult,
   ValidationCodes,
   isValidFFmpegColor,
-  normalizeFillGaps,
   FFMPEG_NAMED_COLORS,
 };

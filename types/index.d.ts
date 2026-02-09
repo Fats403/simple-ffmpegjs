@@ -51,7 +51,8 @@ declare namespace SIMPLEFFMPEG {
     | "music"
     | "backgroundAudio"
     | "image"
-    | "subtitle";
+    | "subtitle"
+    | "color";
 
   interface BaseClip {
     type: ClipType;
@@ -220,11 +221,36 @@ declare namespace SIMPLEFFMPEG {
     opacity?: number;
   }
 
+  /** Gradient specification for color clips */
+  interface GradientSpec {
+    type: "linear-gradient" | "radial-gradient";
+    /** Array of color strings (at least 2). Evenly distributed across the gradient. */
+    colors: string[];
+    /** For linear gradients: "vertical" (default), "horizontal", or angle in degrees */
+    direction?: "vertical" | "horizontal" | number;
+  }
+
+  /** Color clip — solid color or gradient for filling gaps, transitions, etc. */
+  interface ColorClip {
+    type: "color";
+    /** Flat color string (e.g. "black", "#FF0000") or gradient specification */
+    color: string | GradientSpec;
+    /** Start time on timeline in seconds. Omit to auto-sequence after previous visual clip. */
+    position?: number;
+    /** End time on timeline in seconds. Mutually exclusive with duration. */
+    end?: number;
+    /** Duration in seconds (alternative to end). end = position + duration. */
+    duration?: number;
+    /** Transition effect from the previous visual clip */
+    transition?: { type: string; duration: number };
+  }
+
   type Clip =
     | VideoClip
     | AudioClip
     | BackgroundMusicClip
     | ImageClip
+    | ColorClip
     | TextClip
     | SubtitleClip;
 
@@ -297,8 +323,6 @@ declare namespace SIMPLEFFMPEG {
   interface ValidateOptions {
     /** Skip file existence checks (useful for AI generating configs before files exist) */
     skipFileChecks?: boolean;
-    /** Gap handling mode - affects timeline gap validation. Any valid FFmpeg color, or "none"/false to disable. */
-    fillGaps?: "none" | string | boolean;
     /** Project width - used to validate Ken Burns images are large enough */
     width?: number;
     /** Project height - used to validate Ken Burns images are large enough */
@@ -318,8 +342,6 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
-    /** How to handle visual gaps: 'none'/false (disabled), true/'black' (black fill), or any valid FFmpeg color name/hex (default: 'none') */
-    fillGaps?: "none" | string | boolean;
   }
 
   /** Log entry passed to onLog callback */
@@ -657,6 +679,7 @@ declare namespace SIMPLEFFMPEG {
     | "video"
     | "audio"
     | "image"
+    | "color"
     | "text"
     | "subtitle"
     | "music";

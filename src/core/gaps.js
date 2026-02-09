@@ -1,20 +1,18 @@
 /**
- * Detect visual gaps in a timeline of video/image clips.
+ * Detect visual gaps in a timeline of video/image/color clips.
  * Returns an array of gap objects with {start, end, duration} properties.
  *
  * @param {Array<{type: string, position: number, end: number}>} clips - Array of clips
  * @param {Object} options - Options
  * @param {number} options.epsilon - Tolerance for gap detection (default 0.001)
- * @param {number} [options.timelineEnd] - Desired end of the timeline; if set and greater
- *   than the last visual clip's end, a trailing gap is appended.
  * @returns {Array<{start: number, end: number, duration: number}>} Array of gaps
  */
 function detectVisualGaps(clips, options = {}) {
-  const { epsilon = 1e-3, timelineEnd } = options;
+  const { epsilon = 1e-3 } = options;
 
-  // Filter to only visual clips (video/image) and sort by position
+  // Filter to only visual clips (video/image/color) and sort by position
   const visual = clips
-    .filter((c) => c.type === "video" || c.type === "image")
+    .filter((c) => c.type === "video" || c.type === "image" || c.type === "color")
     .map((c) => ({
       position: c.position || 0,
       end: c.end || 0,
@@ -24,18 +22,6 @@ function detectVisualGaps(clips, options = {}) {
   const gaps = [];
 
   if (visual.length === 0) {
-    // If no visual clips but a timeline end is specified, the entire range is a gap
-    if (
-      typeof timelineEnd === "number" &&
-      Number.isFinite(timelineEnd) &&
-      timelineEnd > epsilon
-    ) {
-      gaps.push({
-        start: 0,
-        end: timelineEnd,
-        duration: timelineEnd,
-      });
-    }
     return gaps;
   }
 
@@ -62,18 +48,6 @@ function detectVisualGaps(clips, options = {}) {
     }
   }
 
-  // Check for trailing gap (gap at the end after last clip)
-  if (typeof timelineEnd === "number" && Number.isFinite(timelineEnd)) {
-    const lastEnd = visual[visual.length - 1].end;
-    if (timelineEnd - lastEnd > epsilon) {
-      gaps.push({
-        start: lastEnd,
-        end: timelineEnd,
-        duration: timelineEnd - lastEnd,
-      });
-    }
-  }
-
   return gaps;
 }
 
@@ -95,7 +69,7 @@ function hasVisualGaps(clips, options = {}) {
  * @returns {number} The end time of the last visual clip, or 0 if no visual clips
  */
 function getVisualTimelineEnd(clips) {
-  const visual = clips.filter((c) => c.type === "video" || c.type === "image");
+  const visual = clips.filter((c) => c.type === "video" || c.type === "image" || c.type === "color");
   if (visual.length === 0) return 0;
   return Math.max(...visual.map((c) => c.end || 0));
 }

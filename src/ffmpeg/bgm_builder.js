@@ -29,7 +29,9 @@ function buildBackgroundMusicMix(
   let filter = "";
   const bgLabels = [];
   backgroundClips.forEach((clip, i) => {
-    const inputIndex = project.videoOrAudioClips.indexOf(clip);
+    const inputIndex = project._inputIndexMap
+      ? project._inputIndexMap.get(clip)
+      : project.videoOrAudioClips.indexOf(clip);
     const effectivePosition =
       typeof clip.position === "number" ? clip.position : 0;
     const effectiveEnd =

@@ -9,7 +9,6 @@ describe("buildVideoFilter", () => {
       fps: options.fps || 30,
       width: options.width || 1920,
       height: options.height || 1080,
-      fillGaps: options.fillGaps || "none",
     },
     videoOrAudioClips: [],
   });
@@ -644,343 +643,131 @@ describe("buildVideoFilter", () => {
     });
   });
 
-  describe("gap filling with black frames", () => {
-    it("should not fill gaps when fillGaps is 'none' (default)", () => {
-      const project = createProject({ fillGaps: "none" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+  describe("color clips", () => {
+    it("should generate color= filter source for flat color clip", () => {
+      const project = createProject();
+      const clip = {
+        type: "color",
+        color: "black",
+        position: 0,
+        end: 3,
+        _isFlatColor: true,
+      };
+      project.videoOrAudioClips.push(clip);
 
-      const result = buildVideoFilter(project, clips);
+      const result = buildVideoFilter(project, [clip]);
 
-      // Should only have one scaled stream (no black fill)
-      expect(result.filter).not.toContain("color=c=black");
-      expect(result.filter).toContain("concat=n=1");
+      expect(result.hasVideo).toBe(true);
+      expect(result.filter).toContain("color=c=black:s=1920x1080:d=3");
+      expect(result.filter).toContain("fps=30");
+      expect(result.videoDuration).toBe(3);
     });
 
-    it("should fill leading gap with black when fillGaps is 'black'", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+    it("should use correct dimensions and fps for flat color clip", () => {
+      const project = createProject({ width: 1080, height: 1920, fps: 60 });
+      const clip = {
+        type: "color",
+        color: "navy",
+        position: 0,
+        end: 2,
+        _isFlatColor: true,
+      };
+      project.videoOrAudioClips.push(clip);
 
-      const result = buildVideoFilter(project, clips);
+      const result = buildVideoFilter(project, [clip]);
 
-      // Should have black fill for the leading gap (0-2 seconds)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2");
-      // Should concatenate two streams (black + video)
-      expect(result.filter).toContain("concat=n=2");
-    });
-
-    it("should fill middle gap with black when fillGaps is 'black'", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 3,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 5,
-          end: 8,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips);
-
-      // Should have black fill for the gap (3-5 seconds)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2");
-      // Should concatenate three streams (video + black + video)
-      expect(result.filter).toContain("concat=n=3");
-    });
-
-    it("should fill multiple gaps with black frames", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 1,
-          end: 3,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 5,
-          end: 7,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips);
-
-      // Should have two black fills: leading gap (0-1) and middle gap (3-5)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=1"); // 0-1 gap
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2"); // 3-5 gap
-      // Should concatenate four streams
-      expect(result.filter).toContain("concat=n=4");
-    });
-
-    it("should not add black frames when there are no gaps", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 3,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 3,
-          end: 6,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips);
-
-      // Should not have any black fill
-      expect(result.filter).not.toContain("color=c=black");
-      expect(result.filter).toContain("concat=n=2");
-    });
-
-    it("should use correct dimensions for black frames", () => {
-      const project = createProject({
-        fillGaps: "black",
-        width: 1080,
-        height: 1920,
-      });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips);
-
-      expect(result.filter).toContain("color=c=black:s=1080x1920:d=2");
-    });
-
-    it("should use correct fps for black frames", () => {
-      const project = createProject({ fillGaps: "black", fps: 60 });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips);
-
-      expect(result.filter).toContain("color=c=black");
+      expect(result.filter).toContain("color=c=navy:s=1080x1920:d=2");
       expect(result.filter).toContain("fps=60");
     });
 
-    it("should fill gap with custom color when fillGaps is a color name", () => {
-      const project = createProject({ fillGaps: "red" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+    it("should handle color clip with transition (xfade)", () => {
+      const project = createProject();
+      const videoClip = {
+        type: "video",
+        url: "./a.mp4",
+        position: 0,
+        end: 3,
+        cutFrom: 0,
+        mediaDuration: 10,
+      };
+      const colorClip = {
+        type: "color",
+        color: "black",
+        position: 2.5,
+        end: 5.5,
+        _isFlatColor: true,
+        transition: { type: "fade", duration: 0.5 },
+      };
+      project.videoOrAudioClips.push(videoClip);
+      project.videoOrAudioClips.push(colorClip);
 
-      const result = buildVideoFilter(project, clips);
+      const result = buildVideoFilter(project, [videoClip, colorClip]);
 
-      expect(result.filter).toContain("color=c=red:s=1920x1080:d=2");
-      expect(result.filter).toContain("concat=n=2");
+      expect(result.filter).toContain("color=c=black:s=1920x1080:d=3");
+      expect(result.filter).toContain("xfade=transition=fade:duration=0.5");
     });
 
-    it("should fill gap with hex color", () => {
-      const project = createProject({ fillGaps: "#1a1a2e" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+    it("should handle multiple color clips in timeline", () => {
+      const project = createProject();
+      const c1 = { type: "color", color: "black", position: 0, end: 2, _isFlatColor: true };
+      const c2 = { type: "color", color: "navy", position: 2, end: 4, _isFlatColor: true };
+      project.videoOrAudioClips.push(c1);
+      project.videoOrAudioClips.push(c2);
 
-      const result = buildVideoFilter(project, clips);
+      const result = buildVideoFilter(project, [c1, c2]);
 
-      expect(result.filter).toContain("color=c=#1a1a2e:s=1920x1080:d=2");
-      expect(result.filter).toContain("concat=n=2");
+      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2");
+      expect(result.filter).toContain("color=c=navy:s=1920x1080:d=2");
+      expect(result.filter).toContain("concat=n=2:v=1:a=0");
+      expect(result.videoDuration).toBe(4);
     });
 
-    it("should fill trailing gap with black when timelineEnd extends past visual", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+    it("should handle gradient color clip as image (input index based)", () => {
+      const project = createProject();
+      // Gradient color clips have a url (temp PPM) and no _isFlatColor flag
+      const gradientClip = {
+        type: "color",
+        color: { type: "linear-gradient", colors: ["#000", "#fff"] },
+        url: "/tmp/gradient.ppm",
+        position: 0,
+        end: 3,
+        hasAudio: false,
+      };
+      project.videoOrAudioClips.push(gradientClip);
 
-      const result = buildVideoFilter(project, clips, { timelineEnd: 10 });
+      const result = buildVideoFilter(project, [gradientClip]);
 
-      // Should have black fill for the trailing gap (5-10 seconds)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=5");
-      // Should concatenate two streams (video + black)
-      expect(result.filter).toContain("concat=n=2");
-      expect(result.videoDuration).toBe(10);
+      expect(result.hasVideo).toBe(true);
+      // Should go through the image/video trim+scale path
+      expect(result.filter).toContain("[0:v]");
+      expect(result.filter).toContain("trim=start=0:duration=3");
     });
 
-    it("should fill both leading and trailing gaps with black", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
+    it("should compute correct input index when flat color clips are mixed with file clips", () => {
+      const project = createProject();
+      const colorClip = { type: "color", color: "black", position: 0, end: 2, _isFlatColor: true };
+      const videoClip = {
+        type: "video",
+        url: "./a.mp4",
+        position: 2,
+        end: 5,
+        cutFrom: 0,
+        mediaDuration: 10,
+      };
+      project.videoOrAudioClips.push(colorClip);
+      project.videoOrAudioClips.push(videoClip);
 
-      const result = buildVideoFilter(project, clips, { timelineEnd: 8 });
+      const result = buildVideoFilter(project, [colorClip, videoClip]);
 
-      // Should have black fill for leading gap (0-2) and trailing gap (5-8)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2"); // 0-2
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=3"); // 5-8
-      // Should concatenate three streams (black + video + black)
-      expect(result.filter).toContain("concat=n=3");
-      expect(result.videoDuration).toBe(8);
-    });
-
-    it("should fill middle and trailing gaps together", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 3,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 5,
-          end: 8,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips, { timelineEnd: 12 });
-
-      // Middle gap (3-5) + trailing gap (8-12)
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2"); // 3-5
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=4"); // 8-12
-      expect(result.filter).toContain("concat=n=4");
-      expect(result.videoDuration).toBe(12);
-    });
-
-    it("should not fill trailing gap when fillGaps is 'none' even with timelineEnd", () => {
-      const project = createProject({ fillGaps: "none" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips, { timelineEnd: 10 });
-
-      expect(result.filter).not.toContain("color=c=black");
-      expect(result.filter).toContain("concat=n=1");
-      expect(result.videoDuration).toBe(5);
-    });
-
-    it("should not add trailing gap when timelineEnd equals visual end", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      const result = buildVideoFilter(project, clips, { timelineEnd: 5 });
-
-      expect(result.filter).not.toContain("color=c=black");
-      expect(result.filter).toContain("concat=n=1");
-      expect(result.videoDuration).toBe(5);
+      // Flat color has no input, so video clip should be [0:v] (not [1:v])
+      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2");
+      expect(result.filter).toContain("[0:v]");
+      expect(result.filter).toContain("trim=start=0:duration=3");
     });
   });
+
+  // Legacy gap fill tests removed — fillGaps is no longer a feature.
+  // Color clips are the explicit replacement.
 
   describe("videoDuration return value", () => {
     it("should return videoDuration for single clip (no transitions)", () => {
@@ -1057,98 +844,6 @@ describe("buildVideoFilter", () => {
       const project = createProject();
       const result = buildVideoFilter(project, []);
       expect(result.videoDuration).toBe(0);
-    });
-  });
-
-  describe("trailing gap with transitions", () => {
-    it("should return correct videoDuration with transition + trailing gap", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 3,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 2.5,
-          end: 5.5,
-          cutFrom: 0,
-          mediaDuration: 10,
-          transition: { type: "fade", duration: 0.5 },
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      // timelineEnd = 8 means trailing gap from 5.5 to 8 = 2.5s
-      const result = buildVideoFilter(project, clips, { timelineEnd: 8 });
-
-      expect(result.filter).toContain("color=c=black");
-      // Video: 3 + 3 - 0.5 (transition) + 2.5 (trailing gap) = 8
-      expect(result.videoDuration).toBe(8);
-    });
-
-    it("should return correct videoDuration with middle gap + transition + trailing gap", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 0,
-          end: 2,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-        {
-          type: "video",
-          url: "./b.mp4",
-          position: 4.5,
-          end: 7.5,
-          cutFrom: 0,
-          mediaDuration: 10,
-          transition: { type: "fade", duration: 0.5 },
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      // Middle gap from 2 to 4.5 = 2.5s, trailing gap from 7.5 to 10 = 2.5s
-      const result = buildVideoFilter(project, clips, { timelineEnd: 10 });
-
-      // Middle gap 2-4.5 = 2.5s
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2.5");
-      // Streams: clip_a(2s) + black_middle(2.5s) concat, then xfade
-      // with clip_b(3s) - 0.5s transition, then black_trail(2.5s) concat.
-      // Total = 2 + 2.5 + 3 - 0.5(xfade) + 2.5 = 9.5
-      // Note: the 0.5s transition compression is handled at the
-      // _prepareExport level, which adjusts timelineEnd accordingly.
-      expect(result.videoDuration).toBe(9.5);
-    });
-
-    it("should return correct videoDuration with leading + trailing gap", () => {
-      const project = createProject({ fillGaps: "black" });
-      const clips = [
-        {
-          type: "video",
-          url: "./a.mp4",
-          position: 2,
-          end: 5,
-          cutFrom: 0,
-          mediaDuration: 10,
-        },
-      ];
-      clips.forEach((c) => project.videoOrAudioClips.push(c));
-
-      // Leading gap 0-2 = 2s, trailing gap 5-9 = 4s
-      const result = buildVideoFilter(project, clips, { timelineEnd: 9 });
-
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=2"); // leading
-      expect(result.filter).toContain("color=c=black:s=1920x1080:d=4"); // trailing
-      expect(result.filter).toContain("concat=n=3"); // leading + clip + trailing
-      expect(result.videoDuration).toBe(9);
     });
   });
 });
