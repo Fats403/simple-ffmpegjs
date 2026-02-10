@@ -78,6 +78,7 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 - **Progress Tracking** — Real-time export progress callbacks
 - **Cancellation** — AbortController support for stopping exports
 - **Color Clips** — Flat colors and gradients (linear, radial) as first-class timeline clips with full transition support
+- **Effect Clips** — Timed overlay effects (vignette, film grain, gaussian blur, color adjustment) with fade-in/out envelopes
 - **Auto-Batching** — Automatically splits complex filter graphs to avoid OS command limits
 - **Schema Export** — Generate a structured description of the clip format for documentation, code generation, or AI context
 - **Pre-Validation** — Validate clip configurations before processing with structured, machine-readable error codes
@@ -237,7 +238,7 @@ const schema = SIMPLEFFMPEG.getSchema({ exclude: ["text", "subtitle"] });
 
 // See all available module IDs
 SIMPLEFFMPEG.getSchemaModules();
-// ['video', 'audio', 'image', 'color', 'text', 'subtitle', 'music']
+// ['video', 'audio', 'image', 'color', 'effect', 'text', 'subtitle', 'music']
 ```
 
 Available modules:
@@ -248,6 +249,7 @@ Available modules:
 | `audio`    | Standalone audio clips                                      |
 | `image`    | Image clips, Ken Burns effects                              |
 | `color`    | Color clips — flat colors, linear/radial gradients          |
+| `effect`   | Overlay adjustment effects — vignette, grain, blur, grading |
 | `text`     | Text overlays — all modes, animations, positioning, styling |
 | `subtitle` | Subtitle file import (SRT, VTT, ASS, SSA)                   |
 | `music`    | Background music / background audio, looping                |
@@ -587,6 +589,42 @@ await project.load([
   transition?: {
     type: string;                  // Any xfade transition (e.g., 'fade', 'wipeleft')
     duration: number;
+  };
+}
+```
+
+#### Effect Clip
+
+Effects are overlay adjustment layers. They apply to the already-composed video
+for a time window, and can ramp in/out smoothly (instead of appearing instantly):
+
+```ts
+{
+  type: "effect";
+  effect: "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
+  position: number;           // Required timeline start (seconds)
+  end?: number;               // Use end OR duration, not both
+  duration?: number;          // Duration in seconds (alternative to end)
+  fadeIn?: number;            // Optional smooth ramp-in (seconds)
+  fadeOut?: number;           // Optional smooth ramp-out (seconds)
+  easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out"; // default: "linear"
+  params: {
+    amount?: number;          // Blend amount 0..1 (default: 1)
+
+    // vignette
+    angle?: number;           // radians
+
+    // filmGrain
+    temporal?: boolean;       // default: true
+
+    // gaussianBlur
+    sigma?: number;
+
+    // colorAdjust
+    brightness?: number;      // -1..1
+    contrast?: number;        // 0..3
+    saturation?: number;      // 0..3
+    gamma?: number;           // 0.1..10
   };
 }
 ```
@@ -1482,7 +1520,7 @@ npm run test:watch
 For visual verification, run the demo suite to generate sample videos covering all major features. Each demo outputs to its own subfolder under `examples/output/` and includes annotated expected timelines so you know exactly what to look for:
 
 ```bash
-# Run all demos (color clips, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
+# Run all demos (color clips, effects, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
 node examples/run-examples.js
 
 # Run a specific demo by name (partial match)
@@ -1495,6 +1533,7 @@ Available demo scripts (can also be run individually):
 | Script                          | What it tests                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
 | `demo-color-clips.js`           | Flat colors, linear/radial gradients, transitions, full composition with color clips   |
+| `demo-effects-pack-1.js`        | Timed overlay effects (vignette, grain, blur, color adjustment) with smooth ramps      |
 | `demo-transitions.js`           | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions  |
 | `demo-text-and-animations.js`   | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
 | `demo-ken-burns.js`             | All 6 presets, smart anchors, custom diagonal, slideshow with transitions              |

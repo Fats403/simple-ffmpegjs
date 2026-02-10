@@ -143,6 +143,8 @@ function formatSchema(modules, options = {}) {
     video: '"video"',
     audio: '"audio"',
     image: '"image"',
+    color: '"color"',
+    effect: '"effect"',
     text: '"text"',
     subtitle: '"subtitle"',
     music: '"music" or "backgroundAudio"',

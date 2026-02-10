@@ -175,6 +175,17 @@ function loadText(project, clipObj) {
   }
 }
 
+function loadEffect(project, clipObj) {
+  const clip = {
+    ...clipObj,
+    fadeIn: typeof clipObj.fadeIn === "number" ? clipObj.fadeIn : 0,
+    fadeOut: typeof clipObj.fadeOut === "number" ? clipObj.fadeOut : 0,
+    easing: clipObj.easing || "linear",
+    params: clipObj.params || {},
+  };
+  project.effectClips.push(clip);
+}
+
 function loadSubtitle(project, clipObj) {
   // Validate file exists
   if (!fs.existsSync(clipObj.url)) {
@@ -248,6 +259,7 @@ module.exports = {
   loadImage,
   loadBackgroundAudio,
   loadText,
+  loadEffect,
   loadSubtitle,
   loadColor,
 };

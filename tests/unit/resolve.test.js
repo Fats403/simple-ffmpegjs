@@ -47,6 +47,21 @@ describe("resolveClips", () => {
       expect(clips[0].end).toBe(4);
     });
 
+    it("should compute end from position + duration for effect clips", () => {
+      const { clips, errors } = resolveClips([
+        {
+          type: "effect",
+          effect: "vignette",
+          position: 1,
+          duration: 2.5,
+          params: { amount: 0.7 },
+        },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0].end).toBe(3.5);
+    });
+
     it("should compute end from position + duration for music clips", () => {
       const { clips, errors } = resolveClips([
         { type: "music", url: "./bg.mp3", position: 0, duration: 30 },
@@ -136,6 +151,20 @@ describe("resolveClips", () => {
       expect(clips[0]).toMatchObject({ position: 0, end: 5 });
       expect(clips[1]).toMatchObject({ position: 5, end: 8 });
       expect(clips[2]).toMatchObject({ position: 8, end: 12 });
+    });
+
+    it("should NOT auto-sequence effect clips (position required)", () => {
+      const { clips, errors } = resolveClips([
+        { type: "video", url: "./a.mp4", duration: 5 },
+        { type: "effect", effect: "vignette", duration: 2, params: {} },
+        { type: "video", url: "./b.mp4", duration: 3 },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0]).toMatchObject({ position: 0, end: 5 });
+      expect(clips[1].position).toBeUndefined();
+      expect(clips[1].end).toBeUndefined();
+      expect(clips[2]).toMatchObject({ position: 5, end: 8 });
     });
 
     it("should auto-sequence audio clips on a separate audio track", () => {

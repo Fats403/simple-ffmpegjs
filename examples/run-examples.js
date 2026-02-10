@@ -12,7 +12,7 @@
  *   node examples/run-examples.js torture ken   # run torture test and ken burns
  *
  * Available demo names (partial match):
- *   color-clips, transitions, text, ken-burns, audio, watermarks, karaoke, torture
+ *   color-clips, effects, transitions, text, ken-burns, audio, watermarks, karaoke, torture
  */
 
 import { execSync, spawn } from "child_process";
@@ -29,6 +29,7 @@ const __dirname = path.dirname(__filename);
 
 const DEMOS = [
   { name: "color-clips",             file: "demo-color-clips.js" },
+  { name: "effects",                 file: "demo-effects-pack-1.js" },
   { name: "transitions",            file: "demo-transitions.js" },
   { name: "text-and-animations",    file: "demo-text-and-animations.js" },
   { name: "ken-burns",              file: "demo-ken-burns.js" },

@@ -13,6 +13,7 @@ const videoModule = require("./modules/video");
 const audioModule = require("./modules/audio");
 const imageModule = require("./modules/image");
 const colorModule = require("./modules/color");
+const effectModule = require("./modules/effect");
 const textModule = require("./modules/text");
 const subtitleModule = require("./modules/subtitle");
 const musicModule = require("./modules/music");
@@ -26,6 +27,7 @@ const ALL_MODULES = {
   audio: audioModule,
   image: imageModule,
   color: colorModule,
+  effect: effectModule,
   text: textModule,
   subtitle: subtitleModule,
   music: musicModule,

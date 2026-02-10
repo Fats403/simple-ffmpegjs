@@ -131,6 +131,7 @@ describe("Validation", () => {
           "image",
           "subtitle",
           "color",
+          "effect",
         ];
 
         for (const type of types) {
@@ -143,6 +144,8 @@ describe("Validation", () => {
             clip = { type, url: "./test.srt" };
           } else if (type === "color") {
             clip = { type, color: "black", position: 0, end: 5 };
+          } else if (type === "effect") {
+            clip = { type, effect: "vignette", position: 0, end: 5, params: {} };
           } else {
             clip = { type, url: "./test.mp4", position: 0, end: 5 };
           }
@@ -1049,6 +1052,91 @@ describe("Validation", () => {
       const result = validateConfig(clips);
       expect(result.valid).toBe(false);
       expect(result.errors[0].path).toBe("clips[0].transition.duration");
+    });
+  });
+
+  describe("effect clip validation", () => {
+    it("should accept a valid effect clip", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, end: 10 },
+        {
+          type: "effect",
+          effect: "vignette",
+          position: 2,
+          end: 8,
+          fadeIn: 0.5,
+          fadeOut: 0.5,
+          params: { amount: 0.8, angle: 0.7 },
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should reject invalid effect type", () => {
+      const clips = [
+        {
+          type: "effect",
+          effect: "bad-effect",
+          position: 0,
+          end: 5,
+          params: {},
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].effect");
+    });
+
+    it("should require params object", () => {
+      const clips = [
+        {
+          type: "effect",
+          effect: "gaussianBlur",
+          position: 0,
+          end: 5,
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].params");
+    });
+
+    it("should reject fadeIn + fadeOut larger than clip duration", () => {
+      const clips = [
+        {
+          type: "effect",
+          effect: "filmGrain",
+          position: 0,
+          end: 2,
+          fadeIn: 1.5,
+          fadeOut: 1,
+          params: {},
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.path === "clips[0]" && e.code === ValidationCodes.INVALID_TIMELINE
+        )
+      ).toBe(true);
+    });
+
+    it("should validate effect-specific params", () => {
+      const clips = [
+        {
+          type: "effect",
+          effect: "colorAdjust",
+          position: 0,
+          end: 4,
+          params: { brightness: 2 },
+        },
+      ];
+      const result = validateConfig(clips);
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].path).toBe("clips[0].params.brightness");
     });
   });
 

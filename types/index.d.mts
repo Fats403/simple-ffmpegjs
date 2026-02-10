@@ -52,7 +52,8 @@ declare namespace SIMPLEFFMPEG {
     | "backgroundAudio"
     | "image"
     | "subtitle"
-    | "color";
+    | "color"
+    | "effect";
 
   interface BaseClip {
     type: ClipType;
@@ -245,12 +246,58 @@ declare namespace SIMPLEFFMPEG {
     transition?: { type: string; duration: number };
   }
 
+  type EffectName = "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
+  type EffectEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
+  interface EffectParamsBase {
+    amount?: number;
+  }
+
+  interface VignetteEffectParams extends EffectParamsBase {
+    angle?: number;
+  }
+
+  interface FilmGrainEffectParams extends EffectParamsBase {
+    temporal?: boolean;
+  }
+
+  interface GaussianBlurEffectParams extends EffectParamsBase {
+    sigma?: number;
+  }
+
+  interface ColorAdjustEffectParams extends EffectParamsBase {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    gamma?: number;
+  }
+
+  type EffectParams =
+    | VignetteEffectParams
+    | FilmGrainEffectParams
+    | GaussianBlurEffectParams
+    | ColorAdjustEffectParams;
+
+  /** Effect clip — timed overlay adjustment layer over composed video */
+  interface EffectClip {
+    type: "effect";
+    effect: EffectName;
+    position: number;
+    end?: number;
+    duration?: number;
+    fadeIn?: number;
+    fadeOut?: number;
+    easing?: EffectEasing;
+    params: EffectParams;
+  }
+
   type Clip =
     | VideoClip
     | AudioClip
     | BackgroundMusicClip
     | ImageClip
     | ColorClip
+    | EffectClip
     | TextClip
     | SubtitleClip;
 
@@ -583,6 +630,7 @@ declare namespace SIMPLEFFMPEG {
     | "audio"
     | "image"
     | "color"
+    | "effect"
     | "text"
     | "subtitle"
     | "music";

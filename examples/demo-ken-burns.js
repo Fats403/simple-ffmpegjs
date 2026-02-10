@@ -12,24 +12,23 @@
  * EXPECTED TIMELINE FOR EACH DEMO
  * ============================================================================
  *
- * DEMO 1: All 6 preset effects                                 ~30s total
+ * DEMO 1: All 6 preset effects                                 ~24s total
  * ───────────────────────────────────────────────────────────────────────────
- *   Each effect runs for 4s with a 1s black gap between them:
+ *   Each effect runs for 4s with no visual gaps:
  *   0-4s   zoom-in  (image slowly zooms in toward center)
- *   5-9s   zoom-out (image starts zoomed, pulls back)
- *  10-14s  pan-left (camera pans from right to left)
- *  15-19s  pan-right (camera pans from left to right)
- *  20-24s  pan-up   (camera pans from bottom to top)
- *  25-29s  pan-down (camera pans from top to bottom)
+ *   4-8s   zoom-out (image starts zoomed, pulls back)
+ *   8-12s  pan-left (camera pans from right to left)
+ *  12-16s  pan-right (camera pans from left to right)
+ *  16-20s  pan-up   (camera pans from bottom to top)
+ *  20-24s  pan-down (camera pans from top to bottom)
  *          Each section has a label at the bottom naming the effect.
  *          Grid image letters (A,B,C,D) help track the motion.
  *
- * DEMO 2: Smart mode with anchors                               ~9s total
+ * DEMO 2: Smart mode with anchors                               ~8s total
  * ───────────────────────────────────────────────────────────────────────────
  *   0-4s   smart mode, anchor=top (zooms toward top of image)
- *   5-9s   smart mode, anchor=bottom (zooms toward bottom)
- *          1s black gap between them. Watch which corner letters
- *          stay visible vs. which get cropped by the zoom.
+ *   4-8s   smart mode, anchor=bottom (zooms toward bottom)
+ *          Watch which corner letters stay visible vs. cropped.
  *
  * DEMO 3: Custom diagonal pan                                   ~4s total
  * ───────────────────────────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ async function demo1_AllPresets() {
   const effects = ["zoom-in", "zoom-out", "pan-left", "pan-right", "pan-up", "pan-down"];
   const clips = [];
   effects.forEach((name, i) => {
-    const start = i * 5;
+    const start = i * 4;
     clips.push({
       type: "image", url: path.join(FIXTURES_DIR, "test-image.jpg"),
       position: start, end: start + 4, kenBurns: name,
@@ -85,7 +84,7 @@ async function demo1_AllPresets() {
     });
   });
 
-  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30, fillGaps: "black" });
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
   await project.load(clips);
   const out = path.join(OUTPUT_DIR, "01-all-presets.mp4");
   await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
@@ -94,7 +93,7 @@ async function demo1_AllPresets() {
 
 async function demo2_SmartAnchors() {
   log("DEMO 2: Smart mode with anchors");
-  const project = new SIMPLEFFMPEG({ width: 640, height: 360, fps: 30, fillGaps: "black" });
+  const project = new SIMPLEFFMPEG({ width: 640, height: 360, fps: 30 });
   await project.load([
     {
       type: "image", url: path.join(FIXTURES_DIR, "test-image.jpg"),
@@ -103,11 +102,11 @@ async function demo2_SmartAnchors() {
     },
     {
       type: "image", url: path.join(FIXTURES_DIR, "test-image.jpg"),
-      position: 5, end: 9, width: 640, height: 480,
+      position: 4, end: 8, width: 640, height: 480,
       kenBurns: { type: "smart", anchor: "bottom", startZoom: 1.05, endZoom: 1.2, easing: "ease-in-out" },
     },
     { type: "text", text: "anchor: top", position: 0, end: 4, fontSize: 28, fontColor: "white", yPercent: 0.9 },
-    { type: "text", text: "anchor: bottom", position: 5, end: 9, fontSize: 28, fontColor: "white", yPercent: 0.1 },
+    { type: "text", text: "anchor: bottom", position: 4, end: 8, fontSize: 28, fontColor: "white", yPercent: 0.1 },
   ]);
   const out = path.join(OUTPUT_DIR, "02-smart-anchors.mp4");
   await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
@@ -170,7 +169,7 @@ const { fail } = await runDemos("Ken Burns — Visual Demo", OUTPUT_DIR, [
 ]);
 
 console.log(`  WHAT TO CHECK:
-  01  Six distinct motions with labels, 1s black gap between each
+  01  Six distinct motions with labels, no visual gaps
   02  Top anchor zooms toward A/B, bottom anchor toward C/D
   03  Camera moves diagonally from bottom-left to top-right
   04  Smooth crossfades between moving images with background audio

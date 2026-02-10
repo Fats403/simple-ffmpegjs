@@ -18,31 +18,30 @@
  *   ~2.5s   Fade transition (0.5s) -> BLUE video
  *   3-5.5s  BLUE video, "Chapter 1" text (shifted 0.5s by transition)
  *   5.5-9.5s Image (Ken Burns zoom-in), "Image Section" text
- *   9.5-13.5s DARK GREEN (#0a2e0a) trailing gap fill, "The End" text
+ *   9.5-13.5s DARK GREEN (#0a2e0a) trailing color clip, "The End" text
  *           1 transition x 0.5s = 0.5s compression.
  *           Background music plays throughout. Text watermark at top-right.
- *           Tests: transitions + Ken Burns + text + karaoke + BGM +
- *           watermark + custom color trailing gap, all in one export.
+ *           Tests: transitions + Ken Burns + effects + text + karaoke + BGM +
+ *           watermark + custom color trailing segment, all in one export.
  *
- * DEMO 2: Many clips with gaps and transitions                  ~17s total
+ * DEMO 2: Many clips with color fillers and transitions         ~17s total
  * ───────────────────────────────────────────────────────────────────────────
- *   0-1s    NAVY fill (leading gap)
+ *   0-1s    NAVY color clip
  *   1-3s    RED video
  *   ~2.5s   wipeleft (0.5s) -> image (Ken Burns pan-right)
  *   3-5s    Image clip (shifted by first transition)
- *   5-6s    NAVY fill (middle gap, shifted)
+ *   6-7s    NAVY color clip between segments
  *   6-8s    BLUE video
  *   ~7.5s   fade (0.5s) -> GREEN video
  *   8-10.5s GREEN video
  *  10.5-12s RED video
- *  12-17s   NAVY fill (trailing gap) with "Credits" text
+ *  14-18s   NAVY color clip with "Credits" text
  *           2 transitions x 0.5s = 1.0s compression.
- *           Tests: 6 clips, mixed types, transitions, leading/middle/trailing
- *           gaps, all with same fill color.
+ *           Tests: mixed visual types, transitions, and explicit color fillers.
  *
  * DEMO 3: Text-heavy (many simultaneous overlays)              ~3s total
  * ───────────────────────────────────────────────────────────────────────────
- *   0-3s    BLUE video with 6 text overlays at once:
+ *   0-3s    BLUE video with 6 text overlays at once + timed effects:
  *           - "fade-in" (top-left, fades in)
  *           - "pop" (top-right, pops)
  *           - "typewriter" (center, types out)
@@ -57,12 +56,12 @@
  *   ~0.25s  fade (0.25s) -> very short BLUE clip (0.5s)
  *   0.5-0.75s BLUE video clip continues
  *   0.75-2.75s GREEN video (shifted by 0.25s transition)
- *   2.75-5.75s Text on black trailing gap.
+ *   2.75-5.75s Text on black trailing color clip.
  *           "Boundary Text" at clip boundary, compensated by 0.25s.
  *           Audio starts at 1.5s (mid-timeline), runs to 4.5s.
  *           1 transition x 0.25s = 0.25s compression.
  *           Tests: very short clips, short transitions, text at exact
- *           boundary, audio starting mid-timeline, trailing gap.
+ *           boundary, audio starting mid-timeline, trailing color clip.
  *
  * DEMO 5: MEGA CHAOS (~3 minutes)                              ~178s total
  * ───────────────────────────────────────────────────────────────────────────
@@ -70,18 +69,18 @@
  *   9 sections, 30+ visual clips, 20+ text overlays, every transition type,
  *   every Ken Burns mode, every text animation, karaoke, word-replace,
  *   word-sequential, SRT + VTT subtitles, standalone audio, background
- *   music (looped), text + image watermarks, leading + middle + trailing
- *   gaps — all in a single export. See section comments below for details.
+ *   music (looped), text + image watermarks, and explicit color filler
+ *   sections — all in a single export. See section comments below for details.
  *
- *   SECTION 1  (0-5s)      LEADING GAP — magenta fill, karaoke intro
+ *   SECTION 1  (0-5s)      MAGENTA COLOR INTRO, karaoke intro
  *   SECTION 2  (5-23s)     OPENING — videos + image, 4 transitions, KB
  *   SECTION 3  (23-62s)    TRANSITION STORM — 13 clips, 12 transition types
- *   SECTION 4  (62-67s)    MIDDLE GAP 1 — magenta, "INTERMISSION" text
+ *   SECTION 4  (62-67s)    MAGENTA BREAK 1, "INTERMISSION" text
  *   SECTION 5  (67-103s)   KEN BURNS FESTIVAL — all 8 KB effects, 5 transitions
- *   SECTION 6  (103-106s)  MIDDLE GAP 2 — brief magenta fill
+ *   SECTION 6  (103-106s)  MAGENTA BREAK 2
  *   SECTION 7  (106-140s)  TEXT STORM — every text animation + word modes
  *   SECTION 8  (140-170s)  KARAOKE + SUBTITLES — karaoke, SRT, VTT
- *   SECTION 9  (170-200s)  TRAILING GAP — cascading text finale
+ *   SECTION 9  (170-200s)  MAGENTA FINALE — cascading text
  *
  *   Transitions: 21 x 0.5s + 5 x 1.0s = 15.5s compression
  *   Raw end: ~200s → output: ~178.5s ≈ 2m 58s
@@ -116,11 +115,14 @@ const WM_IMG = path.join(FIXTURES_DIR, "test-watermark.png");
 
 async function demo1_KitchenSink() {
   log("DEMO 1: Kitchen sink (everything combined)");
-  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30, fillGaps: "#0a2e0a" });
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
   await project.load([
     { type: "video", url: RED, position: 0, end: 3, volume: 0.2 },
     { type: "video", url: BLUE, position: 3, end: 6, volume: 0.2, transition: { type: "fade", duration: 0.5 } },
     { type: "image", url: IMG, position: 6, end: 10, kenBurns: "zoom-in" },
+    { type: "color", color: "#0a2e0a", position: 10, end: 14 },
+    { type: "effect", effect: "vignette", position: 0, end: 4, fadeIn: 0.6, fadeOut: 0.6, params: { amount: 0.6, angle: 0.65 } },
+    { type: "effect", effect: "colorAdjust", position: 5.8, end: 10, fadeIn: 0.6, params: { amount: 0.75, contrast: 1.2, saturation: 1.35, gamma: 1.08, brightness: -0.04 } },
     { type: "text", text: "Welcome", position: 0.3, end: 2.5, fontSize: 40, fontColor: "white", yPercent: 0.12, animation: { type: "fade-in", in: 0.5 } },
     { type: "text", text: "Chapter 1", position: 3.5, end: 5.5, fontSize: 36, fontColor: "yellow", yPercent: 0.12 },
     { type: "text", text: "Image Section", position: 6.5, end: 9.5, fontSize: 32, fontColor: "white", borderColor: "black", borderWidth: 2, yPercent: 0.12 },
@@ -136,20 +138,24 @@ async function demo1_KitchenSink() {
   console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
 }
 
-async function demo2_ManyClipsGapsTransitions() {
-  log("DEMO 2: Many clips with gaps and transitions");
-  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30, fillGaps: "navy" });
+async function demo2_ManyClipsColorFillersTransitions() {
+  log("DEMO 2: Many clips with color fillers and transitions");
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
   await project.load([
+    { type: "color", color: "navy", position: 0, end: 1 },
     { type: "video", url: RED, position: 1, end: 3 },
     { type: "image", url: IMG, position: 3, end: 6, kenBurns: "pan-right", transition: { type: "wipeleft", duration: 0.5 } },
+    { type: "color", color: "navy", position: 6, end: 7 },
     { type: "video", url: BLUE, position: 7, end: 9 },
     { type: "video", url: GREEN, position: 9, end: 12, transition: { type: "fade", duration: 0.5 } },
     { type: "video", url: RED, position: 12, end: 14 },
-    { type: "text", text: "Leading gap", position: 0, end: 1, fontSize: 28, fontColor: "white", yPercent: 0.5 },
-    { type: "text", text: "Middle gap", position: 6, end: 7, fontSize: 28, fontColor: "white", yPercent: 0.5 },
+    { type: "color", color: "navy", position: 14, end: 18 },
+    { type: "effect", effect: "filmGrain", position: 1, end: 14, fadeIn: 0.4, fadeOut: 0.6, params: { amount: 0.28, temporal: true } },
+    { type: "text", text: "Leading filler", position: 0, end: 1, fontSize: 28, fontColor: "white", yPercent: 0.5 },
+    { type: "text", text: "Middle filler", position: 6, end: 7, fontSize: 28, fontColor: "white", yPercent: 0.5 },
     { type: "text", text: "Credits", position: 13, end: 18, fontSize: 44, fontColor: "white", yPercent: 0.5, animation: { type: "fade-in", in: 0.5 } },
   ]);
-  const out = path.join(OUTPUT_DIR, "02-many-clips-gaps.mp4");
+  const out = path.join(OUTPUT_DIR, "02-many-clips-color-fillers.mp4");
   await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
   console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
 }
@@ -159,6 +165,8 @@ async function demo3_TextHeavy() {
   const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
   await project.load([
     { type: "video", url: BLUE, position: 0, end: 3 },
+    { type: "effect", effect: "gaussianBlur", position: 0, end: 1.1, fadeOut: 0.35, params: { amount: 0.9, sigma: 8 } },
+    { type: "effect", effect: "colorAdjust", position: 1.1, end: 3, fadeIn: 0.35, params: { amount: 0.6, saturation: 1.45, contrast: 1.15, gamma: 1.05 } },
     { type: "text", text: "fade-in", position: 0.2, end: 2.8, fontSize: 28, fontColor: "white", xPercent: 0.2, yPercent: 0.15, animation: { type: "fade-in", in: 0.5 } },
     { type: "text", text: "pop", position: 0.2, end: 2.8, fontSize: 28, fontColor: "yellow", xPercent: 0.8, yPercent: 0.15, animation: { type: "pop", in: 0.3 } },
     { type: "text", text: "typewriter effect!", position: 0.2, end: 2.8, fontSize: 28, fontColor: "cyan", xPercent: 0.5, yPercent: 0.4, animation: { type: "typewriter", speed: 12 } },
@@ -173,11 +181,13 @@ async function demo3_TextHeavy() {
 
 async function demo4_EdgeCases() {
   log("DEMO 4: Edge cases (short clips, boundaries, mid-timeline audio)");
-  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30, fillGaps: "black" });
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
   await project.load([
     { type: "video", url: RED, position: 0, end: 0.5 },
     { type: "video", url: BLUE, position: 0.5, end: 1, transition: { type: "fade", duration: 0.25 } },
     { type: "video", url: GREEN, position: 1, end: 3 },
+    { type: "color", color: "black", position: 3, end: 6 },
+    { type: "effect", effect: "vignette", position: 0, end: 3, fadeIn: 0.2, fadeOut: 0.2, params: { amount: 0.45 } },
     { type: "text", text: "Boundary Text", position: 3, end: 6, fontSize: 44, fontColor: "white", yPercent: 0.5, animation: { type: "fade-in", in: 0.3 } },
     { type: "audio", url: AUDIO, position: 1.5, end: 4.5, volume: 0.6 },
   ]);
@@ -188,13 +198,13 @@ async function demo4_EdgeCases() {
 
 async function demo5_MegaChaos() {
   log("DEMO 5: MEGA CHAOS (~3 minutes of pure madness)");
-  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30, fillGaps: "#8B008B" }); // dark magenta
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
 
   await project.load([
     // ═══════════════════════════════════════════════════════════════
-    // SECTION 1: Leading gap (0-5s) — magenta fill
+    // SECTION 1: Intro color bed (0-5s) — magenta
     // ═══════════════════════════════════════════════════════════════
-    // (No visual clip — gap auto-filled with magenta)
+    { type: "color", color: "#8B008B", position: 0, end: 5 },
     { type: "text", mode: "karaoke", text: "Welcome to the chaos",
       position: 0.3, end: 4.5, fontSize: 48, fontColor: "#FFFFFF",
       highlightColor: "#FFD700", yPercent: 0.45 },
@@ -205,6 +215,7 @@ async function demo5_MegaChaos() {
     // ═══════════════════════════════════════════════════════════════
     // SECTION 2: Opening salvo (5-23s) — videos + image + transitions
     // ═══════════════════════════════════════════════════════════════
+    { type: "effect", effect: "vignette", position: 5, end: 23, fadeIn: 1, fadeOut: 1, params: { amount: 0.5, angle: 0.6 } },
     { type: "video", url: RED, position: 5, end: 8, volume: 0.3 },
     { type: "video", url: BLUE, position: 8, end: 11, volume: 0.3,
       transition: { type: "fade", duration: 0.5 } },
@@ -214,6 +225,7 @@ async function demo5_MegaChaos() {
       transition: { type: "fadeblack", duration: 0.5 } },
     { type: "video", url: RED, position: 19, end: 22, volume: 0.5,
       transition: { type: "circleopen", duration: 0.5 } },
+    { type: "color", color: "#8B008B", position: 22, end: 23 },
     // Section 2 text
     { type: "text", text: "RED", position: 5.2, end: 7.8, fontSize: 36,
       fontColor: "#FF4444", borderColor: "white", borderWidth: 2,
@@ -232,6 +244,7 @@ async function demo5_MegaChaos() {
     // SECTION 3: Transition storm (23-62s) — cycle through transition types
     //   13 clips, 12 different transitions
     // ═══════════════════════════════════════════════════════════════
+    { type: "effect", effect: "filmGrain", position: 23, end: 62, fadeIn: 0.8, fadeOut: 1, params: { amount: 0.26, temporal: true } },
     { type: "video", url: BLUE, position: 23, end: 26,
       transition: { type: "wiperight", duration: 0.5 } },
     { type: "video", url: GREEN, position: 26, end: 29,
@@ -262,8 +275,9 @@ async function demo5_MegaChaos() {
       yPercent: 0.04, animation: { type: "pulse", speed: 2, intensity: 0.15 } },
 
     // ═══════════════════════════════════════════════════════════════
-    // SECTION 4: Middle gap 1 (62-67s) — magenta fill
+    // SECTION 4: Break 1 (62-67s) — magenta
     // ═══════════════════════════════════════════════════════════════
+    { type: "color", color: "#8B008B", position: 62, end: 67 },
     { type: "text", text: "INTERMISSION", position: 62, end: 67,
       fontSize: 56, fontColor: "white", yPercent: 0.35,
       animation: { type: "fade-in-out", in: 0.8, out: 0.8 } },
@@ -278,6 +292,7 @@ async function demo5_MegaChaos() {
     // SECTION 5: Ken Burns festival (67-103s) — all 8 effects
     //   6 images, 5 transitions (1s each)
     // ═══════════════════════════════════════════════════════════════
+    { type: "effect", effect: "gaussianBlur", position: 67, end: 103, fadeIn: 0.6, fadeOut: 0.6, params: { amount: 0.5, sigma: 5.5 } },
     { type: "image", url: IMG, position: 67, end: 73, kenBurns: "zoom-in" },
     { type: "image", url: IMG, position: 73, end: 79, kenBurns: "zoom-out",
       transition: { type: "fade", duration: 1 } },
@@ -286,10 +301,10 @@ async function demo5_MegaChaos() {
     { type: "image", url: IMG, position: 85, end: 91, kenBurns: "pan-right",
       transition: { type: "dissolve", duration: 1 } },
     { type: "image", url: IMG, position: 91, end: 97,
-      kenBurns: { effect: "smart", anchor: "bottom" },
+      kenBurns: { type: "smart", anchor: "bottom" },
       transition: { type: "circleclose", duration: 1 } },
     { type: "image", url: IMG, position: 97, end: 103,
-      kenBurns: { effect: "custom", startX: 0.1, startY: 0.9, endX: 0.9, endY: 0.1, startScale: 1.2, endScale: 1.5 },
+      kenBurns: { type: "custom", startX: 0.1, startY: 0.9, endX: 0.9, endY: 0.1, startZoom: 1.2, endZoom: 1.5 },
       transition: { type: "fadeblack", duration: 1 } },
     // Section 5 labels
     { type: "text", text: "zoom-in", position: 67.5, end: 72, fontSize: 28,
@@ -309,8 +324,9 @@ async function demo5_MegaChaos() {
       yPercent: 0.04 },
 
     // ═══════════════════════════════════════════════════════════════
-    // SECTION 6: Middle gap 2 (103-106s) — brief magenta fill
+    // SECTION 6: Break 2 (103-106s) — brief magenta
     // ═══════════════════════════════════════════════════════════════
+    { type: "color", color: "#8B008B", position: 103, end: 106 },
     { type: "text", text: "ROUND 3", position: 103, end: 106,
       fontSize: 64, fontColor: "#FF00FF", yPercent: 0.45,
       animation: { type: "pop-bounce", in: 0.5 } },
@@ -319,6 +335,7 @@ async function demo5_MegaChaos() {
     // SECTION 7: Text animation storm (106-140s)
     //   Every text animation + word-replace + word-sequential
     // ═══════════════════════════════════════════════════════════════
+    { type: "effect", effect: "colorAdjust", position: 106, end: 140, fadeIn: 1, fadeOut: 1, params: { amount: 0.72, saturation: 1.35, contrast: 1.18, gamma: 1.08, brightness: -0.03 } },
     { type: "video", url: RED, position: 106, end: 109, volume: 0.15 },
     { type: "video", url: BLUE, position: 109, end: 112, volume: 0.15,
       transition: { type: "fade", duration: 0.5 } },
@@ -336,6 +353,7 @@ async function demo5_MegaChaos() {
       transition: { type: "fade", duration: 0.5 } },
     { type: "video", url: RED, position: 136, end: 139,
       transition: { type: "squeezev", duration: 0.5 } },
+    { type: "color", color: "#8B008B", position: 139, end: 140 },
     // All text animations in section 7 (overlapping intentionally)
     { type: "text", text: "fade-in here!", position: 106.5, end: 110, fontSize: 26,
       fontColor: "white", xPercent: 0.25, yPercent: 0.15,
@@ -430,9 +448,10 @@ async function demo5_MegaChaos() {
       yPercent: 0.04 },
 
     // ═══════════════════════════════════════════════════════════════
-    // SECTION 9: Trailing gap finale (170-200s) — magenta fill
+    // SECTION 9: Magenta finale bed (170-200s)
     //   Text cascading in and out = grand finale
     // ═══════════════════════════════════════════════════════════════
+    { type: "color", color: "#8B008B", position: 170, end: 200 },
     { type: "text", text: "THE CHAOS", position: 170, end: 200,
       fontSize: 52, fontColor: "white", yPercent: 0.25,
       animation: { type: "fade-in", in: 1.0 } },
@@ -459,8 +478,8 @@ async function demo5_MegaChaos() {
     // AUDIO LAYER: Background music + standalone audio
     // ═══════════════════════════════════════════════════════════════
     { type: "music", url: AUDIO, volume: 0.15, loop: true },
-    { type: "audio", url: AUDIO, position: 62, end: 67, volume: 0.5 },  // plays during gap 1
-    { type: "audio", url: AUDIO, position: 170, end: 175, volume: 0.4 }, // plays into trailing gap
+    { type: "audio", url: AUDIO, position: 62, end: 67, volume: 0.5 },
+    { type: "audio", url: AUDIO, position: 170, end: 175, volume: 0.4 },
   ]);
 
   const out = path.join(OUTPUT_DIR, "05-mega-chaos.mp4");
@@ -479,7 +498,7 @@ async function demo5_MegaChaos() {
 
 const { fail } = await runDemos("Torture Test — Visual Demo", OUTPUT_DIR, [
   demo1_KitchenSink,
-  demo2_ManyClipsGapsTransitions,
+  demo2_ManyClipsColorFillersTransitions,
   demo3_TextHeavy,
   demo4_EdgeCases,
   demo5_MegaChaos,
@@ -487,22 +506,22 @@ const { fail } = await runDemos("Torture Test — Visual Demo", OUTPUT_DIR, [
 
 console.log(`  WHAT TO CHECK:
   01  Everything renders: transition, Ken Burns, text, karaoke,
-      watermark, BGM, and dark green trailing gap — no crashes
-  02  Leading, middle, trailing navy gaps; 6 clips with mixed types
-      and transitions; "Credits" text visible in trailing gap
+      watermark, BGM, and dark green outro color clip — no crashes
+  02  Leading/middle/trailing navy filler clips; mixed visual types
+      and transitions; "Credits" text visible on trailing filler
   03  All 6 text animations render simultaneously without glitches
   04  Short clips don't crash; text starts at clip boundary;
-      audio starts at 1.5s; trailing gap extends to ~5.75s
+      audio starts at 1.5s; trailing color clip extends to ~5.75s
   05  MEGA: ~3 minute video renders without crashing. Verify:
-      - Magenta leading gap with karaoke intro (0-5s)
+      - Magenta intro color clip with karaoke intro (0-5s)
       - Rapid transitions through many types (5-60s)
-      - Magenta intermission gap (60s area)
+      - Magenta intermission filler clip (60s area)
       - All Ken Burns effects on images with labels (67-103s area)
-      - Another brief magenta gap (103-106s area)
+      - Another brief magenta filler clip (103-106s area)
       - Every text animation type visible (106-140s area)
       - Karaoke smooth + instant, SRT + VTT subtitles (140-170s area)
-      - Cascading text on magenta trailing gap finale (170s+)
-      - Background music throughout, standalone audio in gaps
+      - Cascading text on magenta finale color clip (170s+)
+      - Background music throughout, standalone audio on filler sections
       - Text watermark ("CHAOS") at top-right
 `);
 

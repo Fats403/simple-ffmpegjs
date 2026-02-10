@@ -7,6 +7,7 @@ const Loaders = require("./loaders");
 const { buildVideoFilter } = require("./ffmpeg/video_builder");
 const { buildAudioForVideoClips } = require("./ffmpeg/audio_builder");
 const { buildBackgroundMusicMix } = require("./ffmpeg/bgm_builder");
+const { buildEffectFilters } = require("./ffmpeg/effect_builder");
 const {
   getClipAudioString,
   hasProblematicChars,
@@ -90,6 +91,7 @@ class SIMPLEFFMPEG {
     this.videoOrAudioClips = [];
     this.textClips = [];
     this.subtitleClips = [];
+    this.effectClips = [];
     this.filesToClean = [];
     this._isLoading = false; // Guard against concurrent load() calls
     this._isExporting = false; // Guard against concurrent export() calls
@@ -191,7 +193,7 @@ class SIMPLEFFMPEG {
    * Load clips into the project for processing
    *
    * @param {Array} clipObjs - Array of clip configuration objects
-   * @param {string} clipObjs[].type - Clip type: 'video', 'audio', 'image', 'text', 'music', 'backgroundAudio', 'subtitle'
+   * @param {string} clipObjs[].type - Clip type: 'video', 'audio', 'image', 'color', 'text', 'effect', 'music', 'backgroundAudio', 'subtitle'
    * @param {string} clipObjs[].url - Media file path (required for video, audio, image, music, subtitle)
    * @param {number} clipObjs[].position - Start time on timeline in seconds
    * @param {number} clipObjs[].end - End time on timeline in seconds
@@ -276,6 +278,9 @@ class SIMPLEFFMPEG {
           }
           if (clipObj.type === "text") {
             return Loaders.loadText(this, clipObj);
+          }
+          if (clipObj.type === "effect") {
+            return Loaders.loadEffect(this, clipObj);
           }
           if (clipObj.type === "image") {
             return Loaders.loadImage(this, clipObj);
@@ -474,6 +479,13 @@ class SIMPLEFFMPEG {
       ) {
         finalVisualEnd = vres.videoDuration;
       }
+    }
+
+    // Overlay effects (adjustment layer clips) on the composed video output.
+    if (this.effectClips.length > 0 && hasVideo && finalVideoLabel) {
+      const effectRes = buildEffectFilters(this.effectClips, finalVideoLabel);
+      filterComplex += effectRes.filter;
+      finalVideoLabel = effectRes.finalVideoLabel || finalVideoLabel;
     }
 
     // Audio for video clips (aligned amix)
@@ -1418,7 +1430,7 @@ class SIMPLEFFMPEG {
    * Get the list of available schema module IDs.
    * Use these IDs with getSchema({ include: [...] }) or getSchema({ exclude: [...] }).
    *
-   * @returns {string[]} Array of module IDs: ['video', 'audio', 'image', 'text', 'subtitle', 'music']
+   * @returns {string[]} Array of module IDs: ['video', 'audio', 'image', 'color', 'effect', 'text', 'subtitle', 'music']
    */
   static getSchemaModules() {
     return getSchemaModules();

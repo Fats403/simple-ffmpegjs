@@ -375,6 +375,62 @@ describe("Integration Tests", () => {
 
       expect(preview.filterComplex).toContain("color=c=red");
     });
+
+    it("should include effect filters in preview", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+          position: 0,
+          end: 3,
+        },
+        {
+          type: "effect",
+          effect: "gaussianBlur",
+          position: 0.5,
+          end: 2.5,
+          fadeIn: 0.2,
+          fadeOut: 0.2,
+          params: { sigma: 5, amount: 0.7 },
+        },
+      ]);
+
+      const preview = await project.preview({
+        outputPath: "./test-effect-preview.mp4",
+      });
+
+      expect(preview.filterComplex).toContain("gblur=sigma=5");
+      expect(preview.filterComplex).toContain("overlay=shortest=1:eof_action=pass");
+    });
+
+    it("should export with timed overlay effect", async () => {
+      const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+      const outputPath = path.join(OUTPUT_DIR, "test-effect-timed.mp4");
+
+      await project.load([
+        {
+          type: "video",
+          url: path.join(FIXTURES_DIR, "test-video-3s.mp4"),
+          position: 0,
+          end: 3,
+        },
+        {
+          type: "effect",
+          effect: "filmGrain",
+          position: 0.5,
+          end: 2.5,
+          fadeIn: 0.3,
+          fadeOut: 0.3,
+          params: { amount: 0.4, temporal: true },
+        },
+      ]);
+
+      const result = await project.export({ outputPath });
+      expect(result).toBe(outputPath);
+      expect(fs.existsSync(outputPath)).toBe(true);
+    }, 30000);
   });
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("preview()", () => {

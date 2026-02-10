@@ -106,6 +106,172 @@ function createIssue(code, path, message, received = undefined) {
   return issue;
 }
 
+const EFFECT_TYPES = ["vignette", "filmGrain", "gaussianBlur", "colorAdjust"];
+const EFFECT_EASING = ["linear", "ease-in", "ease-out", "ease-in-out"];
+
+function validateFiniteNumber(value, path, errors, opts = {}) {
+  const { min = null, max = null, minInclusive = true, maxInclusive = true } = opts;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    errors.push(
+      createIssue(
+        ValidationCodes.INVALID_VALUE,
+        path,
+        "Must be a finite number",
+        value
+      )
+    );
+    return;
+  }
+  if (min != null) {
+    const failsMin = minInclusive ? value < min : value <= min;
+    if (failsMin) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_RANGE,
+          path,
+          minInclusive ? `Must be >= ${min}` : `Must be > ${min}`,
+          value
+        )
+      );
+      return;
+    }
+  }
+  if (max != null) {
+    const failsMax = maxInclusive ? value > max : value >= max;
+    if (failsMax) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_RANGE,
+          path,
+          maxInclusive ? `Must be <= ${max}` : `Must be < ${max}`,
+          value
+        )
+      );
+    }
+  }
+}
+
+function validateEffectClip(clip, path, errors) {
+  if (!EFFECT_TYPES.includes(clip.effect)) {
+    errors.push(
+      createIssue(
+        ValidationCodes.INVALID_VALUE,
+        `${path}.effect`,
+        `Invalid effect '${clip.effect}'. Expected: ${EFFECT_TYPES.join(", ")}`,
+        clip.effect
+      )
+    );
+  }
+
+  if (clip.fadeIn != null) {
+    validateFiniteNumber(clip.fadeIn, `${path}.fadeIn`, errors, { min: 0 });
+  }
+  if (clip.fadeOut != null) {
+    validateFiniteNumber(clip.fadeOut, `${path}.fadeOut`, errors, { min: 0 });
+  }
+  if (clip.easing != null && !EFFECT_EASING.includes(clip.easing)) {
+    errors.push(
+      createIssue(
+        ValidationCodes.INVALID_VALUE,
+        `${path}.easing`,
+        `Invalid easing '${clip.easing}'. Expected: ${EFFECT_EASING.join(", ")}`,
+        clip.easing
+      )
+    );
+  }
+
+  if (typeof clip.position === "number" && typeof clip.end === "number") {
+    const duration = clip.end - clip.position;
+    const fadeTotal = (clip.fadeIn || 0) + (clip.fadeOut || 0);
+    if (fadeTotal > duration + 1e-9) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_TIMELINE,
+          `${path}`,
+          `fadeIn + fadeOut (${fadeTotal}) must be <= clip duration (${duration})`,
+          { fadeIn: clip.fadeIn || 0, fadeOut: clip.fadeOut || 0, duration }
+        )
+      );
+    }
+  }
+
+  if (
+    clip.params == null ||
+    typeof clip.params !== "object" ||
+    Array.isArray(clip.params)
+  ) {
+    errors.push(
+      createIssue(
+        ValidationCodes.MISSING_REQUIRED,
+        `${path}.params`,
+        "params is required and must be an object for effect clips",
+        clip.params
+      )
+    );
+    return;
+  }
+
+  const params = clip.params;
+  if (params.amount != null) {
+    validateFiniteNumber(params.amount, `${path}.params.amount`, errors, {
+      min: 0,
+      max: 1,
+    });
+  }
+
+  if (clip.effect === "vignette") {
+    if (params.angle != null) {
+      validateFiniteNumber(params.angle, `${path}.params.angle`, errors, {
+        min: 0,
+        max: 6.283185307179586,
+      });
+    }
+  } else if (clip.effect === "filmGrain") {
+    if (params.temporal != null && typeof params.temporal !== "boolean") {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.params.temporal`,
+          "temporal must be a boolean",
+          params.temporal
+        )
+      );
+    }
+  } else if (clip.effect === "gaussianBlur") {
+    if (params.sigma != null) {
+      validateFiniteNumber(params.sigma, `${path}.params.sigma`, errors, {
+        min: 0,
+        max: 100,
+      });
+    }
+  } else if (clip.effect === "colorAdjust") {
+    if (params.brightness != null) {
+      validateFiniteNumber(params.brightness, `${path}.params.brightness`, errors, {
+        min: -1,
+        max: 1,
+      });
+    }
+    if (params.contrast != null) {
+      validateFiniteNumber(params.contrast, `${path}.params.contrast`, errors, {
+        min: 0,
+        max: 3,
+      });
+    }
+    if (params.saturation != null) {
+      validateFiniteNumber(params.saturation, `${path}.params.saturation`, errors, {
+        min: 0,
+        max: 3,
+      });
+    }
+    if (params.gamma != null) {
+      validateFiniteNumber(params.gamma, `${path}.params.gamma`, errors, {
+        min: 0.1,
+        max: 10,
+      });
+    }
+  }
+}
+
 /**
  * Validate a single clip and return issues
  */
@@ -125,6 +291,7 @@ function validateClip(clip, index, options = {}) {
     "image",
     "subtitle",
     "color",
+    "effect",
   ];
 
   // Check type
@@ -196,7 +363,7 @@ function validateClip(clip, index, options = {}) {
   }
 
   // Types that require position/end on timeline
-  const requiresTimeline = ["video", "audio", "text", "image", "color"].includes(
+  const requiresTimeline = ["video", "audio", "text", "image", "color", "effect"].includes(
     clip.type
   );
 
@@ -712,7 +879,9 @@ function validateClip(clip, index, options = {}) {
         "custom",
       ];
       const kbType =
-        typeof clip.kenBurns === "string" ? clip.kenBurns : clip.kenBurns.type;
+        typeof clip.kenBurns === "string"
+          ? clip.kenBurns
+          : clip.kenBurns.type;
       if (kbType && !validKenBurns.includes(kbType)) {
         errors.push(
           createIssue(
@@ -945,6 +1114,10 @@ function validateClip(clip, index, options = {}) {
         )
       );
     }
+  }
+
+  if (clip.type === "effect") {
+    validateEffectClip(clip, path, errors);
   }
 
   // Visual clip transition validation (video, image, color)

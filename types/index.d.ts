@@ -52,7 +52,8 @@ declare namespace SIMPLEFFMPEG {
     | "backgroundAudio"
     | "image"
     | "subtitle"
-    | "color";
+    | "color"
+    | "effect";
 
   interface BaseClip {
     type: ClipType;
@@ -245,12 +246,69 @@ declare namespace SIMPLEFFMPEG {
     transition?: { type: string; duration: number };
   }
 
+  type EffectName = "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
+  type EffectEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+
+  interface EffectParamsBase {
+    /** Base blend amount from 0 to 1 (default: 1) */
+    amount?: number;
+  }
+
+  interface VignetteEffectParams extends EffectParamsBase {
+    /** Vignette angle in radians (default: PI/5) */
+    angle?: number;
+  }
+
+  interface FilmGrainEffectParams extends EffectParamsBase {
+    /** Temporal grain changes every frame (default: true) */
+    temporal?: boolean;
+  }
+
+  interface GaussianBlurEffectParams extends EffectParamsBase {
+    /** Gaussian blur sigma (default derived from amount) */
+    sigma?: number;
+  }
+
+  interface ColorAdjustEffectParams extends EffectParamsBase {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    gamma?: number;
+  }
+
+  type EffectParams =
+    | VignetteEffectParams
+    | FilmGrainEffectParams
+    | GaussianBlurEffectParams
+    | ColorAdjustEffectParams;
+
+  /** Effect clip — timed overlay adjustment layer over composed video */
+  interface EffectClip {
+    type: "effect";
+    effect: EffectName;
+    /** Start time on timeline in seconds. Required for effect clips. */
+    position: number;
+    /** End time on timeline in seconds. Mutually exclusive with duration. */
+    end?: number;
+    /** Duration in seconds (alternative to end). end = position + duration. */
+    duration?: number;
+    /** Ramp-in duration in seconds */
+    fadeIn?: number;
+    /** Ramp-out duration in seconds */
+    fadeOut?: number;
+    /** Envelope easing for fade ramps */
+    easing?: EffectEasing;
+    /** Effect-specific params */
+    params: EffectParams;
+  }
+
   type Clip =
     | VideoClip
     | AudioClip
     | BackgroundMusicClip
     | ImageClip
     | ColorClip
+    | EffectClip
     | TextClip
     | SubtitleClip;
 
@@ -680,6 +738,7 @@ declare namespace SIMPLEFFMPEG {
     | "audio"
     | "image"
     | "color"
+    | "effect"
     | "text"
     | "subtitle"
     | "music";
