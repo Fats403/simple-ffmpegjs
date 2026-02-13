@@ -24,11 +24,14 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
   }
 
   if (effectClip.effect === "filmGrain") {
-    const grainStrength = clamp(
-      (typeof params.amount === "number" ? params.amount : 0.35) * 100,
+    // `strength` controls noise intensity (0-1, default 0.35).
+    // `amount` is used purely for overlay blend alpha.
+    const strength = clamp(
+      typeof params.strength === "number" ? params.strength : 0.35,
       0,
-      100
+      1
     );
+    const grainStrength = strength * 100;
     const flags = params.temporal === false ? "u" : "t+u";
     return {
       filter: `${inputLabel}noise=alls=${formatNumber(
@@ -53,24 +56,103 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
     };
   }
 
-  // colorAdjust
-  const brightness =
-    typeof params.brightness === "number" ? params.brightness : 0;
-  const contrast = typeof params.contrast === "number" ? params.contrast : 1;
-  const saturation =
-    typeof params.saturation === "number" ? params.saturation : 1;
-  const gamma = typeof params.gamma === "number" ? params.gamma : 1;
+  if (effectClip.effect === "colorAdjust") {
+    const brightness =
+      typeof params.brightness === "number" ? params.brightness : 0;
+    const contrast =
+      typeof params.contrast === "number" ? params.contrast : 1;
+    const saturation =
+      typeof params.saturation === "number" ? params.saturation : 1;
+    const gamma = typeof params.gamma === "number" ? params.gamma : 1;
 
-  return {
-    filter:
-      `${inputLabel}eq=` +
-      `brightness=${formatNumber(brightness, 4)}:` +
-      `contrast=${formatNumber(contrast, 4)}:` +
-      `saturation=${formatNumber(saturation, 4)}:` +
-      `gamma=${formatNumber(gamma, 4)}` +
-      `${outputLabel};`,
-    amount,
-  };
+    return {
+      filter:
+        `${inputLabel}eq=` +
+        `brightness=${formatNumber(brightness, 4)}:` +
+        `contrast=${formatNumber(contrast, 4)}:` +
+        `saturation=${formatNumber(saturation, 4)}:` +
+        `gamma=${formatNumber(gamma, 4)}` +
+        `${outputLabel};`,
+      amount,
+    };
+  }
+
+  if (effectClip.effect === "sepia") {
+    // Classic sepia tone via color channel mixer matrix
+    return {
+      filter:
+        `${inputLabel}colorchannelmixer=` +
+        `.393:.769:.189:0:` +
+        `.349:.686:.168:0:` +
+        `.272:.534:.131:0` +
+        `${outputLabel};`,
+      amount,
+    };
+  }
+
+  if (effectClip.effect === "blackAndWhite") {
+    const contrast =
+      typeof params.contrast === "number" ? params.contrast : 1;
+    let chain = `${inputLabel}hue=s=0`;
+    if (contrast !== 1) {
+      chain += `,eq=contrast=${formatNumber(contrast, 4)}`;
+    }
+    return {
+      filter: `${chain}${outputLabel};`,
+      amount,
+    };
+  }
+
+  if (effectClip.effect === "sharpen") {
+    // strength controls the unsharp amount (0-3, default 1.0), 5x5 luma matrix
+    const strength = clamp(
+      typeof params.strength === "number" ? params.strength : 1.0,
+      0,
+      3
+    );
+    return {
+      filter: `${inputLabel}unsharp=5:5:${formatNumber(strength, 4)}${outputLabel};`,
+      amount,
+    };
+  }
+
+  if (effectClip.effect === "chromaticAberration") {
+    // shift is horizontal pixel offset for red/blue channels (default 4, range 0-20)
+    const shift = clamp(
+      typeof params.shift === "number" ? params.shift : 4,
+      0,
+      20
+    );
+    const shiftInt = Math.round(shift);
+    return {
+      filter: `${inputLabel}rgbashift=rh=${shiftInt}:bh=${-shiftInt}${outputLabel};`,
+      amount,
+    };
+  }
+
+  if (effectClip.effect === "letterbox") {
+    // size is bar height as fraction of frame height (default 0.12, range 0-0.5)
+    const size = clamp(
+      typeof params.size === "number" ? params.size : 0.12,
+      0,
+      0.5
+    );
+    const color = typeof params.color === "string" ? params.color : "black";
+    const barExpr = `round(ih*${formatNumber(size, 4)})`;
+    return {
+      filter:
+        `${inputLabel}` +
+        `drawbox=y=0:w=iw:h='${barExpr}':color=${color}:t=fill,` +
+        `drawbox=y='ih-${barExpr}':w=iw:h='${barExpr}':color=${color}:t=fill` +
+        `${outputLabel};`,
+      amount,
+    };
+  }
+
+  // Unknown effect — guard against silent fallthrough
+  throw new Error(
+    `Unknown effect type '${effectClip.effect}' in buildProcessedEffectFilter`
+  );
 }
 
 function buildEffectFilters(effectClips, inputLabel) {

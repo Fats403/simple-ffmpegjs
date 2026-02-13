@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 
 const DEMOS = [
   { name: "color-clips",             file: "demo-color-clips.js" },
-  { name: "effects",                 file: "demo-effects-pack-1.js" },
+  { name: "effects",                 file: "demo-effects.js" },
   { name: "transitions",            file: "demo-transitions.js" },
   { name: "text-and-animations",    file: "demo-text-and-animations.js" },
   { name: "ken-burns",              file: "demo-ken-burns.js" },

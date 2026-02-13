@@ -154,7 +154,7 @@ async function loadBackgroundAudio(project, clipObj) {
 function loadText(project, clipObj) {
   const clip = {
     ...clipObj,
-    fontFile: clipObj.fontFile || null,
+    fontFile: clipObj.fontFile || project.options.fontFile || null,
     fontFamily: clipObj.fontFamily || C.DEFAULT_FONT_FAMILY,
     fontSize: clipObj.fontSize || C.DEFAULT_FONT_SIZE,
     fontColor: clipObj.fontColor || C.DEFAULT_FONT_COLOR,
@@ -180,7 +180,6 @@ function loadEffect(project, clipObj) {
     ...clipObj,
     fadeIn: typeof clipObj.fadeIn === "number" ? clipObj.fadeIn : 0,
     fadeOut: typeof clipObj.fadeOut === "number" ? clipObj.fadeOut : 0,
-    easing: clipObj.easing || "linear",
     params: clipObj.params || {},
   };
   project.effectClips.push(clip);

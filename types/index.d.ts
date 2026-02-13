@@ -246,8 +246,16 @@ declare namespace SIMPLEFFMPEG {
     transition?: { type: string; duration: number };
   }
 
-  type EffectName = "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
-  type EffectEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+  type EffectName =
+    | "vignette"
+    | "filmGrain"
+    | "gaussianBlur"
+    | "colorAdjust"
+    | "sepia"
+    | "blackAndWhite"
+    | "sharpen"
+    | "chromaticAberration"
+    | "letterbox";
 
   interface EffectParamsBase {
     /** Base blend amount from 0 to 1 (default: 1) */
@@ -260,6 +268,8 @@ declare namespace SIMPLEFFMPEG {
   }
 
   interface FilmGrainEffectParams extends EffectParamsBase {
+    /** Noise intensity 0-1 (default: 0.35). Independent from blend amount. */
+    strength?: number;
     /** Temporal grain changes every frame (default: true) */
     temporal?: boolean;
   }
@@ -276,11 +286,40 @@ declare namespace SIMPLEFFMPEG {
     gamma?: number;
   }
 
+  interface SepiaEffectParams extends EffectParamsBase {}
+
+  interface BlackAndWhiteEffectParams extends EffectParamsBase {
+    /** Optional contrast boost (default: 1, range 0-3) */
+    contrast?: number;
+  }
+
+  interface SharpenEffectParams extends EffectParamsBase {
+    /** Unsharp amount (default: 1.0, range 0-3) */
+    strength?: number;
+  }
+
+  interface ChromaticAberrationEffectParams extends EffectParamsBase {
+    /** Horizontal pixel offset for R/B channels (default: 4, range 0-20) */
+    shift?: number;
+  }
+
+  interface LetterboxEffectParams extends EffectParamsBase {
+    /** Bar height as fraction of frame height (default: 0.12, range 0-0.5) */
+    size?: number;
+    /** Bar color (default: "black") */
+    color?: string;
+  }
+
   type EffectParams =
     | VignetteEffectParams
     | FilmGrainEffectParams
     | GaussianBlurEffectParams
-    | ColorAdjustEffectParams;
+    | ColorAdjustEffectParams
+    | SepiaEffectParams
+    | BlackAndWhiteEffectParams
+    | SharpenEffectParams
+    | ChromaticAberrationEffectParams
+    | LetterboxEffectParams;
 
   /** Effect clip — timed overlay adjustment layer over composed video */
   interface EffectClip {
@@ -296,8 +335,6 @@ declare namespace SIMPLEFFMPEG {
     fadeIn?: number;
     /** Ramp-out duration in seconds */
     fadeOut?: number;
-    /** Envelope easing for fade ramps */
-    easing?: EffectEasing;
     /** Effect-specific params */
     params: EffectParams;
   }
@@ -400,6 +437,8 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
+    /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
+    fontFile?: string;
   }
 
   /** Log entry passed to onLog callback */

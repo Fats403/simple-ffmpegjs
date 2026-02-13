@@ -246,8 +246,16 @@ declare namespace SIMPLEFFMPEG {
     transition?: { type: string; duration: number };
   }
 
-  type EffectName = "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
-  type EffectEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
+  type EffectName =
+    | "vignette"
+    | "filmGrain"
+    | "gaussianBlur"
+    | "colorAdjust"
+    | "sepia"
+    | "blackAndWhite"
+    | "sharpen"
+    | "chromaticAberration"
+    | "letterbox";
 
   interface EffectParamsBase {
     amount?: number;
@@ -258,6 +266,7 @@ declare namespace SIMPLEFFMPEG {
   }
 
   interface FilmGrainEffectParams extends EffectParamsBase {
+    strength?: number;
     temporal?: boolean;
   }
 
@@ -272,11 +281,35 @@ declare namespace SIMPLEFFMPEG {
     gamma?: number;
   }
 
+  interface SepiaEffectParams extends EffectParamsBase {}
+
+  interface BlackAndWhiteEffectParams extends EffectParamsBase {
+    contrast?: number;
+  }
+
+  interface SharpenEffectParams extends EffectParamsBase {
+    strength?: number;
+  }
+
+  interface ChromaticAberrationEffectParams extends EffectParamsBase {
+    shift?: number;
+  }
+
+  interface LetterboxEffectParams extends EffectParamsBase {
+    size?: number;
+    color?: string;
+  }
+
   type EffectParams =
     | VignetteEffectParams
     | FilmGrainEffectParams
     | GaussianBlurEffectParams
-    | ColorAdjustEffectParams;
+    | ColorAdjustEffectParams
+    | SepiaEffectParams
+    | BlackAndWhiteEffectParams
+    | SharpenEffectParams
+    | ChromaticAberrationEffectParams
+    | LetterboxEffectParams;
 
   /** Effect clip — timed overlay adjustment layer over composed video */
   interface EffectClip {
@@ -287,7 +320,6 @@ declare namespace SIMPLEFFMPEG {
     duration?: number;
     fadeIn?: number;
     fadeOut?: number;
-    easing?: EffectEasing;
     params: EffectParams;
   }
 
@@ -389,6 +421,8 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
+    /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
+    fontFile?: string;
   }
 
   /** Log entry passed to onLog callback */

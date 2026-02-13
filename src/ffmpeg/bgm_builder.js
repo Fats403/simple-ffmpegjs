@@ -43,15 +43,31 @@ function buildBackgroundMusicMix(
     const adelay = effectivePosition * 1000;
     const trimEnd = effectiveCutFrom + (effectiveEnd - effectivePosition);
     const outLabel = `[bg${i}]`;
-    filter += `[${inputIndex}:a]volume=${effectiveVolume},atrim=start=${effectiveCutFrom}:end=${trimEnd},adelay=${adelay}|${adelay},asetpts=PTS-STARTPTS${outLabel};`;
+    filter += `[${inputIndex}:a]volume=${effectiveVolume},atrim=start=${effectiveCutFrom}:end=${trimEnd},asetpts=PTS-STARTPTS,adelay=${adelay}|${adelay}${outLabel};`;
     bgLabels.push(outLabel);
   });
 
   if (bgLabels.length > 0) {
     if (existingAudioLabel) {
-      filter += `${existingAudioLabel}${bgLabels.join("")}amix=inputs=${
-        bgLabels.length + 1
-      }:duration=longest[finalaudio];`;
+      // Generate a silence anchor from time 0 so that amix starts producing
+      // output immediately. Without this, amix waits for ALL inputs to have
+      // frames before outputting — if the existing audio (e.g. delayed video
+      // audio) starts later on the timeline, background music is silenced
+      // until that point.
+      const anchorDur = Math.max(projectDuration, visualEnd || 0, 0.1);
+      const padLabel = "[_bgmpad]";
+      filter += `anullsrc=cl=stereo,atrim=end=${anchorDur}${padLabel};`;
+
+      // Use normalize=0 with explicit weights so the silence anchor
+      // contributes no audio energy while preserving the same volume
+      // balance as a direct amix of the real inputs.
+      const realCount = bgLabels.length + 1; // bgm tracks + existing audio
+      const w = (1 / realCount).toFixed(6);
+      const weights = ["0", ...Array(realCount).fill(w)].join(" ");
+
+      filter += `${padLabel}${existingAudioLabel}${bgLabels.join("")}amix=inputs=${
+        bgLabels.length + 2
+      }:duration=longest:weights='${weights}':normalize=0[finalaudio];`;
       return { filter, finalAudioLabel: "[finalaudio]", hasAudio: true };
     }
     filter += `${bgLabels.join("")}amix=inputs=${

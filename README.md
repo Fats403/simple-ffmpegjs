@@ -24,14 +24,14 @@
 - [API Reference](#api-reference)
   - [Constructor](#constructor)
   - [Methods](#methods)
-  - [Clip Types](#clip-types)
+  - [Auto-Sequencing & Duration Shorthand](#auto-sequencing--duration-shorthand)
+  - [Clip Types](#clip-types) — Video, Image, Color, Effect, Text, Subtitle, Audio, Background Music
   - [Platform Presets](#platform-presets)
   - [Watermarks](#watermarks)
   - [Progress Information](#progress-information)
   - [Logging](#logging)
   - [Error Handling](#error-handling)
   - [Cancellation](#cancellation)
-  - [Color Clips](#color-clips)
 - [Examples](#examples)
   - [Clips & Transitions](#clips--transitions)
   - [Text & Animations](#text--animations)
@@ -66,19 +66,26 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 
 ## Features
 
+**Video & Images**
 - **Video Concatenation** — Join multiple clips with optional xfade transitions
+- **Image Support** — Ken Burns effects (zoom, pan) for static images
+- **Color Clips** — Flat colors and gradients (linear, radial) as first-class timeline clips with full transition support
+
+**Audio**
 - **Audio Mixing** — Layer audio tracks, voiceovers, and background music
+
+**Overlays & Effects**
 - **Text Overlays** — Static, word-by-word, and cumulative text with animations
 - **Text Animations** — Typewriter, scale-in, pulse, fade effects
 - **Karaoke Mode** — Word-by-word highlighting with customizable colors
 - **Subtitle Import** — Load SRT, VTT, ASS/SSA subtitle files
 - **Watermarks** — Text or image overlays with positioning and timing control
+- **Effect Clips** — Timed overlay effects (vignette, film grain, blur, color adjust, sepia, black & white, sharpen, chromatic aberration, letterbox) with fade-in/out envelopes
+
+**Developer Experience**
 - **Platform Presets** — Quick configuration for TikTok, YouTube, Instagram, etc.
-- **Image Support** — Ken Burns effects (zoom, pan) for static images
 - **Progress Tracking** — Real-time export progress callbacks
 - **Cancellation** — AbortController support for stopping exports
-- **Color Clips** — Flat colors and gradients (linear, radial) as first-class timeline clips with full transition support
-- **Effect Clips** — Timed overlay effects (vignette, film grain, gaussian blur, color adjustment) with fade-in/out envelopes
 - **Auto-Batching** — Automatically splits complex filter graphs to avoid OS command limits
 - **Schema Export** — Generate a structured description of the clip format for documentation, code generation, or AI context
 - **Pre-Validation** — Validate clip configurations before processing with structured, machine-readable error codes
@@ -249,7 +256,7 @@ Available modules:
 | `audio`    | Standalone audio clips                                      |
 | `image`    | Image clips, Ken Burns effects                              |
 | `color`    | Color clips — flat colors, linear/radial gradients          |
-| `effect`   | Overlay adjustment effects — vignette, grain, blur, grading |
+| `effect`   | Overlay adjustment effects — vignette, grain, blur, color adjust, sepia, B&W, sharpen, chromatic aberration, letterbox |
 | `text`     | Text overlays — all modes, animations, positioning, styling |
 | `subtitle` | Subtitle file import (SRT, VTT, ASS, SSA)                   |
 | `music`    | Background music / background audio, looping                |
@@ -288,7 +295,25 @@ new SIMPLEFFMPEG(options?: {
   fps?: number;             // Frame rate (default: 30)
   validationMode?: 'warn' | 'strict';  // Validation behavior (default: 'warn')
   preset?: string;          // Platform preset (e.g., 'tiktok', 'youtube', 'instagram-post')
+  fontFile?: string;        // Default font file for all text clips (individual clips can override)
 })
+```
+
+When `fontFile` is set at the project level, every text clip (including karaoke) inherits it automatically. You can still override it on any individual clip:
+
+```js
+const project = new SIMPLEFFMPEG({
+  preset: "tiktok",
+  fontFile: "./fonts/Montserrat-Bold.ttf",   // applies to all text clips
+});
+
+await project.load([
+  { type: "video", url: "intro.mp4", position: 0, end: 10 },
+  // Uses the global font
+  { type: "text", text: "Hello!", position: 1, end: 4, fontSize: 72 },
+  // Overrides with a different font
+  { type: "text", text: "Special", position: 5, end: 8, fontFile: "./fonts/Italic.otf" },
+]);
 ```
 
 ### Methods
@@ -319,43 +344,6 @@ SIMPLEFFMPEG.getDuration(clips); // 14.5
 ```
 
 Useful for computing text overlay timings or background music end times before calling `load()`.
-
-**Duration and Auto-Sequencing:**
-
-For video, image, and audio clips, you can use shorthand to avoid specifying explicit `position` and `end` values:
-
-- **`duration`** — Use instead of `end`. The library computes `end = position + duration`. You cannot specify both `duration` and `end` on the same clip.
-- **Omit `position`** — The clip is placed immediately after the previous clip on its track. Video and image clips share the visual track; audio clips have their own track. The first clip defaults to `position: 0`.
-
-These can be combined:
-
-```ts
-// Before: manual position/end for every clip
-await project.load([
-  { type: "video", url: "./a.mp4", position: 0, end: 5 },
-  { type: "video", url: "./b.mp4", position: 5, end: 10 },
-  { type: "video", url: "./c.mp4", position: 10, end: 18, cutFrom: 3 },
-]);
-
-// After: auto-sequencing + duration
-await project.load([
-  { type: "video", url: "./a.mp4", duration: 5 },
-  { type: "video", url: "./b.mp4", duration: 5 },
-  { type: "video", url: "./c.mp4", duration: 8, cutFrom: 3 },
-]);
-```
-
-You can mix explicit and implicit positioning freely. Clips with explicit `position` are placed there; subsequent auto-sequenced clips follow from the last clip's end:
-
-```ts
-await project.load([
-  { type: "video", url: "./a.mp4", duration: 5 }, // position: 0, end: 5
-  { type: "video", url: "./b.mp4", position: 10, end: 15 }, // explicit gap
-  { type: "video", url: "./c.mp4", duration: 5 }, // position: 15, end: 20
-]);
-```
-
-Text clips always require an explicit `position` (they're overlays on specific moments). Background music and subtitle clips already have optional `position`/`end` with their own defaults.
 
 #### `SIMPLEFFMPEG.probe(filePath)`
 
@@ -482,6 +470,43 @@ await project.preview(options?: ExportOptions): Promise<{
 }>
 ```
 
+### Auto-Sequencing & Duration Shorthand
+
+For video, image, and audio clips, you can use shorthand to avoid specifying explicit `position` and `end` values:
+
+- **`duration`** — Use instead of `end`. The library computes `end = position + duration`. You cannot specify both `duration` and `end` on the same clip.
+- **Omit `position`** — The clip is placed immediately after the previous clip on its track. Video and image clips share the visual track; audio clips have their own track. The first clip defaults to `position: 0`.
+
+These can be combined:
+
+```ts
+// Before: manual position/end for every clip
+await project.load([
+  { type: "video", url: "./a.mp4", position: 0, end: 5 },
+  { type: "video", url: "./b.mp4", position: 5, end: 10 },
+  { type: "video", url: "./c.mp4", position: 10, end: 18, cutFrom: 3 },
+]);
+
+// After: auto-sequencing + duration
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 },
+  { type: "video", url: "./b.mp4", duration: 5 },
+  { type: "video", url: "./c.mp4", duration: 8, cutFrom: 3 },
+]);
+```
+
+You can mix explicit and implicit positioning freely. Clips with explicit `position` are placed there; subsequent auto-sequenced clips follow from the last clip's end:
+
+```ts
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 }, // position: 0, end: 5
+  { type: "video", url: "./b.mp4", position: 10, end: 15 }, // explicit gap
+  { type: "video", url: "./c.mp4", duration: 5 }, // position: 15, end: 20
+]);
+```
+
+Text clips always require an explicit `position` (they're overlays on specific moments). Background music and subtitle clips already have optional `position`/`end` with their own defaults.
+
 ### Clip Types
 
 #### Video Clip
@@ -503,47 +528,6 @@ await project.preview(options?: ExportOptions): Promise<{
 ```
 
 All [xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
-
-#### Audio Clip
-
-```ts
-{
-  type: "audio";
-  url: string;
-  position?: number;        // Omit to auto-sequence after previous audio clip
-  end?: number;             // Use end OR duration, not both
-  duration?: number;        // Duration in seconds (alternative to end)
-  cutFrom?: number;
-  volume?: number;
-}
-```
-
-#### Background Music
-
-```ts
-{
-  type: "music";            // or "backgroundAudio"
-  url: string;
-  position?: number;        // default: 0
-  end?: number;             // default: project duration
-  cutFrom?: number;
-  volume?: number;          // default: 0.2
-  loop?: boolean;           // Loop audio to fill video duration
-}
-```
-
-Background music is mixed after transitions, so video crossfades won't affect its volume.
-
-**Looping Music:**
-
-If your music track is shorter than your video, enable looping:
-
-```ts
-await project.load([
-  { type: "video", url: "./video.mp4", position: 0, end: 120 },
-  { type: "music", url: "./30s-track.mp3", volume: 0.3, loop: true },
-]);
-```
 
 #### Image Clip
 
@@ -575,6 +559,8 @@ await project.load([
 
 #### Color Clip
 
+Color clips add flat colors or gradients as first-class visual elements. They support transitions, text overlays, and all the same timeline features as video and image clips. Use them for intros, outros, title cards, or anywhere you need a background.
+
 ```ts
 {
   type: "color";
@@ -593,6 +579,73 @@ await project.load([
 }
 ```
 
+`color` accepts any valid FFmpeg color name or hex code:
+
+```ts
+{ type: "color", color: "navy", position: 0, end: 3 }
+{ type: "color", color: "#1a1a2e", position: 0, end: 3 }
+```
+
+**Gradients:**
+
+```ts
+// Linear gradient (vertical by default)
+{
+  type: "color",
+  color: { type: "linear-gradient", colors: ["#0a0a2e", "#4a148c"] },
+  position: 0,
+  end: 4,
+}
+
+// Horizontal linear gradient
+{
+  type: "color",
+  color: { type: "linear-gradient", colors: ["#e74c3c", "#f1c40f", "#2ecc71"], direction: "horizontal" },
+  position: 0,
+  end: 4,
+}
+
+// Radial gradient
+{
+  type: "color",
+  color: { type: "radial-gradient", colors: ["#ff8c00", "#1a0000"] },
+  position: 0,
+  end: 3,
+}
+```
+
+**With transitions:**
+
+```ts
+await project.load([
+  { type: "color", color: "black", position: 0, end: 3 },
+  {
+    type: "video",
+    url: "./main.mp4",
+    position: 3,
+    end: 8,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  {
+    type: "color",
+    color: { type: "radial-gradient", colors: ["#2c3e50", "#000000"] },
+    position: 8,
+    end: 11,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  {
+    type: "text",
+    text: "The End",
+    position: 8.5,
+    end: 10.5,
+    fontSize: 64,
+    fontColor: "white",
+  },
+]);
+```
+
+> **Note:** Timeline gaps (periods with no visual content) always produce a validation error. If a gap is intentional, fill it with a `type: "color"` clip or adjust your clip positions to close the gap.
+
 #### Effect Clip
 
 Effects are overlay adjustment layers. They apply to the already-composed video
@@ -601,33 +654,29 @@ for a time window, and can ramp in/out smoothly (instead of appearing instantly)
 ```ts
 {
   type: "effect";
-  effect: "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust";
+  effect: EffectName;         // See table below
   position: number;           // Required timeline start (seconds)
   end?: number;               // Use end OR duration, not both
   duration?: number;          // Duration in seconds (alternative to end)
   fadeIn?: number;            // Optional smooth ramp-in (seconds)
   fadeOut?: number;           // Optional smooth ramp-out (seconds)
-  easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out"; // default: "linear"
-  params: {
-    amount?: number;          // Blend amount 0..1 (default: 1)
-
-    // vignette
-    angle?: number;           // radians
-
-    // filmGrain
-    temporal?: boolean;       // default: true
-
-    // gaussianBlur
-    sigma?: number;
-
-    // colorAdjust
-    brightness?: number;      // -1..1
-    contrast?: number;        // 0..3
-    saturation?: number;      // 0..3
-    gamma?: number;           // 0.1..10
-  };
+  params: EffectParams;       // Effect-specific parameters (see table below)
 }
 ```
+
+All effects accept `params.amount` (0-1, default 1) to control the blend intensity. Additional per-effect parameters:
+
+| Effect | Description | Extra Params |
+|---|---|---|
+| `vignette` | Darkened edges | `angle`: radians (default: PI/5) |
+| `filmGrain` | Noise overlay | `strength`: noise intensity 0-1 (default: 0.35), `temporal`: boolean (default: true) |
+| `gaussianBlur` | Gaussian blur | `sigma`: blur radius (default derived from amount) |
+| `colorAdjust` | Color grading | `brightness`: -1..1, `contrast`: 0..3, `saturation`: 0..3, `gamma`: 0.1..10 |
+| `sepia` | Warm vintage tone | — |
+| `blackAndWhite` | Desaturate to grayscale | `contrast`: boost 0-3 (default: 1) |
+| `sharpen` | Sharpen detail | `strength`: unsharp amount 0-3 (default: 1) |
+| `chromaticAberration` | RGB channel split | `shift`: pixel offset 0-20 (default: 4) |
+| `letterbox` | Cinematic bars | `size`: bar height as fraction of frame 0-0.5 (default: 0.12), `color`: string (default: "black") |
 
 #### Text Clip
 
@@ -696,6 +745,47 @@ Import external subtitle files (SRT, VTT, ASS/SSA):
   borderWidth?: number;
   opacity?: number;
 }
+```
+
+#### Audio Clip
+
+```ts
+{
+  type: "audio";
+  url: string;
+  position?: number;        // Omit to auto-sequence after previous audio clip
+  end?: number;             // Use end OR duration, not both
+  duration?: number;        // Duration in seconds (alternative to end)
+  cutFrom?: number;
+  volume?: number;
+}
+```
+
+#### Background Music
+
+```ts
+{
+  type: "music";            // or "backgroundAudio"
+  url: string;
+  position?: number;        // default: 0
+  end?: number;             // default: project duration
+  cutFrom?: number;
+  volume?: number;          // default: 0.2
+  loop?: boolean;           // Loop audio to fill video duration
+}
+```
+
+Background music is mixed after transitions, so video crossfades won't affect its volume.
+
+**Looping Music:**
+
+If your music track is shorter than your video, enable looping:
+
+```ts
+await project.load([
+  { type: "video", url: "./video.mp4", position: 0, end: 120 },
+  { type: "music", url: "./30s-track.mp3", volume: 0.3, loop: true },
+]);
 ```
 
 ### Platform Presets
@@ -910,90 +1000,6 @@ try {
 }
 ```
 
-### Color Clips
-
-Color clips let you add flat colors or gradients as first-class visual elements in your timeline. They support transitions, text overlays, and all the same timeline features as video and image clips. Use them for intros, outros, title cards, or anywhere you need a background:
-
-**Flat color:**
-
-```ts
-await project.load([
-  // Black intro screen for 2 seconds
-  { type: "color", color: "black", position: 0, end: 2 },
-  // Video starts at 2s
-  { type: "video", url: "./clip.mp4", position: 2, end: 7 },
-]);
-```
-
-`color` accepts any valid FFmpeg color name or hex code:
-
-```ts
-{ type: "color", color: "navy", position: 0, end: 3 }
-{ type: "color", color: "#1a1a2e", position: 0, end: 3 }
-```
-
-**Gradients:**
-
-```ts
-// Linear gradient (vertical by default)
-{
-  type: "color",
-  color: { type: "linear-gradient", colors: ["#0a0a2e", "#4a148c"] },
-  position: 0,
-  end: 4,
-}
-
-// Horizontal linear gradient
-{
-  type: "color",
-  color: { type: "linear-gradient", colors: ["#e74c3c", "#f1c40f", "#2ecc71"], direction: "horizontal" },
-  position: 0,
-  end: 4,
-}
-
-// Radial gradient
-{
-  type: "color",
-  color: { type: "radial-gradient", colors: ["#ff8c00", "#1a0000"] },
-  position: 0,
-  end: 3,
-}
-```
-
-**With transitions:**
-
-Color clips support the same `transition` property as video and image clips:
-
-```ts
-await project.load([
-  { type: "color", color: "black", position: 0, end: 3 },
-  {
-    type: "video",
-    url: "./main.mp4",
-    position: 3,
-    end: 8,
-    transition: { type: "fade", duration: 0.5 },
-  },
-  {
-    type: "color",
-    color: { type: "radial-gradient", colors: ["#2c3e50", "#000000"] },
-    position: 8,
-    end: 11,
-    transition: { type: "fade", duration: 0.5 },
-  },
-  {
-    type: "text",
-    text: "The End",
-    position: 8.5,
-    end: 10.5,
-    fontSize: 64,
-    fontColor: "white",
-  },
-]);
-```
-
-> **Note:** Timeline gaps (periods with no visual content) always produce a validation error. If a gap is intentional, fill it with a `type: "color"` clip or adjust your clip positions to close the gap.
-
 ## Examples
 
 ### Clips & Transitions
@@ -1055,7 +1061,7 @@ await project.load([
 ]);
 ```
 
-When `position` is omitted, clips are placed sequentially — each one starts where the previous one ended. `duration` is an alternative to `end`: the library computes `end = position + duration`. The explicit form (`position: 0, end: 3`) still works identically.
+When `position` is omitted, clips are placed sequentially — see [Auto-Sequencing & Duration Shorthand](#auto-sequencing--duration-shorthand) for details.
 
 > **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
 > If you pass `width`/`height`, they override probed dimensions (useful for remote or generated images).
@@ -1533,7 +1539,7 @@ Available demo scripts (can also be run individually):
 | Script                          | What it tests                                                                          |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
 | `demo-color-clips.js`           | Flat colors, linear/radial gradients, transitions, full composition with color clips   |
-| `demo-effects-pack-1.js`        | Timed overlay effects (vignette, grain, blur, color adjustment) with smooth ramps      |
+| `demo-effects.js`               | Timed overlay effects (all 9 effects) with smooth fade ramps                           |
 | `demo-transitions.js`           | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions  |
 | `demo-text-and-animations.js`   | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
 | `demo-ken-burns.js`             | All 6 presets, smart anchors, custom diagonal, slideshow with transitions              |

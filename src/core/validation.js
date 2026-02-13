@@ -106,8 +106,17 @@ function createIssue(code, path, message, received = undefined) {
   return issue;
 }
 
-const EFFECT_TYPES = ["vignette", "filmGrain", "gaussianBlur", "colorAdjust"];
-const EFFECT_EASING = ["linear", "ease-in", "ease-out", "ease-in-out"];
+const EFFECT_TYPES = [
+  "vignette",
+  "filmGrain",
+  "gaussianBlur",
+  "colorAdjust",
+  "sepia",
+  "blackAndWhite",
+  "sharpen",
+  "chromaticAberration",
+  "letterbox",
+];
 
 function validateFiniteNumber(value, path, errors, opts = {}) {
   const { min = null, max = null, minInclusive = true, maxInclusive = true } = opts;
@@ -169,17 +178,6 @@ function validateEffectClip(clip, path, errors) {
   if (clip.fadeOut != null) {
     validateFiniteNumber(clip.fadeOut, `${path}.fadeOut`, errors, { min: 0 });
   }
-  if (clip.easing != null && !EFFECT_EASING.includes(clip.easing)) {
-    errors.push(
-      createIssue(
-        ValidationCodes.INVALID_VALUE,
-        `${path}.easing`,
-        `Invalid easing '${clip.easing}'. Expected: ${EFFECT_EASING.join(", ")}`,
-        clip.easing
-      )
-    );
-  }
-
   if (typeof clip.position === "number" && typeof clip.end === "number") {
     const duration = clip.end - clip.position;
     const fadeTotal = (clip.fadeIn || 0) + (clip.fadeOut || 0);
@@ -227,6 +225,12 @@ function validateEffectClip(clip, path, errors) {
       });
     }
   } else if (clip.effect === "filmGrain") {
+    if (params.strength != null) {
+      validateFiniteNumber(params.strength, `${path}.params.strength`, errors, {
+        min: 0,
+        max: 1,
+      });
+    }
     if (params.temporal != null && typeof params.temporal !== "boolean") {
       errors.push(
         createIssue(
@@ -268,6 +272,46 @@ function validateEffectClip(clip, path, errors) {
         min: 0.1,
         max: 10,
       });
+    }
+  } else if (clip.effect === "sepia") {
+    // sepia only uses amount (base param) — no extra params to validate
+  } else if (clip.effect === "blackAndWhite") {
+    if (params.contrast != null) {
+      validateFiniteNumber(params.contrast, `${path}.params.contrast`, errors, {
+        min: 0,
+        max: 3,
+      });
+    }
+  } else if (clip.effect === "sharpen") {
+    if (params.strength != null) {
+      validateFiniteNumber(params.strength, `${path}.params.strength`, errors, {
+        min: 0,
+        max: 3,
+      });
+    }
+  } else if (clip.effect === "chromaticAberration") {
+    if (params.shift != null) {
+      validateFiniteNumber(params.shift, `${path}.params.shift`, errors, {
+        min: 0,
+        max: 20,
+      });
+    }
+  } else if (clip.effect === "letterbox") {
+    if (params.size != null) {
+      validateFiniteNumber(params.size, `${path}.params.size`, errors, {
+        min: 0,
+        max: 0.5,
+      });
+    }
+    if (params.color != null && typeof params.color !== "string") {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.params.color`,
+          "color must be a string",
+          params.color
+        )
+      );
     }
   }
 }

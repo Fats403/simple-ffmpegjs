@@ -56,6 +56,7 @@ class SIMPLEFFMPEG {
    * @param {number} options.fps - Frames per second (default: 30)
    * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
+   * @param {string} options.fontFile - Default font file path (.ttf, .otf) applied to all text clips unless overridden per-clip
    *
    * @example
    * const project = new SIMPLEFFMPEG({ preset: 'tiktok' });
@@ -87,6 +88,7 @@ class SIMPLEFFMPEG {
       height: options.height || presetConfig.height || C.DEFAULT_HEIGHT,
       validationMode: options.validationMode || C.DEFAULT_VALIDATION_MODE,
       preset: options.preset || null,
+      fontFile: options.fontFile || null,
     };
     this.videoOrAudioClips = [];
     this.textClips = [];

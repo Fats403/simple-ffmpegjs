@@ -45,6 +45,23 @@
  *          Should hear three distinct audio sources blended together.
  *          Video tone + standalone tone + music tone.
  *
+ * DEMO 6: BGM starts before first video (regression test)        ~9s total
+ * ───────────────────────────────────────────────────────────────────────────
+ *   0-5s   Black screen — only background music playing (no video audio)
+ *   5-8s   RED video appears at 5s; BGM + video audio mixed together
+ *   8-9s   BLUE video; BGM continues
+ *          KEY CHECK: Background music must be audible from second 0,
+ *          NOT starting at second 5 when the first video appears.
+ *          This was the original bug — amix blocked on delayed video audio.
+ *
+ * DEMO 7: BGM looping with late video start                      ~12s total
+ * ───────────────────────────────────────────────────────────────────────────
+ *   0-7s   Black screen — only looping background music (5s clip loops)
+ *   7-10s  RED video appears; BGM continues looping underneath
+ *   10-12s BLUE video; BGM still looping
+ *          KEY CHECK: BGM should loop seamlessly from 0s, well before
+ *          any video appears at 7s. Confirms loop + late start works.
+ *
  * ============================================================================
  */
 
@@ -126,6 +143,40 @@ async function demo5_MultiSourceMix() {
   console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
 }
 
+async function demo6_BgmBeforeFirstVideo() {
+  log("DEMO 6: BGM starts before first video (regression test)");
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
+  await project.load([
+    // Black screen fills the gap before the first video
+    { type: "color", color: "#000000", position: 0, end: 5 },
+    // First video doesn't appear until 5 seconds in
+    { type: "video", url: path.join(FIXTURES_DIR, "test-video-red-3s.mp4"), position: 5, end: 8, volume: 0.3 },
+    { type: "video", url: path.join(FIXTURES_DIR, "test-video-blue-3s.mp4"), position: 8, end: 9, volume: 0.3 },
+    // BGM at position 0 — should be audible from the very start
+    { type: "music", url: path.join(FIXTURES_DIR, "test-audio-5s.mp3"), volume: 0.6 },
+  ]);
+  const out = path.join(OUTPUT_DIR, "06-bgm-before-video.mp4");
+  await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
+  console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
+}
+
+async function demo7_BgmLoopWithLateVideo() {
+  log("DEMO 7: BGM looping with late video start (regression test)");
+  const project = new SIMPLEFFMPEG({ width: 640, height: 480, fps: 30 });
+  await project.load([
+    // Black screen fills the gap before the first video
+    { type: "color", color: "#000000", position: 0, end: 7 },
+    // Videos don't start until 7 seconds in
+    { type: "video", url: path.join(FIXTURES_DIR, "test-video-red-3s.mp4"), position: 7, end: 10, volume: 0.2 },
+    { type: "video", url: path.join(FIXTURES_DIR, "test-video-blue-3s.mp4"), position: 10, end: 12, volume: 0.2 },
+    // BGM at position 0 with loop — must play from second 0, not second 7
+    { type: "music", url: path.join(FIXTURES_DIR, "test-audio-5s.mp3"), volume: 0.6, loop: true },
+  ]);
+  const out = path.join(OUTPUT_DIR, "07-bgm-loop-late-video.mp4");
+  await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
+  console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -136,6 +187,8 @@ const { fail } = await runDemos("Audio Mixing — Visual Demo", OUTPUT_DIR, [
   demo3_StandaloneAudio,
   demo4_MusicLoop,
   demo5_MultiSourceMix,
+  demo6_BgmBeforeFirstVideo,
+  demo7_BgmLoopWithLateVideo,
 ]);
 
 console.log(`  WHAT TO CHECK (listen carefully):
@@ -144,6 +197,8 @@ console.log(`  WHAT TO CHECK (listen carefully):
   03  Silence until 2s, sine tone from 2-5s, silence after 5s
   04  Continuous audio for full 6s (loop restarts at 5s)
   05  Three layered tones: video + standalone (1-4s) + background
+  06  BGM audible from 0s — NOT starting at 5s when video appears
+  07  Looping BGM audible from 0s — NOT starting at 7s when video appears
 `);
 
 if (fail > 0) process.exit(1);
