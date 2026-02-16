@@ -1,4 +1,5 @@
 const fs = require("fs");
+const nodePath = require("path");
 const { detectVisualGaps } = require("./gaps");
 
 // ========================================================================
@@ -117,6 +118,62 @@ const EFFECT_TYPES = [
   "chromaticAberration",
   "letterbox",
 ];
+
+const VIDEO_EXTENSIONS = new Set([
+  ".mp4",
+  ".mov",
+  ".m4v",
+  ".mkv",
+  ".webm",
+  ".avi",
+  ".flv",
+  ".wmv",
+  ".mpg",
+  ".mpeg",
+  ".m2ts",
+  ".mts",
+  ".ts",
+  ".3gp",
+  ".ogv",
+]);
+
+const IMAGE_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".webp",
+  ".bmp",
+  ".tif",
+  ".tiff",
+  ".gif",
+  ".avif",
+]);
+
+function validateMediaUrlExtension(clip, clipPath, errors) {
+  if (typeof clip.url !== "string" || clip.url.length === 0) {
+    return;
+  }
+
+  if (clip.type !== "video" && clip.type !== "image") {
+    return;
+  }
+
+  const ext = nodePath.extname(clip.url).toLowerCase();
+  const expectedExts = clip.type === "video" ? VIDEO_EXTENSIONS : IMAGE_EXTENSIONS;
+  const expectedLabel = clip.type === "video" ? "video" : "image";
+  const oppositeLabel = clip.type === "video" ? "image" : "video";
+
+  if (!ext || !expectedExts.has(ext)) {
+    errors.push(
+      createIssue(
+        ValidationCodes.INVALID_FORMAT,
+        `${clipPath}.url`,
+        `URL extension '${ext || "(none)"}' does not match clip type '${clip.type}'. Expected a ${expectedLabel} file extension, not ${oppositeLabel}.`,
+        clip.url
+      )
+    );
+  }
+}
 
 function validateFiniteNumber(value, path, errors, opts = {}) {
   const { min = null, max = null, minInclusive = true, maxInclusive = true } = opts;
@@ -545,6 +602,8 @@ function validateClip(clip, index, options = {}) {
         }
       } catch (_) {}
     }
+
+    validateMediaUrlExtension(clip, path, errors);
 
     if (typeof clip.cutFrom === "number") {
       if (!Number.isFinite(clip.cutFrom)) {

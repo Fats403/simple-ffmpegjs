@@ -155,6 +155,19 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
   );
 }
 
+/**
+ * Extract the FFmpeg filter name from a filter segment string.
+ * Expected format: "[inputLabel]filterName=params[outputLabel];"
+ * Returns the filter name or an empty string if it can't be found.
+ */
+function extractFilterName(filterSegment) {
+  // Strip leading pad labels like [fxsrc0]
+  const withoutLabels = filterSegment.replace(/\[[^\]]*\]/g, "");
+  // The filter name is the first word before '=' or ',' or ';' or end-of-string
+  const match = withoutLabels.match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
+  return match ? match[1] : "";
+}
+
 function buildEffectFilters(effectClips, inputLabel) {
   if (!Array.isArray(effectClips) || effectClips.length === 0) {
     return { filter: "", finalVideoLabel: inputLabel };
@@ -190,6 +203,20 @@ function buildEffectFilters(effectClips, inputLabel) {
       procSrcLabel,
       fxLabel
     );
+
+    // Safeguard: verify the filter builder produced a non-empty filter name.
+    // If any effect resolves to an empty filter (e.g. unsupported on the
+    // running FFmpeg version), FFmpeg would receive '' as a filter name and
+    // fail with "No such filter: ''".
+    const filterName = extractFilterName(fxFilter);
+    if (!filterName) {
+      throw new Error(
+        `Effect '${clip.effect}' produced an empty filter name. ` +
+        `This usually means the effect is not supported by the current FFmpeg version. ` +
+        `Generated filter segment: ${JSON.stringify(fxFilter)}`
+      );
+    }
+
     filter += fxFilter;
 
     const start = formatNumber(clip.position || 0, 4);
@@ -217,4 +244,4 @@ function buildEffectFilters(effectClips, inputLabel) {
   return { filter, finalVideoLabel: currentLabel };
 }
 
-module.exports = { buildEffectFilters };
+module.exports = { buildEffectFilters, extractFilterName };

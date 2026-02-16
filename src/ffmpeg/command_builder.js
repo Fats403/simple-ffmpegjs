@@ -1,5 +1,6 @@
 const os = require("os");
 const { escapeFilePath } = require("./strings");
+const { SimpleffmpegError } = require("../core/errors");
 
 /**
  * Get the null device path for the current platform
@@ -258,10 +259,62 @@ function escapeMetadata(value) {
     .replace(/\n/g, "\\n");
 }
 
+/**
+ * Sanitize a filter_complex string before passing it to FFmpeg.
+ *
+ * Guards against:
+ *  - Trailing semicolons that create empty filter chains (some FFmpeg builds
+ *    reject these with "No such filter: ''").
+ *  - Double (or more) semicolons that produce empty chains between real ones.
+ *  - Completely empty filter names between pad labels, e.g. "[a][b]" with no
+ *    filter name — detected and surfaced as a descriptive error.
+ */
+function sanitizeFilterComplex(fc) {
+  if (!fc || typeof fc !== "string") return fc;
+
+  // Collapse runs of semicolons (;;; → ;) that would produce empty chains
+  let sanitized = fc.replace(/;{2,}/g, ";");
+
+  // Strip leading/trailing semicolons
+  sanitized = sanitized.replace(/^;+/, "").replace(/;+$/, "");
+
+  // Detect empty filter names: a closing ']' immediately followed by an
+  // opening '[' with no filter name in between (at a chain boundary).
+  // Valid patterns like "[a][b]xfade=..." have a filter name after the
+  // second label. An empty name looks like "[a][b];" or "[a][b]," or
+  // "[a];[b]" at the very start of a chain.
+  //
+  // We check for the pattern: ';' followed by optional whitespace then '['
+  // where the preceding chain segment has no filter name.
+  // Also check for label sequences with no filter: "][" not followed by an
+  // alphanumeric filter name within the same chain segment.
+  const chains = sanitized.split(";");
+  for (let i = 0; i < chains.length; i++) {
+    const chain = chains[i].trim();
+    if (!chain) continue;
+
+    // Remove all pad labels to see if there's an actual filter name left
+    const withoutLabels = chain.replace(/\[[^\]]*\]/g, "").trim();
+    // After removing labels, what's left should start with a filter name
+    // (alphabetic). If it's empty or starts with ',' or '=' that means
+    // a filter name is missing.
+    if (withoutLabels.length === 0) {
+      throw new SimpleffmpegError(
+        `Empty filter name detected in filter_complex chain segment ${i}: "${chain}". ` +
+        `This usually means an effect or transition is not producing a valid FFmpeg filter. ` +
+        `Full filter_complex (truncated): "${sanitized.slice(0, 500)}..."`
+      );
+    }
+  }
+
+  return sanitized;
+}
+
 module.exports = {
   buildMainCommand,
   buildTextBatchCommand,
   buildThumbnailCommand,
   buildSnapshotCommand,
   escapeMetadata,
+  sanitizeFilterComplex,
 };

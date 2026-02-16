@@ -146,6 +146,8 @@ describe("Validation", () => {
             clip = { type, color: "black", position: 0, end: 5 };
           } else if (type === "effect") {
             clip = { type, effect: "vignette", position: 0, end: 5, params: {} };
+          } else if (type === "image") {
+            clip = { type, url: "./test.png", position: 0, end: 5 };
           } else {
             clip = { type, url: "./test.mp4", position: 0, end: 5 };
           }
@@ -262,6 +264,44 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(false);
         expect(result.errors[0].code).toBe(ValidationCodes.INVALID_RANGE);
+      });
+
+      it("should reject video clip that uses image extension", () => {
+        const clips = [{ type: "video", url: "./still.png", position: 0, end: 5 }];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(false);
+        expect(
+          result.errors.some(
+            (e) =>
+              e.code === ValidationCodes.INVALID_FORMAT &&
+              e.path === "clips[0].url"
+          )
+        ).toBe(true);
+      });
+
+      it("should reject image clip that uses video extension", () => {
+        const clips = [{ type: "image", url: "./clip.mp4", position: 0, end: 5 }];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(false);
+        expect(
+          result.errors.some(
+            (e) =>
+              e.code === ValidationCodes.INVALID_FORMAT &&
+              e.path === "clips[0].url"
+          )
+        ).toBe(true);
+      });
+
+      it("should accept media extensions case-insensitively", () => {
+        const clips = [
+          { type: "video", url: "./clip.MP4", position: 0, end: 5 },
+          { type: "image", url: "./still.PNG", position: 0, end: 5 },
+        ];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(true);
       });
     });
 

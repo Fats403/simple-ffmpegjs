@@ -5,6 +5,7 @@ const {
   buildThumbnailCommand,
   buildSnapshotCommand,
   escapeMetadata,
+  sanitizeFilterComplex,
 } = await import("../../src/ffmpeg/command_builder.js");
 
 describe("Command Builder", () => {
@@ -346,5 +347,60 @@ describe("Command Builder", () => {
         'test\\\\path\\n\\"quoted\\"'
       );
     });
+  });
+});
+
+describe("sanitizeFilterComplex", () => {
+  it("strips trailing semicolons", () => {
+    expect(sanitizeFilterComplex("[0:v]scale=1920:1080[outv];")).toBe(
+      "[0:v]scale=1920:1080[outv]"
+    );
+  });
+
+  it("strips leading semicolons", () => {
+    expect(sanitizeFilterComplex(";[0:v]scale=1920:1080[outv]")).toBe(
+      "[0:v]scale=1920:1080[outv]"
+    );
+  });
+
+  it("collapses double semicolons", () => {
+    expect(
+      sanitizeFilterComplex(
+        "[0:v]scale=1920:1080[outv];;[outv]vignette=angle=0.6283[fxout0]"
+      )
+    ).toBe(
+      "[0:v]scale=1920:1080[outv];[outv]vignette=angle=0.6283[fxout0]"
+    );
+  });
+
+  it("collapses triple semicolons", () => {
+    expect(
+      sanitizeFilterComplex("filter1[a];;;filter2[b]")
+    ).toBe("filter1[a];filter2[b]");
+  });
+
+  it("returns null/empty/undefined unchanged", () => {
+    expect(sanitizeFilterComplex("")).toBe("");
+    expect(sanitizeFilterComplex(null)).toBe(null);
+    expect(sanitizeFilterComplex(undefined)).toBe(undefined);
+  });
+
+  it("passes through valid filter complex unchanged", () => {
+    const valid =
+      "[0:v]scale=1920:1080[scaled0];[scaled0]fps=30[outv];[0:a]volume=1[outa]";
+    expect(sanitizeFilterComplex(valid)).toBe(valid);
+  });
+
+  it("throws on chain segment with only labels (empty filter name)", () => {
+    expect(() =>
+      sanitizeFilterComplex("[a][b];[c][d]xfade=transition=dissolve[e]")
+    ).toThrow(/Empty filter name/);
+  });
+
+  it("does not throw for valid multi-input filter chains", () => {
+    // amix/xfade take multiple input labels — this is valid
+    const fc =
+      "[0:v]scale=1920:1080[v0];[v0][v1]xfade=transition=dissolve:duration=0.5[outv]";
+    expect(() => sanitizeFilterComplex(fc)).not.toThrow();
   });
 });

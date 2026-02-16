@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 
-const { buildEffectFilters } = await import(
+const { buildEffectFilters, extractFilterName } = await import(
   "../../src/ffmpeg/effect_builder.js"
 );
 
@@ -356,5 +356,100 @@ describe("unknown effect guard", () => {
     expect(() =>
       buildEffectFilters([fx("doesNotExist", 0, 5)], "[v]")
     ).toThrow("Unknown effect type 'doesNotExist'");
+  });
+});
+
+// ===========================================================================
+// Empty filter name safeguard
+// ===========================================================================
+describe("empty filter name safeguard", () => {
+  it("every known effect produces a non-empty filter name", () => {
+    const effects = [
+      { name: "vignette", params: {} },
+      { name: "filmGrain", params: {} },
+      { name: "gaussianBlur", params: { sigma: 5 } },
+      { name: "colorAdjust", params: {} },
+      { name: "sepia", params: {} },
+      { name: "blackAndWhite", params: {} },
+      { name: "sharpen", params: {} },
+      { name: "chromaticAberration", params: {} },
+      { name: "letterbox", params: {} },
+    ];
+
+    for (const { name, params } of effects) {
+      const result = buildEffectFilters([fx(name, 0, 5, params)], "[v]");
+      // Filter must contain the effect's filter chain — no empty filter names
+      expect(result.filter.length).toBeGreaterThan(0);
+      // The filter string should not contain ";;" (empty chain)
+      expect(result.filter).not.toContain(";;");
+    }
+  });
+
+  it("chromaticAberration with fractional shift (production case) produces valid filter", () => {
+    // This mirrors the production clip that triggered the bug:
+    // { shift: 0.6, amount: 0.18 } with short duration and fades
+    const result = buildEffectFilters(
+      [
+        fx(
+          "chromaticAberration",
+          18.35,
+          18.9,
+          { amount: 0.18, shift: 0.6 },
+          { fadeIn: 0.05, fadeOut: 0.2 }
+        ),
+      ],
+      "[vtrans8]"
+    );
+    // shift 0.6 rounds to 1
+    expect(result.filter).toContain("rgbashift=rh=1:bh=-1");
+    expect(result.filter).not.toContain(";;");
+    expect(result.finalVideoLabel).toBe("[fxout0]");
+  });
+
+  it("chromaticAberration with shift=0 still produces valid filter", () => {
+    const result = buildEffectFilters(
+      [fx("chromaticAberration", 0, 5, { shift: 0 })],
+      "[v]"
+    );
+    expect(result.filter).toContain("rgbashift=rh=0:bh=0");
+  });
+});
+
+// ===========================================================================
+// extractFilterName
+// ===========================================================================
+describe("extractFilterName", () => {
+  it("extracts filter name from standard filter segment", () => {
+    expect(extractFilterName("[fxsrc0]rgbashift=rh=4:bh=-4[fxraw0];")).toBe(
+      "rgbashift"
+    );
+  });
+
+  it("extracts filter name from chained filters", () => {
+    expect(
+      extractFilterName("[fxsrc0]hue=s=0,eq=contrast=1.3[fxraw0];")
+    ).toBe("hue");
+  });
+
+  it("extracts filter name from drawbox (letterbox)", () => {
+    expect(
+      extractFilterName(
+        "[fxsrc0]drawbox=y=0:w=iw:h='round(ih*0.12)':color=black:t=fill[fxraw0];"
+      )
+    ).toBe("drawbox");
+  });
+
+  it("returns empty string for empty input", () => {
+    expect(extractFilterName("")).toBe("");
+  });
+
+  it("returns empty string for labels-only input (no filter name)", () => {
+    expect(extractFilterName("[a][b];")).toBe("");
+  });
+
+  it("extracts filter name without labels", () => {
+    expect(extractFilterName("vignette=angle=0.6283:eval=frame")).toBe(
+      "vignette"
+    );
   });
 });

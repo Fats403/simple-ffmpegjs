@@ -30,6 +30,7 @@ const {
   buildMainCommand,
   buildThumbnailCommand,
   buildSnapshotCommand,
+  sanitizeFilterComplex,
 } = require("./ffmpeg/command_builder");
 const { runTextPasses } = require("./ffmpeg/text_passes");
 const { formatBytes, runFFmpeg } = require("./lib/utils");
@@ -829,6 +830,12 @@ class SIMPLEFFMPEG {
         finalVideoLabel = "[outscaled]";
       }
     }
+
+    // Sanitize the filter complex string before passing to FFmpeg.
+    // Remove trailing semicolons (which create empty filter chains on some
+    // FFmpeg builds) and collapse double semicolons that could result from
+    // concatenating builder outputs where one returned an empty string.
+    filterComplex = sanitizeFilterComplex(filterComplex);
 
     // Build command
     const command = buildMainCommand({
