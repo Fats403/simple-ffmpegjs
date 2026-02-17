@@ -800,9 +800,12 @@ class SIMPLEFFMPEG {
 
       const wmConfig = exportOptions.watermark;
 
-      // For image watermarks, we need to add an input
+      // For image watermarks, we need to add an input.
+      // Use the actual file input count (from _inputIndexMap) rather than
+      // videoOrAudioClips.length, because flat color clips use the color=
+      // filter source and don't produce file inputs.
       if (wmConfig.type === "image" && wmConfig.url) {
-        watermarkInputIndex = this.videoOrAudioClips.length;
+        watermarkInputIndex = this._inputIndexMap.size;
         watermarkInputString = ` -i "${escapeFilePath(wmConfig.url)}"`;
       }
 
