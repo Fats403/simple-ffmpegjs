@@ -444,7 +444,7 @@ describe("buildVideoFilter", () => {
       );
     });
 
-    it("should NOT auto-apply pan zoom when zoom is explicitly set", () => {
+    it("should enforce minimum pan zoom when explicit zoom is too low for visible pan", () => {
       const project = createProject();
       const clip = {
         type: "image",
@@ -464,8 +464,60 @@ describe("buildVideoFilter", () => {
 
       const result = buildVideoFilter(project, [clip]);
 
-      // User explicitly set zoom to 1.0, so it should stay at 1.0
-      expect(result.filter).toContain("z='1'");
+      // Zoom=1.0 makes pans invisible ((iw - iw/zoom) = 0), so both
+      // endpoints are bumped to MIN_PAN_ZOOM (1.04)
+      expect(result.filter).toContain("z='1.04'");
+    });
+
+    it("should bump only the low endpoint when smart KB has explicit startZoom=1", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 5,
+        kenBurns: {
+          type: "smart",
+          anchor: "bottom",
+          startZoom: 1,
+          endZoom: 1.15,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // startZoom=1 is below MIN_PAN_ZOOM, so it's bumped to 1.04
+      // endZoom=1.15 is already above, so it stays
+      expect(result.filter).toContain("z='1.04+(0.11)*((on/149))'");
+      // No source dimensions → portrait output defaults to vertical pan
+      // anchor=bottom → startY=1, endY=0 (pan bottom-to-top)
+      expect(result.filter).toContain("y='(ih - ih/zoom)*(1+(-1)*((on/149)))'");
+    });
+
+    it("should not adjust zoom when explicit values are already above minimum", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 4,
+        kenBurns: {
+          type: "custom",
+          startZoom: 1.1,
+          endZoom: 1.2,
+          startX: 0.2,
+          endX: 0.8,
+          easing: "linear",
+        },
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      // Both zoom values are above MIN_PAN_ZOOM, so no adjustment
+      expect(result.filter).toContain("z='1.1+(0.1)*((on/119))'");
     });
 
     it("should use object form of string preset identically", () => {

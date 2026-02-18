@@ -1,5 +1,6 @@
 const DEFAULT_KEN_BURNS_ZOOM = 0.15;
 const DEFAULT_PAN_ZOOM = 1.12;
+const MIN_PAN_ZOOM = 1.04;
 
 function clamp01(value) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -151,16 +152,20 @@ function resolveKenBurnsOptions(kenBurns, width, height, sourceWidth, sourceHeig
     endY = customEndY;
   }
 
-  // When positions indicate panning but zoom wasn't explicitly set (still at
-  // the default 1.0), apply a default pan zoom.  At zoom=1.0 the zoompan
-  // visible window equals the full image, so (iw - iw/zoom) = 0 and position
-  // values are multiplied by zero — making the pan completely invisible.
+  // At zoom=1.0 the zoompan visible window equals the full image, so
+  // (iw - iw/zoom) = 0 and position values are multiplied by zero — making
+  // any pan completely invisible.  Ensure both zoom endpoints are high enough
+  // for the pan to have a visible range.
+  // When zoom wasn't explicitly provided, use the full default pan zoom.
+  // When it was explicit but below the minimum, nudge it up just enough to
+  // make the pan work without dramatically altering the requested zoom.
   const hasPan = startX !== endX || startY !== endY;
-  const zoomWasExplicit =
-    typeof kb.startZoom === "number" || typeof kb.endZoom === "number";
-  if (hasPan && !zoomWasExplicit && startZoom === 1 && endZoom === 1) {
-    startZoom = DEFAULT_PAN_ZOOM;
-    endZoom = DEFAULT_PAN_ZOOM;
+  if (hasPan) {
+    const zoomWasExplicit =
+      typeof kb.startZoom === "number" || typeof kb.endZoom === "number";
+    const minZoom = zoomWasExplicit ? MIN_PAN_ZOOM : DEFAULT_PAN_ZOOM;
+    if (startZoom < minZoom) startZoom = minZoom;
+    if (endZoom < minZoom) endZoom = minZoom;
   }
 
   return { startZoom, endZoom, startX, startY, endX, endY, easing };
