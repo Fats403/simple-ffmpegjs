@@ -13,6 +13,8 @@ const {
   generateASSEvents,
   buildKaraokeASS,
   buildSubtitleASS,
+  buildTextClipASS,
+  segmentTextForASS,
   parseSRT,
   parseVTT,
   buildASSFilter,
@@ -497,6 +499,245 @@ Short format`;
 
       // Backslashes converted to forward slashes, then colons escaped
       expect(result.filter).toContain("C\\:/path/to/file.ass");
+    });
+  });
+
+  describe("buildTextClipASS", () => {
+    it("should generate valid ASS with correct header dimensions", () => {
+      const clip = {
+        text: "Hello 🐾",
+        position: 1,
+        end: 4,
+        fontFamily: "Montserrat",
+        fontSize: 52,
+        fontColor: "#FFFFFF",
+      };
+      const ass = buildTextClipASS(clip, 1080, 1920);
+      expect(ass).toContain("PlayResX: 1080");
+      expect(ass).toContain("PlayResY: 1920");
+    });
+
+    it("should map font properties to ASS style", () => {
+      const clip = {
+        text: "Styled 🎬",
+        position: 0,
+        end: 3,
+        fontFamily: "Montserrat",
+        fontSize: 64,
+        fontColor: "#FF0000",
+        borderColor: "#000000",
+        borderWidth: 3,
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("EmojiText");
+      expect(ass).toContain("Montserrat");
+      expect(ass).toContain(",64,");
+    });
+
+    it("should compute \\pos from xPercent/yPercent", () => {
+      const clip = {
+        text: "Positioned 🐾",
+        position: 0,
+        end: 3,
+        xPercent: 0.5,
+        yPercent: 0.8,
+      };
+      const ass = buildTextClipASS(clip, 1080, 1920);
+      expect(ass).toContain("\\pos(540,1536)");
+    });
+
+    it("should apply xOffset and yOffset", () => {
+      const clip = {
+        text: "Offset 🐾",
+        position: 0,
+        end: 3,
+        xPercent: 0.5,
+        yPercent: 0.5,
+        xOffset: 10,
+        yOffset: -20,
+      };
+      const ass = buildTextClipASS(clip, 1080, 1920);
+      expect(ass).toContain("\\pos(550,940)");
+    });
+
+    it("should generate \\fad for fade-in-out animation", () => {
+      const clip = {
+        text: "Fading 🌟",
+        position: 2,
+        end: 6,
+        animation: { type: "fade-in-out", in: 1, out: 1.2 },
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("\\fad(1000,1200)");
+    });
+
+    it("should generate \\fad for fade-in animation", () => {
+      const clip = {
+        text: "Fade In 🎉",
+        position: 0,
+        end: 3,
+        animation: { type: "fade-in", in: 0.5 },
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("\\fad(500,0)");
+    });
+
+    it("should generate \\fad for fade-out animation", () => {
+      const clip = {
+        text: "Fade Out 🎉",
+        position: 0,
+        end: 3,
+        animation: { type: "fade-out", out: 0.8 },
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("\\fad(0,800)");
+    });
+
+    it("should not add \\fad for no animation", () => {
+      const clip = {
+        text: "Static 🐾",
+        position: 0,
+        end: 3,
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).not.toContain("\\fad");
+    });
+
+    it("should preserve emoji in dialogue text", () => {
+      const clip = {
+        text: "small dog, big heart 🐾",
+        position: 0,
+        end: 5,
+      };
+      const ass = buildTextClipASS(clip, 1080, 1920);
+      expect(ass).toContain("small dog, big heart 🐾");
+    });
+
+    it("should use \\an5 for center-anchored positioning", () => {
+      const clip = {
+        text: "Centered 🎬",
+        position: 0,
+        end: 3,
+        xPercent: 0.5,
+        yPercent: 0.5,
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("\\an5");
+    });
+
+    it("should handle shadow properties", () => {
+      const clip = {
+        text: "Shadow 🐾",
+        position: 0,
+        end: 3,
+        shadowColor: "#000000",
+        shadowX: 2,
+        shadowY: 3,
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      // Shadow depth should be max(|2|, |3|) = 3
+      expect(ass).toContain(",3,");
+    });
+  });
+
+  describe("segmentTextForASS", () => {
+    it("should return plain escaped text when emojiFont is null", () => {
+      const result = segmentTextForASS("Hello 🐾", "Sans", null);
+      expect(result).toContain("Hello");
+      expect(result).toContain("🐾");
+      expect(result).not.toContain("\\fn");
+    });
+
+    it("should wrap emoji in \\fn tags when emojiFont is provided", () => {
+      const result = segmentTextForASS("Hello 🐾 world", "Sans", "Noto Color Emoji");
+      expect(result).toContain("{\\fnNoto Color Emoji}");
+      expect(result).toContain("{\\fnSans}");
+      expect(result).toContain("🐾");
+      expect(result).toContain("Hello");
+      expect(result).toContain("world");
+    });
+
+    it("should handle multiple emoji", () => {
+      const result = segmentTextForASS("🎬 Movie 🍿", "Sans", "Noto Color Emoji");
+      const fnCount = (result.match(/\\fnNoto Color Emoji/g) || []).length;
+      expect(fnCount).toBe(2);
+    });
+
+    it("should handle text with only emoji", () => {
+      const result = segmentTextForASS("🐾🎬", "Montserrat", "Noto Color Emoji");
+      expect(result).toContain("{\\fnNoto Color Emoji}");
+      expect(result).toContain("{\\fnMontserrat}");
+    });
+
+    it("should handle text with no emoji", () => {
+      const result = segmentTextForASS("No emoji here", "Sans", "Noto Color Emoji");
+      expect(result).not.toContain("\\fn");
+      expect(result).toContain("No emoji here");
+    });
+
+    it("should handle variation selector emoji like heart", () => {
+      const result = segmentTextForASS("Love ❤️ it", "Sans", "Noto Color Emoji");
+      expect(result).toContain("{\\fnNoto Color Emoji}");
+    });
+
+    it("should restore primary font after each emoji", () => {
+      const result = segmentTextForASS("A 🐾 B 🎬 C", "MyFont", "EmojiFont");
+      // Each emoji should be followed by a restore to MyFont
+      const restoreCount = (result.match(/\\fnMyFont/g) || []).length;
+      expect(restoreCount).toBe(2);
+    });
+  });
+
+  describe("buildTextClipASS with emojiFont", () => {
+    it("should include \\fn tags when emojiFont is provided", () => {
+      const clip = {
+        text: "Hello 🐾",
+        position: 0,
+        end: 3,
+        fontFamily: "Sans",
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080, "Noto Color Emoji");
+      expect(ass).toContain("{\\fnNoto Color Emoji}");
+      expect(ass).toContain("{\\fnSans}");
+    });
+
+    it("should not include \\fn tags when emojiFont is null", () => {
+      const clip = {
+        text: "Hello 🐾",
+        position: 0,
+        end: 3,
+        fontFamily: "Sans",
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080, null);
+      expect(ass).not.toContain("\\fnNoto");
+      expect(ass).toContain("🐾");
+    });
+
+    it("should work without emojiFont parameter (backwards compatible)", () => {
+      const clip = {
+        text: "Hello 🐾",
+        position: 0,
+        end: 3,
+      };
+      const ass = buildTextClipASS(clip, 1920, 1080);
+      expect(ass).toContain("🐾");
+      expect(ass).not.toContain("\\fnNoto");
+    });
+  });
+
+  describe("buildASSFilter with fontsDir", () => {
+    it("should append fontsdir when provided", () => {
+      const result = buildASSFilter("/tmp/test.ass", "[inv]", {
+        fontsDir: "/app/fonts",
+      });
+      expect(result.filter).toContain("fontsdir=");
+      expect(result.filter).toContain("/app/fonts");
+    });
+
+    it("should work without fontsDir (backwards compatible)", () => {
+      const result = buildASSFilter("/tmp/test.ass", "[inv]");
+      expect(result.filter).not.toContain("fontsdir");
+      expect(result.filter).toContain("ass=");
     });
   });
 

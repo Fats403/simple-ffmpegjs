@@ -1,11 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const stringsModule = await import("../../src/ffmpeg/strings.js");
 const {
   escapeDrawtextText,
   hasProblematicChars,
+  hasEmoji,
+  stripEmoji,
+  parseFontFamily,
   escapeFilePath,
   escapeTextFilePath,
-} = await import("../../src/ffmpeg/strings.js");
+} = stringsModule;
 
 const { parseFFmpegCommand } = await import("../../src/lib/utils.js");
 
@@ -50,6 +54,43 @@ describe("Strings - FFmpeg escaping utilities", () => {
       expect(hasProblematicChars(null)).toBe(false);
       expect(hasProblematicChars(undefined)).toBe(false);
       expect(hasProblematicChars(42)).toBe(false);
+    });
+  });
+
+  describe("hasEmoji", () => {
+    it("should detect emoji characters", () => {
+      expect(hasEmoji("hello 🐾")).toBe(true);
+      expect(hasEmoji("🎬🎥")).toBe(true);
+      expect(hasEmoji("text ❤️ more")).toBe(true);
+      expect(hasEmoji("small dog, big heart 🐾")).toBe(true);
+    });
+
+    it("should detect complex emoji sequences", () => {
+      expect(hasEmoji("family 👨‍👩‍👧‍👦 time")).toBe(true);
+      expect(hasEmoji("👋🏽 hello")).toBe(true);
+    });
+
+    it("should return false for plain text", () => {
+      expect(hasEmoji("Hello World")).toBe(false);
+      expect(hasEmoji("Simple text 123")).toBe(false);
+      expect(hasEmoji("100% done!")).toBe(false);
+      expect(hasEmoji("#hashtag")).toBe(false);
+    });
+
+    it("should return false for non-emoji unicode", () => {
+      expect(hasEmoji("café")).toBe(false);
+      expect(hasEmoji("naïve résumé")).toBe(false);
+      expect(hasEmoji("日本語")).toBe(false);
+    });
+
+    it("should return false for non-string input", () => {
+      expect(hasEmoji(null)).toBe(false);
+      expect(hasEmoji(undefined)).toBe(false);
+      expect(hasEmoji(42)).toBe(false);
+    });
+
+    it("should return false for empty string", () => {
+      expect(hasEmoji("")).toBe(false);
     });
   });
 
@@ -128,6 +169,101 @@ describe("Strings - FFmpeg escaping utilities", () => {
     it("should handle combined escaping (backslash + colon + apostrophe)", () => {
       const result = escapeDrawtextText("It's 10:30\\PM");
       expect(result).toBe("It'\\\\\\''" + "s 10\\:30\\\\PM");
+    });
+  });
+
+  describe("stripEmoji", () => {
+    it("should remove emoji from text", () => {
+      expect(stripEmoji("Hello 🐾 world")).toBe("Hello world");
+    });
+
+    it("should remove multiple emoji", () => {
+      expect(stripEmoji("🎬 Movie 🍿 night")).toBe("Movie night");
+    });
+
+    it("should remove variation selector emoji", () => {
+      expect(stripEmoji("Love ❤️ it")).toBe("Love it");
+    });
+
+    it("should handle text with only emoji", () => {
+      expect(stripEmoji("🐾🎬")).toBe("");
+    });
+
+    it("should not modify text without emoji", () => {
+      expect(stripEmoji("Hello World")).toBe("Hello World");
+      expect(stripEmoji("100% done!")).toBe("100% done!");
+    });
+
+    it("should collapse double spaces from removed emoji", () => {
+      expect(stripEmoji("A 🐾 B 🎬 C")).toBe("A B C");
+    });
+
+    it("should return non-string input unchanged", () => {
+      expect(stripEmoji(null)).toBe(null);
+      expect(stripEmoji(undefined)).toBe(undefined);
+      expect(stripEmoji(42)).toBe(42);
+    });
+
+    it("should not strip digits, #, or * (which have Emoji property)", () => {
+      expect(stripEmoji("Call #123")).toBe("Call #123");
+      expect(stripEmoji("100% * 2")).toBe("100% * 2");
+    });
+
+    it("should handle whitespace between emoji (collapses to empty)", () => {
+      expect(stripEmoji("🐾 🎬")).toBe("");
+      expect(stripEmoji("🐾  🎬")).toBe("");
+    });
+
+    it("should handle emoji at text boundaries", () => {
+      expect(stripEmoji("🐾hello")).toBe("hello");
+      expect(stripEmoji("hello🐾")).toBe("hello");
+      expect(stripEmoji("🐾hello🐾")).toBe("hello");
+    });
+
+    it("should preserve special characters after emoji removal", () => {
+      expect(stripEmoji("Let's 🐾 go!")).toBe("Let's go!");
+      expect(stripEmoji("hello, 🐾 world")).toBe("hello, world");
+    });
+
+    it("should preserve newlines within text", () => {
+      expect(stripEmoji("Line 1 🐾\nLine 2")).toBe("Line 1 \nLine 2");
+      expect(stripEmoji("Line 1\n🐾Line 2")).toBe("Line 1\nLine 2");
+    });
+
+    it("should handle empty string", () => {
+      expect(stripEmoji("")).toBe("");
+    });
+  });
+
+  describe("parseFontFamily", () => {
+    it("should return null for non-existent file", () => {
+      expect(parseFontFamily("/tmp/does-not-exist.ttf")).toBe(null);
+    });
+
+    it("should return null for non-font file", () => {
+      const fs = require("fs");
+      const tmpFile = "/tmp/test-not-a-font.txt";
+      fs.writeFileSync(tmpFile, "not a font file");
+      expect(parseFontFamily(tmpFile)).toBe(null);
+      fs.unlinkSync(tmpFile);
+    });
+
+    it("should return null for empty file", () => {
+      const fs = require("fs");
+      const tmpFile = "/tmp/test-empty-font.ttf";
+      fs.writeFileSync(tmpFile, "");
+      expect(parseFontFamily(tmpFile)).toBe(null);
+      fs.unlinkSync(tmpFile);
+    });
+
+    it("should parse family name from a real TTF if available", () => {
+      const fontPath = "/tmp/emoji-fonts/NotoEmoji-Regular.ttf";
+      const fs = require("fs");
+      if (fs.existsSync(fontPath)) {
+        const family = parseFontFamily(fontPath);
+        expect(typeof family).toBe("string");
+        expect(family.length).toBeGreaterThan(0);
+      }
     });
   });
 

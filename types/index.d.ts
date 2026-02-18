@@ -439,6 +439,8 @@ declare namespace SIMPLEFFMPEG {
     validationMode?: "warn" | "strict";
     /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
     fontFile?: string;
+    /** Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline). */
+    emojiFont?: string;
   }
 
   /** Log entry passed to onLog callback */

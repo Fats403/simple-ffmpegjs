@@ -12,7 +12,7 @@
  *   node examples/run-examples.js torture ken   # run torture test and ken burns
  *
  * Available demo names (partial match):
- *   color-clips, effects, transitions, text, ken-burns, audio, watermarks, karaoke, torture
+ *   color-clips, effects, transitions, text, emoji, ken-burns, audio, watermarks, karaoke, torture
  */
 
 import { execSync, spawn } from "child_process";
@@ -32,6 +32,7 @@ const DEMOS = [
   { name: "effects",                 file: "demo-effects.js" },
   { name: "transitions",            file: "demo-transitions.js" },
   { name: "text-and-animations",    file: "demo-text-and-animations.js" },
+  { name: "emoji-text",             file: "demo-emoji-text.js" },
   { name: "ken-burns",              file: "demo-ken-burns.js" },
   { name: "audio-mixing",           file: "demo-audio-mixing.js" },
   { name: "watermarks",             file: "demo-watermarks.js" },

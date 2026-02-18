@@ -631,20 +631,174 @@ function loadSubtitleFile(filePath, options, canvasWidth, canvasHeight) {
 }
 
 /**
+ * Regex matching emoji characters: inherently visual + variation-selector emoji.
+ * Captures each emoji (including trailing \uFE0F) as a group.
+ */
+const EMOJI_RE = /(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)/gu;
+
+/**
+ * Segment text into emoji and non-emoji runs, wrapping emoji characters
+ * with ASS \fn override tags to explicitly switch to the emoji font.
+ *
+ * If emojiFont is null/undefined, returns plain escaped text (no font switching).
+ *
+ * @param {string} text - Raw text
+ * @param {string} primaryFont - The main text font family
+ * @param {string|null} emojiFont - The detected emoji font family, or null
+ * @returns {string} ASS-escaped text with inline \fn tags for emoji
+ */
+function segmentTextForASS(text, primaryFont, emojiFont) {
+  if (!emojiFont) return escapeASSText(text);
+
+  let result = "";
+  let lastIndex = 0;
+
+  for (const match of text.matchAll(EMOJI_RE)) {
+    if (match.index > lastIndex) {
+      result += escapeASSText(text.slice(lastIndex, match.index));
+    }
+    result += `{\\fn${emojiFont}}${escapeASSText(match[0])}{\\fn${primaryFont}}`;
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    result += escapeASSText(text.slice(lastIndex));
+  }
+
+  return result;
+}
+
+/**
+ * Build ASS content for a text clip that contains emoji.
+ * Uses \pos for pixel-precise positioning and \fad for fade animations.
+ * When emojiFont is provided, emoji characters are wrapped in \fn tags
+ * so libass uses the correct font instead of relying on broken fallback.
+ *
+ * @param {Object} clip - Text clip (already resolved with defaults)
+ * @param {number} canvasWidth - Video width
+ * @param {number} canvasHeight - Video height
+ * @param {string|null} [emojiFont] - Detected system emoji font name, or null
+ * @returns {string} Complete ASS file content
+ */
+function buildTextClipASS(clip, canvasWidth, canvasHeight, emojiFont) {
+  const {
+    text = "",
+    position: clipStart,
+    end: clipEnd,
+    fontFamily = "Sans",
+    fontSize = 48,
+    fontColor = "#FFFFFF",
+    borderColor,
+    borderWidth = 0,
+    shadowColor,
+    shadowX = 0,
+    shadowY = 0,
+    backgroundColor,
+    backgroundOpacity,
+    xPercent,
+    yPercent,
+    x,
+    y,
+    xOffset = 0,
+    yOffset = 0,
+    animation,
+    opacity = 1,
+  } = clip;
+
+  const shadowDepth =
+    shadowColor ? Math.max(Math.abs(shadowX), Math.abs(shadowY), 1) : 0;
+  const borderStyle = backgroundColor ? 3 : 1;
+  const backColor = backgroundColor || shadowColor || "#000000";
+  const backOpacity = backgroundColor
+    ? (typeof backgroundOpacity === "number" ? backgroundOpacity : 0.5)
+    : 0.5;
+
+  let ass = generateASSHeader(canvasWidth, canvasHeight, "Emoji Text");
+
+  ass += generateASSStyles([
+    {
+      name: "EmojiText",
+      fontFamily,
+      fontSize,
+      primaryColor: fontColor,
+      outlineColor: borderColor || "#000000",
+      backColor,
+      outline: borderWidth,
+      shadow: shadowDepth,
+      alignment: 7,
+      borderStyle,
+      marginL: 0,
+      marginR: 0,
+      marginV: 0,
+      opacity,
+      outlineOpacity: borderColor ? 1 : 0,
+    },
+  ]);
+
+  // Compute pixel position for \pos tag
+  // Alignment 7 = top-left, so \an5 override centers the text at \pos(x,y)
+  let posX = canvasWidth / 2;
+  let posY = canvasHeight / 2;
+  if (typeof xPercent === "number") posX = Math.round(xPercent * canvasWidth);
+  else if (typeof x === "number") posX = x;
+  if (typeof yPercent === "number") posY = Math.round(yPercent * canvasHeight);
+  else if (typeof y === "number") posY = y;
+  posX += xOffset;
+  posY += yOffset;
+
+  // Build inline override tags
+  let overrides = `\\an5\\pos(${posX},${posY})`;
+
+  const anim = animation || {};
+  const animType = anim.type || "none";
+  if (animType === "fade-in") {
+    const fadeIn = Math.round((typeof anim.in === "number" ? anim.in : 0.25) * 1000);
+    overrides += `\\fad(${fadeIn},0)`;
+  } else if (animType === "fade-out") {
+    const fadeOut = Math.round((typeof anim.out === "number" ? anim.out : 0.25) * 1000);
+    overrides += `\\fad(0,${fadeOut})`;
+  } else if (animType === "fade-in-out" || animType === "fade") {
+    const fadeIn = Math.round((typeof anim.in === "number" ? anim.in : 0.25) * 1000);
+    const fadeOut = Math.round((typeof anim.out === "number" ? anim.out : fadeIn / 1000) * 1000);
+    overrides += `\\fad(${fadeIn},${fadeOut})`;
+  }
+
+  const segmentedText = segmentTextForASS(text, fontFamily, emojiFont || null);
+  const dialogueText = `{${overrides}}${segmentedText}`;
+
+  ass += generateASSEvents([
+    {
+      start: clipStart,
+      end: clipEnd,
+      style: "EmojiText",
+      text: dialogueText,
+    },
+  ]);
+
+  return ass;
+}
+
+/**
  * Build the FFmpeg filter string for ASS subtitles
  * @param {string} assFilePath - Path to the ASS file
  * @param {string} inputLabel - Current video stream label
+ * @param {Object} [options] - Optional settings
+ * @param {string} [options.fontsDir] - Directory for libass font lookup (for fontFile support)
  * @returns {{ filter: string, finalLabel: string }}
  */
-function buildASSFilter(assFilePath, inputLabel) {
-  // Escape path for FFmpeg filter (must survive two levels of av_get_token)
-  const escapedPath = assFilePath
-    .replace(/\\/g, "/")
-    .replace(/:/g, "\\:")
-    .replace(/'/g, "'\\\\\\''" );
+function buildASSFilter(assFilePath, inputLabel, options) {
+  const escapeFn = (p) =>
+    p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\\\\\''" );
+
+  const escapedPath = escapeFn(assFilePath);
+  let filterParams = `ass='${escapedPath}'`;
+
+  if (options && options.fontsDir) {
+    filterParams += `:fontsdir='${escapeFn(options.fontsDir)}'`;
+  }
 
   const outputLabel = "[outass]";
-  const filter = `${inputLabel}ass='${escapedPath}'${outputLabel}`;
+  const filter = `${inputLabel}${filterParams}${outputLabel}`;
 
   return {
     filter,
@@ -691,6 +845,8 @@ function validateSubtitleClip(clip) {
 module.exports = {
   buildKaraokeASS,
   buildSubtitleASS,
+  buildTextClipASS,
+  segmentTextForASS,
   buildASSFilter,
   loadSubtitleFile,
   parseSRT,

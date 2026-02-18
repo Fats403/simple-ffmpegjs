@@ -1545,6 +1545,235 @@ Second subtitle
         expect(result).toBe(outputPath);
         expect(fs.existsSync(outputPath)).toBe(true);
       }, 30000);
+
+      it("should strip emoji and export via drawtext when no emojiFont", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-text.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Hello 🐾🎬",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should strip emoji from fade-animated text when no emojiFont", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-fade.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Fading 🌟✨",
+            position: 0.2,
+            end: 1.8,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "fade-in-out", in: 0.3, out: 0.3 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should export mixed emoji + non-emoji text (emoji stripped)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-mixed.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Plain text",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            yPercent: 0.3,
+          },
+          {
+            type: "text",
+            text: "Emoji text 🐾",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            yPercent: 0.7,
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should strip emoji from pop animation text when no emojiFont", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-pop-fallback.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Pop 🎉",
+            position: 0.3,
+            end: 1.8,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+            animation: { type: "pop", in: 0.3 },
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should strip emoji in preview when no emojiFont (no ASS filter)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Preview 🎬",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const preview = await project.preview({
+          outputPath: path.join(OUTPUT_DIR, "test-emoji-preview.mp4"),
+        });
+        expect(preview.filterComplex).not.toContain("ass=");
+        expect(preview.filterComplex).toContain("drawtext");
+      }, 30000);
+
+      it("should use ASS path when emojiFont is configured and font file exists", async () => {
+        const emojiFontPath = "/tmp/emoji-fonts/NotoEmoji-Regular.ttf";
+        const fontExists = fs.existsSync(emojiFontPath);
+        if (!fontExists) return; // Skip if test font not available
+
+        const project = new SIMPLEFFMPEG({
+          width: 320, height: 240, fps: 30,
+          emojiFont: emojiFontPath,
+        });
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Emoji opt-in 🐾",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const preview = await project.preview({
+          outputPath: path.join(OUTPUT_DIR, "test-emoji-optin.mp4"),
+        });
+        expect(preview.filterComplex).toContain("ass=");
+        expect(preview.filterComplex).toContain("fontsdir=");
+      }, 30000);
+
+      it("should export emoji-only text clip without error (stripped to empty, skipped)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-only.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "🐾🎬",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
+
+      it("should handle special chars + emoji correctly (apostrophe survives stripping)", async () => {
+        const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
+        const outputPath = path.join(OUTPUT_DIR, "test-emoji-apostrophe.mp4");
+
+        await project.load([
+          {
+            type: "video",
+            url: path.join(FIXTURES_DIR, "test-video-2s.mp4"),
+            position: 0,
+            end: 2,
+          },
+          {
+            type: "text",
+            text: "Let's 🐾 go!",
+            position: 0,
+            end: 2,
+            fontSize: 24,
+            fontColor: "#FFFFFF",
+          },
+        ]);
+
+        const result = await project.export({ outputPath });
+        expect(result).toBe(outputPath);
+        expect(fs.existsSync(outputPath)).toBe(true);
+      }, 30000);
     }
   );
 

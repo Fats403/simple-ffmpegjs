@@ -18,11 +18,11 @@
  *   ~2.5s   Fade transition (0.5s) -> BLUE video
  *   3-5.5s  BLUE video, "Chapter 1" text (shifted 0.5s by transition)
  *   5.5-9.5s Image (Ken Burns zoom-in), "Image Section" text
- *   9.5-13.5s DARK GREEN (#0a2e0a) trailing color clip, "The End" text
+ *   9.5-13.5s DARK GREEN (#0a2e0a) trailing color clip, "The End ✨" (emoji stripped)
  *           1 transition x 0.5s = 0.5s compression.
  *           Background music plays throughout. Text watermark at top-right.
  *           Tests: transitions + Ken Burns + effects + text + karaoke + BGM +
- *           watermark + custom color trailing segment, all in one export.
+ *           watermark + emoji stripping + custom color trailing segment.
  *
  * DEMO 2: Many clips with color fillers and transitions         ~17s total
  * ───────────────────────────────────────────────────────────────────────────
@@ -41,13 +41,14 @@
  *
  * DEMO 3: Text-heavy (many simultaneous overlays)              ~3s total
  * ───────────────────────────────────────────────────────────────────────────
- *   0-3s    BLUE video with 6 text overlays at once + timed effects:
+ *   0-3s    BLUE video with 7 text overlays at once + timed effects:
  *           - "fade-in" (top-left, fades in)
  *           - "pop" (top-right, pops)
  *           - "typewriter" (center, types out)
  *           - "pulse" (mid-left, pulses)
  *           - "scale-in" (mid-right, scales up)
  *           - "fade-out" (bottom-center, fades out)
+ *           - "emoji stripped 🎉🔥" (bottom, emoji stripped to "emoji stripped")
  *           All should render without conflict or visual glitches.
  *
  * DEMO 4: Edge cases                                            ~5.75s total
@@ -67,25 +68,27 @@
  * ───────────────────────────────────────────────────────────────────────────
  *   A ~3-minute behemoth exercising EVERY feature simultaneously.
  *   9 sections, 30+ visual clips, 20+ text overlays, every transition type,
- *   every Ken Burns mode, every text animation, karaoke, word-replace,
- *   word-sequential, SRT + VTT subtitles, standalone audio, background
- *   music (looped), text + image watermarks, and explicit color filler
- *   sections — all in a single export. See section comments below for details.
+ *   every Ken Burns mode (including easing), every text animation, karaoke,
+ *   word-replace, word-sequential, SRT + VTT subtitles, all 9 effects,
+ *   emoji stripping, standalone audio, background music (looped), image
+ *   watermark, and explicit color filler sections — all in a single export.
  *
- *   SECTION 1  (0-5s)      MAGENTA COLOR INTRO, karaoke intro
+ *   SECTION 1  (0-5s)      MAGENTA INTRO + letterbox + emoji text (stripped)
  *   SECTION 2  (5-23s)     OPENING — videos + image, 4 transitions, KB
  *   SECTION 3  (23-62s)    TRANSITION STORM — 13 clips, 12 transition types
- *   SECTION 4  (62-67s)    MAGENTA BREAK 1, "INTERMISSION" text
- *   SECTION 5  (67-103s)   KEN BURNS FESTIVAL — all 8 KB effects, 5 transitions
- *   SECTION 6  (103-106s)  MAGENTA BREAK 2
+ *   SECTION 4  (62-67s)    B&W INTERMISSION + blackAndWhite effect
+ *   SECTION 5  (67-103s)   KEN BURNS FESTIVAL — all 8 KB effects + easing
+ *   SECTION 6  (103-106s)  BREAK 2 + chromaticAberration
  *   SECTION 7  (106-140s)  TEXT STORM — every text animation + word modes
- *   SECTION 8  (140-170s)  KARAOKE + SUBTITLES — karaoke, SRT, VTT
- *   SECTION 9  (170-200s)  MAGENTA FINALE — cascading text
+ *   SECTION 8  (140-170s)  KARAOKE + SUBTITLES + sharpen
+ *   SECTION 9  (170-200s)  SEPIA FINALE — cascading text + emoji (stripped)
  *
  *   Transitions: 21 x 0.5s + 5 x 1.0s = 15.5s compression
  *   Raw end: ~200s → output: ~178.5s ≈ 2m 58s
+ *   Effects: vignette, filmGrain, gaussianBlur, colorAdjust, letterbox,
+ *            blackAndWhite, chromaticAberration, sharpen, sepia
  *   Background music + standalone audio + video audio all mixed.
- *   Text watermark (top-right) + image watermark (bottom-left) throughout.
+ *   Image watermark (bottom-left) throughout.
  *
  * ============================================================================
  */
@@ -126,7 +129,7 @@ async function demo1_KitchenSink() {
     { type: "text", text: "Welcome", position: 0.3, end: 2.5, fontSize: 40, fontColor: "white", yPercent: 0.12, animation: { type: "fade-in", in: 0.5 } },
     { type: "text", text: "Chapter 1", position: 3.5, end: 5.5, fontSize: 36, fontColor: "yellow", yPercent: 0.12 },
     { type: "text", text: "Image Section", position: 6.5, end: 9.5, fontSize: 32, fontColor: "white", borderColor: "black", borderWidth: 2, yPercent: 0.12 },
-    { type: "text", text: "The End", position: 9, end: 14, fontSize: 52, fontColor: "white", yPercent: 0.5, animation: { type: "fade-in-out", in: 0.5, out: 0.5 } },
+    { type: "text", text: "The End ✨", position: 9, end: 14, fontSize: 52, fontColor: "white", yPercent: 0.5, animation: { type: "fade-in-out", in: 0.5, out: 0.5 } },
     { type: "text", mode: "karaoke", text: "Sing along now", position: 0.5, end: 2.5, fontSize: 28, fontColor: "#FFFFFF", highlightColor: "#FFFF00", yPercent: 0.88 },
     { type: "music", url: AUDIO, volume: 0.3, loop: true },
   ]);
@@ -173,6 +176,7 @@ async function demo3_TextHeavy() {
     { type: "text", text: "pulse", position: 0.2, end: 2.8, fontSize: 28, fontColor: "#FF8800", xPercent: 0.2, yPercent: 0.65, animation: { type: "pulse", speed: 2, intensity: 0.2 } },
     { type: "text", text: "scale-in", position: 0.2, end: 2.8, fontSize: 28, fontColor: "#88FF00", xPercent: 0.8, yPercent: 0.65, animation: { type: "scale-in", in: 0.5 } },
     { type: "text", text: "fade-out", position: 0.2, end: 2.8, fontSize: 28, fontColor: "white", xPercent: 0.5, yPercent: 0.88, animation: { type: "fade-out", out: 1.0 } },
+    { type: "text", text: "emoji stripped 🎉🔥", position: 0.2, end: 2.8, fontSize: 22, fontColor: "#FF88FF", xPercent: 0.5, yPercent: 0.96, animation: { type: "fade-in", in: 0.3 } },
   ]);
   const out = path.join(OUTPUT_DIR, "03-text-heavy.mp4");
   await project.export({ outputPath: out, preset: "ultrafast", onProgress: progress });
@@ -205,10 +209,11 @@ async function demo5_MegaChaos() {
     // SECTION 1: Intro color bed (0-5s) — magenta
     // ═══════════════════════════════════════════════════════════════
     { type: "color", color: "#8B008B", position: 0, end: 5 },
+    { type: "effect", effect: "letterbox", position: 0, end: 5, params: { size: 0.1 } },
     { type: "text", mode: "karaoke", text: "Welcome to the chaos",
       position: 0.3, end: 4.5, fontSize: 48, fontColor: "#FFFFFF",
       highlightColor: "#FFD700", yPercent: 0.45 },
-    { type: "text", text: "MEGA TORTURE TEST", position: 0.5, end: 4.5,
+    { type: "text", text: "MEGA TORTURE TEST 🔥", position: 0.5, end: 4.5,
       fontSize: 24, fontColor: "#CCCCCC", yPercent: 0.65,
       animation: { type: "pulse", speed: 3, intensity: 0.3 } },
 
@@ -278,6 +283,7 @@ async function demo5_MegaChaos() {
     // SECTION 4: Break 1 (62-67s) — magenta
     // ═══════════════════════════════════════════════════════════════
     { type: "color", color: "#8B008B", position: 62, end: 67 },
+    { type: "effect", effect: "blackAndWhite", position: 62, end: 67, fadeIn: 0.5, fadeOut: 0.5, params: { amount: 0.8 } },
     { type: "text", text: "INTERMISSION", position: 62, end: 67,
       fontSize: 56, fontColor: "white", yPercent: 0.35,
       animation: { type: "fade-in-out", in: 0.8, out: 0.8 } },
@@ -296,9 +302,11 @@ async function demo5_MegaChaos() {
     { type: "image", url: IMG, position: 67, end: 73, kenBurns: "zoom-in" },
     { type: "image", url: IMG, position: 73, end: 79, kenBurns: "zoom-out",
       transition: { type: "fade", duration: 1 } },
-    { type: "image", url: IMG, position: 79, end: 85, kenBurns: "pan-left",
+    { type: "image", url: IMG, position: 79, end: 85,
+      kenBurns: { type: "pan-left", easing: "ease-in-out" },
       transition: { type: "wipeleft", duration: 1 } },
-    { type: "image", url: IMG, position: 85, end: 91, kenBurns: "pan-right",
+    { type: "image", url: IMG, position: 85, end: 91,
+      kenBurns: { type: "pan-right", easing: "ease-out" },
       transition: { type: "dissolve", duration: 1 } },
     { type: "image", url: IMG, position: 91, end: 97,
       kenBurns: { type: "smart", anchor: "bottom" },
@@ -327,6 +335,7 @@ async function demo5_MegaChaos() {
     // SECTION 6: Break 2 (103-106s) — brief magenta
     // ═══════════════════════════════════════════════════════════════
     { type: "color", color: "#8B008B", position: 103, end: 106 },
+    { type: "effect", effect: "chromaticAberration", position: 103, end: 106, params: { amount: 0.6, shift: 6 } },
     { type: "text", text: "ROUND 3", position: 103, end: 106,
       fontSize: 64, fontColor: "#FF00FF", yPercent: 0.45,
       animation: { type: "pop-bounce", in: 0.5 } },
@@ -403,6 +412,7 @@ async function demo5_MegaChaos() {
     // ═══════════════════════════════════════════════════════════════
     // SECTION 8: Karaoke + subtitles (140-170s)
     // ═══════════════════════════════════════════════════════════════
+    { type: "effect", effect: "sharpen", position: 140, end: 160, fadeIn: 0.5, fadeOut: 0.5, params: { amount: 0.6, strength: 1.5 } },
     { type: "video", url: BLUE, position: 140, end: 143, volume: 0.2 },
     { type: "video", url: GREEN, position: 143, end: 146,
       transition: { type: "fade", duration: 0.5 } },
@@ -452,6 +462,7 @@ async function demo5_MegaChaos() {
     //   Text cascading in and out = grand finale
     // ═══════════════════════════════════════════════════════════════
     { type: "color", color: "#8B008B", position: 170, end: 200 },
+    { type: "effect", effect: "sepia", position: 170, end: 200, fadeIn: 1, fadeOut: 1, params: { amount: 0.5 } },
     { type: "text", text: "THE CHAOS", position: 170, end: 200,
       fontSize: 52, fontColor: "white", yPercent: 0.25,
       animation: { type: "fade-in", in: 1.0 } },
@@ -467,7 +478,7 @@ async function demo5_MegaChaos() {
     { type: "text", text: "You made it through the torture test", position: 185, end: 198,
       fontSize: 24, fontColor: "#CCCCCC", yPercent: 0.75,
       animation: { type: "typewriter", speed: 15 } },
-    { type: "text", text: "THE END", position: 190, end: 200,
+    { type: "text", text: "THE END 🎬", position: 190, end: 200,
       fontSize: 72, fontColor: "white", borderColor: "#8B008B", borderWidth: 4,
       yPercent: 0.45, animation: { type: "fade-in-out", in: 1.0, out: 1.5 } },
     { type: "text", mode: "karaoke", text: "Goodbye from the chaos",
@@ -486,8 +497,8 @@ async function demo5_MegaChaos() {
   await project.export({
     outputPath: out, preset: "ultrafast",
     onProgress: progress,
-    watermark: { type: "text", text: "CHAOS", position: "top-right",
-      fontSize: 16, fontColor: "#FFFFFF", opacity: 0.4, margin: 8 },
+    watermark: { type: "image", url: WM_IMG, position: "bottom-left",
+      scale: 0.08, opacity: 0.5, margin: 12 },
   });
   console.log(`\n  Output: ${out}  (${getDuration(out)}s)`);
 }
@@ -506,23 +517,26 @@ const { fail } = await runDemos("Torture Test — Visual Demo", OUTPUT_DIR, [
 
 console.log(`  WHAT TO CHECK:
   01  Everything renders: transition, Ken Burns, text, karaoke,
-      watermark, BGM, and dark green outro color clip — no crashes
+      text watermark, BGM, dark green outro — "The End" has no tofu
+      (emoji stripped). No crashes.
   02  Leading/middle/trailing navy filler clips; mixed visual types
       and transitions; "Credits" text visible on trailing filler
-  03  All 6 text animations render simultaneously without glitches
+  03  All 7 text animations render simultaneously without glitches;
+      bottom text reads "emoji stripped" (emoji removed, no tofu)
   04  Short clips don't crash; text starts at clip boundary;
       audio starts at 1.5s; trailing color clip extends to ~5.75s
   05  MEGA: ~3 minute video renders without crashing. Verify:
-      - Magenta intro color clip with karaoke intro (0-5s)
+      - Letterbox bars + karaoke on magenta intro (0-5s)
+      - "MEGA TORTURE TEST" text (emoji stripped, no tofu)
       - Rapid transitions through many types (5-60s)
-      - Magenta intermission filler clip (60s area)
-      - All Ken Burns effects on images with labels (67-103s area)
-      - Another brief magenta filler clip (103-106s area)
+      - B&W intermission with blackAndWhite effect (60s area)
+      - Ken Burns festival with easing on pan-left/pan-right (67-103s)
+      - Chromatic aberration on brief break (103-106s)
       - Every text animation type visible (106-140s area)
-      - Karaoke smooth + instant, SRT + VTT subtitles (140-170s area)
-      - Cascading text on magenta finale color clip (170s+)
+      - Sharpen effect on karaoke + subtitles section (140-170s)
+      - Sepia-toned magenta finale, "THE END" (emoji stripped) (170s+)
       - Background music throughout, standalone audio on filler sections
-      - Text watermark ("CHAOS") at top-right
+      - Image watermark (bottom-left) throughout
 `);
 
 if (fail > 0) process.exit(1);

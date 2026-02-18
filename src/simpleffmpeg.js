@@ -11,6 +11,9 @@ const { buildEffectFilters } = require("./ffmpeg/effect_builder");
 const {
   getClipAudioString,
   hasProblematicChars,
+  hasEmoji,
+  stripEmoji,
+  parseFontFamily,
   escapeFilePath,
 } = require("./ffmpeg/strings");
 const {
@@ -40,6 +43,7 @@ const {
 } = require("./ffmpeg/watermark_builder");
 const {
   buildKaraokeASS,
+  buildTextClipASS,
   loadSubtitleFile,
   buildASSFilter,
 } = require("./ffmpeg/subtitle_builder");
@@ -58,6 +62,7 @@ class SIMPLEFFMPEG {
    * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
    * @param {string} options.fontFile - Default font file path (.ttf, .otf) applied to all text clips unless overridden per-clip
+   * @param {string} options.emojiFont - Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline).
    *
    * @example
    * const project = new SIMPLEFFMPEG({ preset: 'tiktok' });
@@ -66,7 +71,8 @@ class SIMPLEFFMPEG {
    * const project = new SIMPLEFFMPEG({
    *   width: 1920,
    *   height: 1080,
-   *   fps: 30
+   *   fps: 30,
+   *   emojiFont: '/path/to/NotoEmoji-Regular.ttf'
    * });
    */
   constructor(options = {}) {
@@ -90,14 +96,30 @@ class SIMPLEFFMPEG {
       validationMode: options.validationMode || C.DEFAULT_VALIDATION_MODE,
       preset: options.preset || null,
       fontFile: options.fontFile || null,
+      emojiFont: options.emojiFont || null,
     };
+    this._emojiFontInfo = null;
+    if (this.options.emojiFont) {
+      const family = parseFontFamily(this.options.emojiFont);
+      if (!family) {
+        console.warn(
+          `simple-ffmpeg: Could not parse font family from "${this.options.emojiFont}". Emoji will be stripped from text.`
+        );
+      } else {
+        this._emojiFontInfo = {
+          fontName: family,
+          fontsDir: path.dirname(path.resolve(this.options.emojiFont)),
+        };
+      }
+    }
+    this._emojiStrippedWarned = false;
     this.videoOrAudioClips = [];
     this.textClips = [];
     this.subtitleClips = [];
     this.effectClips = [];
     this.filesToClean = [];
-    this._isLoading = false; // Guard against concurrent load() calls
-    this._isExporting = false; // Guard against concurrent export() calls
+    this._isLoading = false;
+    this._isExporting = false;
   }
 
   /**
@@ -601,6 +623,52 @@ class SIMPLEFFMPEG {
         });
       }
 
+      // Emoji handling: opt-in via emojiFont, otherwise strip emoji from text.
+      const emojiASSClips = [];
+      const drawtextClips = [];
+      const ASS_COMPATIBLE_ANIMS = new Set([
+        "none", "fade-in", "fade-out", "fade-in-out", "fade",
+      ]);
+      for (const clip of adjustedTextClips) {
+        const textContent = clip.text || "";
+        if (!hasEmoji(textContent)) {
+          drawtextClips.push(clip);
+          continue;
+        }
+        if (this._emojiFontInfo) {
+          const animType = (clip.animation && clip.animation.type) || "none";
+          if (ASS_COMPATIBLE_ANIMS.has(animType)) {
+            emojiASSClips.push(clip);
+          } else {
+            console.warn(
+              `simple-ffmpeg: Text "${textContent.slice(0, 40)}..." contains emoji but uses '${animType}' animation ` +
+                `which is not supported in ASS. Emoji will be stripped.`
+            );
+            drawtextClips.push({ ...clip, text: stripEmoji(textContent) });
+          }
+        } else {
+          if (!this._emojiStrippedWarned) {
+            this._emojiStrippedWarned = true;
+            console.warn(
+              "simple-ffmpeg: Text contains emoji but no emojiFont is configured. " +
+                "Emoji will be stripped. To render emoji, pass emojiFont in the constructor: " +
+                "new SIMPLEFFMPEG({ emojiFont: '/path/to/NotoEmoji-Regular.ttf' })"
+            );
+          }
+          drawtextClips.push({ ...clip, text: stripEmoji(textContent) });
+        }
+      }
+      adjustedTextClips = drawtextClips.filter((clip) => {
+        if (!(clip.text || "").trim()) {
+          console.warn(
+            `simple-ffmpeg: Text clip at ${clip.position}s–${clip.end}s ` +
+              `has no visible text after emoji stripping. Skipping.`
+          );
+          return false;
+        }
+        return true;
+      });
+
       // For text with problematic characters, use temp files (textfile approach)
       adjustedTextClips = adjustedTextClips.map((clip, idx) => {
         const textContent = clip.text || "";
@@ -609,8 +677,7 @@ class SIMPLEFFMPEG {
             path.dirname(exportOptions.outputPath),
             `.simpleffmpeg_text_${idx}_${Date.now()}.txt`
           );
-          // Replace newlines with space for non-karaoke (consistent with escapeDrawtextText)
-          const normalizedText = textContent.replace(/\r?\n/g, " ");
+          const normalizedText = textContent.replace(/\r?\n/g, " ").replace(/ {2,}/g, " ");
           try {
             fs.writeFileSync(tempPath, normalizedText, "utf-8");
           } catch (writeError) {
@@ -667,6 +734,44 @@ class SIMPLEFFMPEG {
         } else {
           filterComplex += filterString;
           finalVideoLabel = outLabel;
+        }
+      }
+
+      // Emoji text overlays (ASS-based, only when emojiFont is configured)
+      if (emojiASSClips.length > 0 && this._emojiFontInfo) {
+        const { fontName: emojiFont, fontsDir: emojiFontsDir } = this._emojiFontInfo;
+        for (let i = 0; i < emojiASSClips.length; i++) {
+          const emojiClip = emojiASSClips[i];
+          const assContent = buildTextClipASS(
+            emojiClip,
+            this.options.width,
+            this.options.height,
+            emojiFont
+          );
+          const assFilePath = path.join(
+            path.dirname(exportOptions.outputPath),
+            `.simpleffmpeg_emoji_${i}_${Date.now()}.ass`
+          );
+          try {
+            fs.writeFileSync(assFilePath, assContent, "utf-8");
+          } catch (writeError) {
+            throw new SimpleffmpegError(
+              `Failed to write temporary ASS file "${assFilePath}": ${writeError.message}`,
+              { cause: writeError }
+            );
+          }
+          this.filesToClean.push(assFilePath);
+
+          const assResult = buildASSFilter(assFilePath, finalVideoLabel, {
+            fontsDir: emojiFontsDir,
+          });
+          const uniqueLabel = `[outemoji${i}]`;
+          const filter = assResult.filter.replace(
+            assResult.finalLabel,
+            uniqueLabel
+          );
+          filterComplex += filter + ";";
+          finalVideoLabel = uniqueLabel;
         }
       }
     }

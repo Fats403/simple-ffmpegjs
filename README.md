@@ -76,6 +76,7 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 
 **Overlays & Effects**
 - **Text Overlays** — Static, word-by-word, and cumulative text with animations
+- **Emoji Support** — Opt-in emoji rendering via custom font + libass; stripped by default for clean output
 - **Text Animations** — Typewriter, scale-in, pulse, fade effects
 - **Karaoke Mode** — Word-by-word highlighting with customizable colors
 - **Subtitle Import** — Load SRT, VTT, ASS/SSA subtitle files
@@ -122,6 +123,20 @@ apk add --no-cache ffmpeg fontconfig ttf-dejavu
 # Debian/Ubuntu
 apt-get install -y ffmpeg fontconfig fonts-dejavu-core
 ```
+
+**Emoji in text overlays** are handled gracefully: by default, emoji characters are automatically detected and silently stripped from text to prevent blank boxes (tofu). To render emoji, pass an `emojiFont` path in the constructor:
+
+```javascript
+const project = new SIMPLEFFMPEG({
+  width: 1920,
+  height: 1080,
+  emojiFont: '/path/to/NotoEmoji-Regular.ttf'
+});
+```
+
+Recommended font: [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji) (B&W outline, ~2 MB, SIL OFL). Download from [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Emoji) or [GitHub](https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf). When an emoji font is configured, emoji text is routed through libass (ASS subtitle path) with inline `\fn` font switching for per-glyph rendering.
+
+> **Note:** Emoji render as monochrome outlines because libass does not yet support color emoji font formats. The shapes are recognizable and correctly spaced, just not multi-colored. Without `emojiFont`, emoji are stripped and a one-time console warning is logged.
 
 ## Quick Start
 
@@ -296,6 +311,7 @@ new SIMPLEFFMPEG(options?: {
   validationMode?: 'warn' | 'strict';  // Validation behavior (default: 'warn')
   preset?: string;          // Platform preset (e.g., 'tiktok', 'youtube', 'instagram-post')
   fontFile?: string;        // Default font file for all text clips (individual clips can override)
+  emojiFont?: string;       // Path to emoji font .ttf for opt-in emoji rendering (stripped by default)
 })
 ```
 
@@ -1125,6 +1141,43 @@ await project.load([
 // Also available: fade-in, fade-out, fade-in-out, pop, pop-bounce, scale-in
 ```
 
+**Emoji in text overlays:**
+
+Emoji characters are automatically detected. By default they are stripped from text to prevent tofu (blank boxes). To render emoji, configure an `emojiFont` path in the constructor:
+
+```ts
+// Enable emoji rendering by providing a font path
+const project = new SIMPLEFFMPEG({
+  width: 1920,
+  height: 1080,
+  emojiFont: "./fonts/NotoEmoji-Regular.ttf",
+});
+
+await project.load([
+  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
+  {
+    type: "text",
+    text: "small dog, big heart 🐾",
+    position: 1,
+    end: 5,
+    fontSize: 48,
+    fontColor: "#FFFFFF",
+    yPercent: 0.5,
+  },
+  {
+    type: "text",
+    text: "Movie night! 🎬🍿✨",
+    position: 5,
+    end: 9,
+    fontSize: 48,
+    fontColor: "#FFFFFF",
+    animation: { type: "fade-in-out", in: 0.5, out: 0.5 },
+  },
+]);
+```
+
+> **Note:** Without `emojiFont`, emoji are silently stripped (no tofu). With `emojiFont`, emoji render as monochrome outlines via the ASS path. Supports fade animations (`fade-in`, `fade-out`, `fade-in-out`) and static text. For other animation types (`pop`, `typewriter`, etc.), emoji are stripped and a console warning is logged.
+
 ### Karaoke
 
 Word-by-word highlighting with customizable colors. Use `highlightStyle: "instant"` for immediate color changes instead of the default smooth fill:
@@ -1526,7 +1579,7 @@ npm run test:watch
 For visual verification, run the demo suite to generate sample videos covering all major features. Each demo outputs to its own subfolder under `examples/output/` and includes annotated expected timelines so you know exactly what to look for:
 
 ```bash
-# Run all demos (color clips, effects, transitions, text, Ken Burns, audio, watermarks, karaoke, torture test)
+# Run all demos (color clips, effects, transitions, text, emoji, Ken Burns, audio, watermarks, karaoke, torture test)
 node examples/run-examples.js
 
 # Run a specific demo by name (partial match)
@@ -1542,6 +1595,7 @@ Available demo scripts (can also be run individually):
 | `demo-effects.js`               | Timed overlay effects (all 9 effects) with smooth fade ramps                           |
 | `demo-transitions.js`           | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions  |
 | `demo-text-and-animations.js`   | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
+| `demo-emoji-text.js`            | Emoji stripping (default) and opt-in rendering via emojiFont, fade, styling, fallback |
 | `demo-ken-burns.js`             | All 6 presets, smart anchors, custom diagonal, slideshow with transitions              |
 | `demo-audio-mixing.js`          | Volume levels, background music, standalone audio, loop, multi-source mix              |
 | `demo-watermarks.js`            | Text/image watermarks, all positions, timed appearance, styled over transitions        |

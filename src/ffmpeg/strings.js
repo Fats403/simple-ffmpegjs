@@ -68,6 +68,85 @@ function escapeTextFilePath(filePath) {
     .replace(/:/g, "\\:"); // Escape colons (for Windows drive letters)
 }
 
+/**
+ * Check if text contains emoji characters that require ASS-based rendering
+ * for proper font fallback (drawtext uses a single font with no fallback).
+ * Matches two classes:
+ *   1. \p{Emoji_Presentation} — inherently visual emoji (e.g. 🐾, 🎬)
+ *   2. \p{Emoji}\uFE0F — text-default emoji made visual by variation selector (e.g. ❤️)
+ * Does NOT match bare digits, #, * etc. which have \p{Emoji} but lack the selector.
+ */
+function hasEmoji(text) {
+  if (typeof text !== "string") return false;
+  return /\p{Emoji_Presentation}/u.test(text) || /\p{Emoji}\uFE0F/u.test(text);
+}
+
+const fs = require("fs");
+const path = require("path");
+
+const VISUAL_EMOJI_RE = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
+
+/**
+ * Remove visual emoji characters from text.
+ * Collapses any resulting double-spaces but preserves leading/trailing whitespace.
+ * @param {string} text
+ * @returns {string}
+ */
+function stripEmoji(text) {
+  if (typeof text !== "string") return text;
+  return text.replace(VISUAL_EMOJI_RE, "").replace(/ {2,}/g, " ").trim();
+}
+
+/**
+ * Parse the font family name from a TrueType/OpenType font file.
+ * Reads the 'name' table (nameID 1) directly — no dependencies needed.
+ * Returns the family name string or null if parsing fails.
+ * @param {string} fontPath - Absolute or relative path to a .ttf/.otf file
+ * @returns {string|null}
+ */
+function parseFontFamily(fontPath) {
+  try {
+    const buf = fs.readFileSync(fontPath);
+    if (buf.length < 12) return null;
+    const numTables = buf.readUInt16BE(4);
+    for (let i = 0; i < numTables; i++) {
+      const off = 12 + i * 16;
+      if (off + 16 > buf.length) return null;
+      const tag = buf.toString("ascii", off, off + 4);
+      if (tag !== "name") continue;
+      const tableOffset = buf.readUInt32BE(off + 8);
+      if (tableOffset + 6 > buf.length) return null;
+      const count = buf.readUInt16BE(tableOffset + 2);
+      const stringStorageOffset = tableOffset + buf.readUInt16BE(tableOffset + 4);
+      for (let j = 0; j < count; j++) {
+        const recOff = tableOffset + 6 + j * 12;
+        if (recOff + 12 > buf.length) return null;
+        const platformID = buf.readUInt16BE(recOff);
+        const nameID = buf.readUInt16BE(recOff + 6);
+        const length = buf.readUInt16BE(recOff + 8);
+        const strOff = buf.readUInt16BE(recOff + 10);
+        if (nameID !== 1) continue;
+        const start = stringStorageOffset + strOff;
+        if (start + length > buf.length) continue;
+        if (platformID === 1) {
+          return buf.toString("utf8", start, start + length);
+        }
+        if (platformID === 3) {
+          let name = "";
+          for (let k = 0; k < length; k += 2) {
+            name += String.fromCharCode(buf.readUInt16BE(start + k));
+          }
+          return name;
+        }
+      }
+      break;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function getClipAudioString(clip, inputIndex) {
   const adelay = Math.round(Math.max(0, (clip.position || 0) * 1000));
   const audioConcatInput = `[a${inputIndex}]`;
@@ -84,5 +163,8 @@ module.exports = {
   escapeDrawtextText,
   getClipAudioString,
   hasProblematicChars,
+  hasEmoji,
+  stripEmoji,
+  parseFontFamily,
   escapeTextFilePath,
 };
