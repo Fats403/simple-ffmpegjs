@@ -12,19 +12,23 @@ function buildBackgroundMusicMix(
     };
   }
 
+  // Prefer the caller-supplied visualEnd which accounts for transition
+  // compression, falling back to clip end values for audio-only projects.
   const projectDuration =
-    project.videoOrAudioClips.filter(
-      (c) => c.type === "video" || c.type === "image"
-    ).length > 0
-      ? Math.max(
-          ...project.videoOrAudioClips
-            .filter((c) => c.type === "video" || c.type === "image")
-            .map((c) => c.end)
-        )
-      : Math.max(
-          0,
-          ...backgroundClips.map((c) => (typeof c.end === "number" ? c.end : 0))
-        );
+    typeof visualEnd === "number" && visualEnd > 0
+      ? visualEnd
+      : project.videoOrAudioClips.filter(
+          (c) => c.type === "video" || c.type === "image"
+        ).length > 0
+        ? Math.max(
+            ...project.videoOrAudioClips
+              .filter((c) => c.type === "video" || c.type === "image")
+              .map((c) => c.end)
+          )
+        : Math.max(
+            0,
+            ...backgroundClips.map((c) => (typeof c.end === "number" ? c.end : 0))
+          );
 
   let filter = "";
   const bgLabels = [];

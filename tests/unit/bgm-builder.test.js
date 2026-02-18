@@ -187,6 +187,36 @@ describe("buildBackgroundMusicMix", () => {
     });
   });
 
+  describe("transition-compressed visualEnd", () => {
+    it("should use visualEnd instead of clip end values when visualEnd is provided", () => {
+      // Simulate transition compression: clips end at 46.5 but actual
+      // video duration after xfade is 39.3.
+      const video1 = mockVideoClip({ position: 0, end: 10 });
+      const video2 = mockVideoClip({ position: 10, end: 20, transition: { type: "fade", duration: 1 } });
+      const bgm = mockBgmClip({ volume: 0.18 });
+      const project = mockProject([video1, video2, bgm]);
+
+      // visualEnd = 18 (compressed: 10 + 10 - 1 transition - 1 transition = 18)
+      const result = buildBackgroundMusicMix(project, [bgm], "[outa]", 18);
+
+      // BGM effectiveEnd should be 18 (from visualEnd), not 20 (from clip.end)
+      expect(result.filter).toContain("atrim=start=0:end=18");
+      // Silence anchor should also use 18
+      expect(result.filter).toContain("anullsrc=cl=stereo,atrim=end=18");
+    });
+
+    it("should fall back to clip end values when visualEnd is 0", () => {
+      const video = mockVideoClip({ end: 10 });
+      const bgm = mockBgmClip({ volume: 0.2 });
+      const project = mockProject([video, bgm]);
+
+      const result = buildBackgroundMusicMix(project, [bgm], null, 0);
+
+      // Should fall back to Math.max(clip.end) = 10
+      expect(result.filter).toContain("atrim=start=0:end=10");
+    });
+  });
+
   describe("delayed video audio scenario (the main bug)", () => {
     it("should produce correct filter when video starts at 7s and bgm at 0s", () => {
       const video = mockVideoClip({ position: 7, end: 10 });

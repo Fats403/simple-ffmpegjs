@@ -469,17 +469,11 @@ class SIMPLEFFMPEG {
       finalVideoLabel = vres.finalVideoLabel;
       hasVideo = vres.hasVideo;
 
-      // Use the actual video output length for finalVisualEnd so that
-      // audio trim and BGM duration match the real video stream length,
-      // rather than an original-timeline position that may differ due to
-      // transition compression.
+      // Use the actual video output length so that audio trim and BGM
+      // duration match the real video stream length, which may be shorter
+      // than the original-timeline positions due to transition compression.
       if (typeof vres.videoDuration === "number" && vres.videoDuration > 0) {
         totalVideoDuration = vres.videoDuration;
-      }
-      if (
-        typeof vres.videoDuration === "number" &&
-        vres.videoDuration > finalVisualEnd
-      ) {
         finalVisualEnd = vres.videoDuration;
       }
     }
