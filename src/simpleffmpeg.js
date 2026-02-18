@@ -1,6 +1,7 @@
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
+const os = require("os");
 const TextRenderer = require("./ffmpeg/text_renderer");
 const { unrotateVideo } = require("./core/rotation");
 const Loaders = require("./loaders");
@@ -33,6 +34,7 @@ const {
   buildMainCommand,
   buildThumbnailCommand,
   buildSnapshotCommand,
+  buildKeyframeCommand,
   sanitizeFilterComplex,
 } = require("./ffmpeg/command_builder");
 const { runTextPasses } = require("./ffmpeg/text_passes");
@@ -63,6 +65,7 @@ class SIMPLEFFMPEG {
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
    * @param {string} options.fontFile - Default font file path (.ttf, .otf) applied to all text clips unless overridden per-clip
    * @param {string} options.emojiFont - Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline).
+   * @param {string} options.tempDir - Custom directory for temporary files (gradient images, unrotated videos, intermediate renders). Defaults to os.tmpdir(). Useful for fast SSDs, ramdisks, or environments with constrained /tmp.
    *
    * @example
    * const project = new SIMPLEFFMPEG({ preset: 'tiktok' });
@@ -97,7 +100,20 @@ class SIMPLEFFMPEG {
       preset: options.preset || null,
       fontFile: options.fontFile || null,
       emojiFont: options.emojiFont || null,
+      tempDir: options.tempDir || null,
     };
+    if (this.options.tempDir) {
+      if (typeof this.options.tempDir !== "string") {
+        throw new SimpleffmpegError(
+          "tempDir must be a string path to an existing directory."
+        );
+      }
+      if (!fs.existsSync(this.options.tempDir)) {
+        throw new SimpleffmpegError(
+          `tempDir "${this.options.tempDir}" does not exist. Create it before constructing SIMPLEFFMPEG.`
+        );
+      }
+    }
     this._emojiFontInfo = null;
     if (this.options.emojiFont) {
       const family = parseFontFamily(this.options.emojiFont);
@@ -413,7 +429,9 @@ class SIMPLEFFMPEG {
     await Promise.all(
       this.videoOrAudioClips.map(async (clip) => {
         if (clip.type === "video" && clip.iphoneRotation !== 0) {
-          const unrotatedUrl = await unrotateVideo(clip.url);
+          const unrotatedUrl = await unrotateVideo(clip.url, {
+            tempDir: this.options.tempDir,
+          });
           this.filesToClean.push(unrotatedUrl);
           clip.url = unrotatedUrl;
         }
@@ -670,11 +688,13 @@ class SIMPLEFFMPEG {
       });
 
       // For text with problematic characters, use temp files (textfile approach)
+      const textTempBase =
+        this.options.tempDir || path.dirname(exportOptions.outputPath);
       adjustedTextClips = adjustedTextClips.map((clip, idx) => {
         const textContent = clip.text || "";
         if (hasProblematicChars(textContent)) {
           const tempPath = path.join(
-            path.dirname(exportOptions.outputPath),
+            textTempBase,
             `.simpleffmpeg_text_${idx}_${Date.now()}.txt`
           );
           const normalizedText = textContent.replace(/\r?\n/g, " ").replace(/ {2,}/g, " ");
@@ -749,7 +769,7 @@ class SIMPLEFFMPEG {
             emojiFont
           );
           const assFilePath = path.join(
-            path.dirname(exportOptions.outputPath),
+            this.options.tempDir || path.dirname(exportOptions.outputPath),
             `.simpleffmpeg_emoji_${i}_${Date.now()}.ass`
           );
           try {
@@ -855,7 +875,7 @@ class SIMPLEFFMPEG {
         // Write temp ASS file if we generated content
         if (assContent && !assFilePath) {
           assFilePath = path.join(
-            path.dirname(exportOptions.outputPath),
+            this.options.tempDir || path.dirname(exportOptions.outputPath),
             `.simpleffmpeg_sub_${i}_${Date.now()}.ass`
           );
           try {
@@ -1087,7 +1107,7 @@ class SIMPLEFFMPEG {
       // Two-pass encoding
       if (exportOptions.twoPass && exportOptions.videoBitrate && hasVideo) {
         const passLogFile = path.join(
-          path.dirname(exportOptions.outputPath),
+          this.options.tempDir || path.dirname(exportOptions.outputPath),
           `ffmpeg2pass-${Date.now()}`
         );
 
@@ -1198,10 +1218,20 @@ class SIMPLEFFMPEG {
           intermediateCrf: exportOptions.intermediateCrf,
           batchSize: exportOptions.textMaxNodesPerPass,
           onLog,
+          tempDir: this.options.tempDir,
         });
         passes = textPasses;
         if (finalPath !== exportOptions.outputPath) {
-          fs.renameSync(finalPath, exportOptions.outputPath);
+          try {
+            fs.renameSync(finalPath, exportOptions.outputPath);
+          } catch (renameErr) {
+            if (renameErr.code === "EXDEV") {
+              fs.copyFileSync(finalPath, exportOptions.outputPath);
+              fs.unlinkSync(finalPath);
+            } else {
+              throw renameErr;
+            }
+          }
         }
         tempOutputs.slice(0, -1).forEach((f) => {
           try {
@@ -1452,6 +1482,170 @@ class SIMPLEFFMPEG {
 
     await runFFmpeg({ command });
     return outputPath;
+  }
+
+  /**
+   * Extract keyframes from a video using scene-change detection or fixed time intervals.
+   *
+   * Scene-change mode uses FFmpeg's select=gt(scene,N) filter to detect visual transitions.
+   * Interval mode extracts frames at fixed time intervals using FFmpeg's fps filter.
+   *
+   * When `outputDir` is provided, frames are written to disk and the method returns an
+   * array of file paths. Without `outputDir`, frames are returned as in-memory Buffer
+   * objects (no temp files left behind).
+   *
+   * @param {string} filePath - Path to the source video file
+   * @param {Object} [options] - Extraction options
+   * @param {string} [options.mode='scene-change'] - 'scene-change' for intelligent detection, 'interval' for fixed time spacing
+   * @param {number} [options.sceneThreshold=0.3] - Scene detection sensitivity 0-1, lower = more frames (scene-change mode only)
+   * @param {number} [options.intervalSeconds=5] - Seconds between frames (interval mode only)
+   * @param {number} [options.maxFrames] - Maximum number of frames to extract
+   * @param {string} [options.format='jpeg'] - Output format: 'jpeg' or 'png'
+   * @param {number} [options.quality] - JPEG quality 1-31, lower is better (JPEG only)
+   * @param {number} [options.width] - Output width in pixels (maintains aspect ratio if height omitted)
+   * @param {number} [options.height] - Output height in pixels (maintains aspect ratio if width omitted)
+   * @param {string} [options.outputDir] - Directory to write frames to. If omitted, returns Buffer[] instead of string[].
+   * @param {string} [options.tempDir] - Custom directory for temporary files (default: os.tmpdir()). Only used when outputDir is not set.
+   * @returns {Promise<Buffer[]|string[]>} Buffer[] when no outputDir, string[] of file paths when outputDir is set
+   * @throws {SimpleffmpegError} If arguments are invalid
+   * @throws {FFmpegError} If FFmpeg fails during extraction
+   *
+   * @example
+   * // Scene-change detection — returns Buffer[]
+   * const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "scene-change",
+   *   sceneThreshold: 0.4,
+   *   maxFrames: 8,
+   *   format: "jpeg",
+   * });
+   *
+   * @example
+   * // Fixed interval — writes to disk, returns string[]
+   * const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "interval",
+   *   intervalSeconds: 5,
+   *   outputDir: "./frames/",
+   *   format: "png",
+   * });
+   */
+  static async extractKeyframes(filePath, options = {}) {
+    if (!filePath) {
+      throw new SimpleffmpegError(
+        "extractKeyframes() requires a filePath as the first argument"
+      );
+    }
+
+    const {
+      mode = "scene-change",
+      sceneThreshold = 0.3,
+      intervalSeconds = 5,
+      maxFrames,
+      format = "jpeg",
+      quality,
+      width,
+      height,
+      outputDir,
+      tempDir,
+    } = options;
+
+    if (mode !== "scene-change" && mode !== "interval") {
+      throw new SimpleffmpegError(
+        `extractKeyframes() invalid mode: "${mode}". Must be "scene-change" or "interval".`
+      );
+    }
+
+    if (format !== "jpeg" && format !== "png") {
+      throw new SimpleffmpegError(
+        `extractKeyframes() invalid format: "${format}". Must be "jpeg" or "png".`
+      );
+    }
+
+    if (
+      mode === "scene-change" &&
+      (typeof sceneThreshold !== "number" ||
+        sceneThreshold < 0 ||
+        sceneThreshold > 1)
+    ) {
+      throw new SimpleffmpegError(
+        "extractKeyframes() sceneThreshold must be a number between 0 and 1."
+      );
+    }
+
+    if (
+      mode === "interval" &&
+      (typeof intervalSeconds !== "number" || intervalSeconds <= 0)
+    ) {
+      throw new SimpleffmpegError(
+        "extractKeyframes() intervalSeconds must be a positive number."
+      );
+    }
+
+    if (maxFrames != null && (!Number.isInteger(maxFrames) || maxFrames < 1)) {
+      throw new SimpleffmpegError(
+        "extractKeyframes() maxFrames must be a positive integer."
+      );
+    }
+
+    if (tempDir != null && typeof tempDir === "string" && !fs.existsSync(tempDir)) {
+      throw new SimpleffmpegError(
+        `extractKeyframes() tempDir "${tempDir}" does not exist.`
+      );
+    }
+
+    const ext = format === "png" ? ".png" : ".jpg";
+    const useTemp = !outputDir;
+
+    let targetDir;
+    if (outputDir) {
+      await fsPromises.mkdir(outputDir, { recursive: true });
+      targetDir = outputDir;
+    } else {
+      const tmpBase = tempDir || os.tmpdir();
+      targetDir = await fsPromises.mkdtemp(
+        path.join(tmpBase, "simpleffmpeg-keyframes-")
+      );
+    }
+
+    const outputPattern = path.join(targetDir, `frame-%04d${ext}`);
+
+    const command = buildKeyframeCommand({
+      inputPath: filePath,
+      outputPattern,
+      mode,
+      sceneThreshold,
+      intervalSeconds,
+      maxFrames,
+      width,
+      height,
+      quality,
+    });
+
+    try {
+      await runFFmpeg({ command });
+    } catch (err) {
+      if (useTemp) {
+        await fsPromises
+          .rm(targetDir, { recursive: true, force: true })
+          .catch(() => {});
+      }
+      throw err;
+    }
+
+    const files = (await fsPromises.readdir(targetDir))
+      .filter((f) => f.startsWith("frame-") && f.endsWith(ext))
+      .sort();
+
+    if (useTemp) {
+      const buffers = await Promise.all(
+        files.map((f) => fsPromises.readFile(path.join(targetDir, f)))
+      );
+      await fsPromises
+        .rm(targetDir, { recursive: true, force: true })
+        .catch(() => {});
+      return buffers;
+    }
+
+    return files.map((f) => path.join(targetDir, f));
   }
 
   /**

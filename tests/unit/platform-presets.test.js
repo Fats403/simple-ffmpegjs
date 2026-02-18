@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import os from "os";
 
 const SIMPLEFFMPEG = (await import("../../src/simpleffmpeg.js")).default;
 
@@ -78,6 +79,30 @@ describe("Platform Presets", () => {
       const ff = new SIMPLEFFMPEG({ preset: "unknown-platform" });
       expect(ff.options.width).toBe(1920); // Falls back to default
       expect(ff.options.height).toBe(1080); // Falls back to default
+    });
+  });
+
+  describe("constructor with tempDir", () => {
+    it("should accept a valid tempDir", () => {
+      const ff = new SIMPLEFFMPEG({ tempDir: os.tmpdir() });
+      expect(ff.options.tempDir).toBe(os.tmpdir());
+    });
+
+    it("should throw if tempDir does not exist", () => {
+      expect(() => new SIMPLEFFMPEG({ tempDir: "/nonexistent/path" })).toThrow(
+        /does not exist/
+      );
+    });
+
+    it("should throw if tempDir is not a string", () => {
+      expect(() => new SIMPLEFFMPEG({ tempDir: 123 })).toThrow(
+        /must be a string/
+      );
+    });
+
+    it("should default tempDir to null when not provided", () => {
+      const ff = new SIMPLEFFMPEG();
+      expect(ff.options.tempDir).toBe(null);
     });
   });
 

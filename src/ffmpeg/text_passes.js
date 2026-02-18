@@ -74,10 +74,12 @@ async function runTextPasses({
   intermediateCrf,
   batchSize = 75,
   onLog,
+  tempDir,
 }) {
   const tempOutputs = [];
   let currentInput = baseOutputPath;
   let passes = 0;
+  const intermediateDir = tempDir || path.dirname(baseOutputPath);
 
   for (let i = 0; i < textWindows.length; i += batchSize) {
     const batch = textWindows.slice(i, i + batchSize);
@@ -89,7 +91,7 @@ async function runTextPasses({
     );
 
     const batchOutput = path.join(
-      path.dirname(baseOutputPath),
+      intermediateDir,
       `textpass_${i}_${path.basename(baseOutputPath)}`
     );
     tempOutputs.push(batchOutput);

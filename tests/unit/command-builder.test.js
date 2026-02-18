@@ -4,6 +4,7 @@ const {
   buildMainCommand,
   buildThumbnailCommand,
   buildSnapshotCommand,
+  buildKeyframeCommand,
   escapeMetadata,
   sanitizeFilterComplex,
 } = await import("../../src/ffmpeg/command_builder.js");
@@ -402,5 +403,165 @@ describe("sanitizeFilterComplex", () => {
     const fc =
       "[0:v]scale=1920:1080[v0];[v0][v1]xfade=transition=dissolve:duration=0.5[outv]";
     expect(() => sanitizeFilterComplex(fc)).not.toThrow();
+  });
+});
+
+describe("buildKeyframeCommand", () => {
+  it("should build scene-change command with defaults", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+    });
+
+    expect(cmd).toContain("ffmpeg -y");
+    expect(cmd).toContain('-i "./video.mp4"');
+    expect(cmd).toContain("select='gt(scene,0.3)'");
+    expect(cmd).toContain("-vsync vfr");
+    expect(cmd).toContain('"/tmp/frame-%04d.jpg"');
+    expect(cmd).not.toContain("-frames:v");
+  });
+
+  it("should build interval command", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "interval",
+      intervalSeconds: 5,
+    });
+
+    expect(cmd).toContain("fps=1/5");
+    expect(cmd).toContain("-vsync vfr");
+    expect(cmd).not.toContain("select=");
+  });
+
+  it("should include maxFrames when provided", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.4,
+      maxFrames: 8,
+    });
+
+    expect(cmd).toContain("-frames:v 8");
+  });
+
+  it("should not include maxFrames when not provided", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+    });
+
+    expect(cmd).not.toContain("-frames:v");
+  });
+
+  it("should add scale filter when width and height provided", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      width: 640,
+      height: 360,
+    });
+
+    expect(cmd).toContain("scale=640:360");
+  });
+
+  it("should handle width only (maintain aspect ratio)", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      width: 320,
+    });
+
+    expect(cmd).toContain("scale=320:-1");
+  });
+
+  it("should handle height only (maintain aspect ratio)", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "interval",
+      intervalSeconds: 2,
+      height: 240,
+    });
+
+    expect(cmd).toContain("scale=-1:240");
+  });
+
+  it("should chain scale after select filter", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      width: 640,
+    });
+
+    expect(cmd).toMatch(/select='gt\(scene,0\.3\)',scale=640:-1/);
+  });
+
+  it("should include quality flag when provided", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      quality: 4,
+    });
+
+    expect(cmd).toContain("-q:v 4");
+  });
+
+  it("should not include quality flag when not provided", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.png",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+    });
+
+    expect(cmd).not.toContain("-q:v");
+  });
+
+  it("should use custom scene threshold", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.6,
+    });
+
+    expect(cmd).toContain("select='gt(scene,0.6)'");
+  });
+
+  it("should use custom interval seconds", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "interval",
+      intervalSeconds: 10,
+    });
+
+    expect(cmd).toContain("fps=1/10");
+  });
+
+  it("should escape special characters in file paths", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./my video's file.mp4",
+      outputPattern: "/tmp/output dir/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+    });
+
+    expect(cmd).toContain("-i");
+    expect(cmd).toContain("my video");
   });
 });

@@ -236,7 +236,7 @@ async function loadColor(project, clipObj) {
     const ppmBuffer = generateGradientPPM(width, height, clipObj.color);
 
     const tempPath = path.join(
-      os.tmpdir(),
+      project.options.tempDir || os.tmpdir(),
       `simpleffmpeg-gradient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ppm`
     );
     fs.writeFileSync(tempPath, ppmBuffer);

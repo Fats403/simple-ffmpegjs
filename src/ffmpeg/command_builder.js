@@ -310,11 +310,61 @@ function sanitizeFilterComplex(fc) {
   return sanitized;
 }
 
+/**
+ * Build FFmpeg command to extract keyframes from a video.
+ *
+ * Supports two modes:
+ * - "scene-change": uses select='gt(scene,N)' to detect visual transitions
+ * - "interval": uses fps=1/N to sample at fixed time intervals
+ */
+function buildKeyframeCommand({
+  inputPath,
+  outputPattern,
+  mode,
+  sceneThreshold,
+  intervalSeconds,
+  maxFrames,
+  width,
+  height,
+  quality,
+}) {
+  let cmd = `ffmpeg -y -i "${escapeFilePath(inputPath)}"`;
+
+  const filters = [];
+
+  if (mode === "scene-change") {
+    filters.push(`select='gt(scene,${sceneThreshold})'`);
+  } else {
+    filters.push(`fps=1/${intervalSeconds}`);
+  }
+
+  if (width || height) {
+    const w = width || -1;
+    const h = height || -1;
+    filters.push(`scale=${w}:${h}`);
+  }
+
+  cmd += ` -vf "${filters.join(",")}"`;
+  cmd += ` -vsync vfr`;
+
+  if (maxFrames != null) {
+    cmd += ` -frames:v ${maxFrames}`;
+  }
+
+  if (quality != null) {
+    cmd += ` -q:v ${quality}`;
+  }
+
+  cmd += ` "${escapeFilePath(outputPattern)}"`;
+  return cmd;
+}
+
 module.exports = {
   buildMainCommand,
   buildTextBatchCommand,
   buildThumbnailCommand,
   buildSnapshotCommand,
+  buildKeyframeCommand,
   escapeMetadata,
   sanitizeFilterComplex,
 };

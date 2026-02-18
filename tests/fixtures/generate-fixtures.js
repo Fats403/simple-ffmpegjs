@@ -42,6 +42,11 @@ const fixtures = [
     // Small 64x64 white circle on transparent background for watermark testing
     cmd: `ffmpeg -y -f lavfi -i "color=c=white:s=64x64:d=1,format=rgba" -frames:v 1`,
   },
+  {
+    name: "test-video-multiscene-6s.mp4",
+    // 6 second video with 3 distinct scenes (red→blue→green, 2s each) for keyframe extraction tests
+    cmd: `ffmpeg -y -f lavfi -i "color=c=red:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "color=c=blue:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "color=c=green:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "anullsrc=r=44100:cl=stereo" -filter_complex "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]" -map "[v]" -map 3:a -t 6 -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 64k -shortest`,
+  },
 ];
 
 // Text-based fixtures (subtitles)

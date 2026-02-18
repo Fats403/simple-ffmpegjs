@@ -83,6 +83,9 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 - **Watermarks** — Text or image overlays with positioning and timing control
 - **Effect Clips** — Timed overlay effects (vignette, film grain, blur, color adjust, sepia, black & white, sharpen, chromatic aberration, letterbox) with fade-in/out envelopes
 
+**Analysis & Extraction**
+- **Keyframe Extraction** — Scene-change detection or fixed-interval frame sampling, returning in-memory buffers or files on disk
+
 **Developer Experience**
 - **Platform Presets** — Quick configuration for TikTok, YouTube, Instagram, etc.
 - **Progress Tracking** — Real-time export progress callbacks
@@ -312,8 +315,22 @@ new SIMPLEFFMPEG(options?: {
   preset?: string;          // Platform preset (e.g., 'tiktok', 'youtube', 'instagram-post')
   fontFile?: string;        // Default font file for all text clips (individual clips can override)
   emojiFont?: string;       // Path to emoji font .ttf for opt-in emoji rendering (stripped by default)
+  tempDir?: string;         // Custom temp directory for intermediate files (default: OS temp)
 })
 ```
+
+**Custom Temp Directory:**
+
+Set `tempDir` to route all temporary files (gradient images, unrotated videos, text/subtitle temp files, batch intermediate renders) to a custom location. Useful for fast SSDs, ramdisks, Docker containers with limited `/tmp`, or any environment where temp storage performance matters:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  preset: "youtube",
+  tempDir: "/mnt/fast-nvme/tmp",
+});
+```
+
+When not set, temp files go to the OS default (`os.tmpdir()`) or next to the output file, depending on the operation. Cross-filesystem moves are handled automatically.
 
 When `fontFile` is set at the project level, every text clip (including karaoke) inherits it automatically. You can still override it on any individual clip:
 
@@ -437,6 +454,67 @@ await SIMPLEFFMPEG.snapshot("./video.mp4", {
   time: 0,
 });
 ```
+
+#### `SIMPLEFFMPEG.extractKeyframes(filePath, options)`
+
+Extract keyframes from a video using scene-change detection or fixed time intervals. This is a static method — no project instance needed.
+
+**Scene-change mode** (default) uses FFmpeg's `select=gt(scene,N)` filter to intelligently detect visual transitions and extract frames at cut points. **Interval mode** extracts frames at fixed time intervals.
+
+When `outputDir` is provided, frames are written to disk and the method returns an array of file paths. Without `outputDir`, frames are returned as in-memory `Buffer` objects (no temp files left behind).
+
+```ts
+// Scene-change detection — returns Buffer[]
+const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "scene-change",
+  sceneThreshold: 0.4,
+  maxFrames: 8,
+  format: "jpeg",
+});
+
+// Fixed interval — writes to disk, returns string[]
+const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "interval",
+  intervalSeconds: 5,
+  outputDir: "./frames/",
+  format: "png",
+});
+```
+
+**Keyframe Options:**
+
+| Option            | Type     | Default          | Description                                                                     |
+| ----------------- | -------- | ---------------- | ------------------------------------------------------------------------------- |
+| `mode`            | `string` | `'scene-change'` | `'scene-change'` for intelligent detection, `'interval'` for fixed time spacing |
+| `sceneThreshold`  | `number` | `0.3`            | Scene detection sensitivity 0-1 (lower = more frames). Scene-change mode only.  |
+| `intervalSeconds` | `number` | `5`              | Seconds between frames. Interval mode only.                                     |
+| `maxFrames`       | `number` | -                | Maximum number of frames to extract                                             |
+| `format`          | `string` | `'jpeg'`         | Output format: `'jpeg'` or `'png'`                                              |
+| `quality`         | `number` | -                | JPEG quality 1-31, lower is better (only applies to JPEG)                       |
+| `width`           | `number` | -                | Output width in pixels (maintains aspect ratio if height omitted)               |
+| `height`          | `number` | -                | Output height in pixels (maintains aspect ratio if width omitted)               |
+| `outputDir`       | `string` | -                | Directory to write frames to. If omitted, returns `Buffer[]` instead.           |
+| `tempDir`         | `string` | `os.tmpdir()`    | Custom temp directory (only when `outputDir` is not set). Useful for fast SSDs or ramdisks. |
+
+```ts
+// Scene-change with resize and JPEG quality
+const frames = await SIMPLEFFMPEG.extractKeyframes("./long-video.mp4", {
+  sceneThreshold: 0.25,
+  maxFrames: 12,
+  width: 640,
+  quality: 4,
+});
+
+// One frame every 10 seconds, saved as PNG
+const paths = await SIMPLEFFMPEG.extractKeyframes("./presentation.mp4", {
+  mode: "interval",
+  intervalSeconds: 10,
+  outputDir: "./thumbnails/",
+  format: "png",
+});
+```
+
+Throws `FFmpegError` if FFmpeg fails during extraction.
 
 #### `project.export(options)`
 

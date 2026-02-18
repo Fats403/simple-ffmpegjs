@@ -5,8 +5,6 @@ const { randomUUID } = require("crypto");
 const { spawn } = require("child_process");
 const { FFmpegError } = require("./errors");
 
-const tempDir = os.tmpdir();
-
 /** Default timeout for unrotate operations (5 minutes) */
 const DEFAULT_UNROTATE_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -14,13 +12,16 @@ const DEFAULT_UNROTATE_TIMEOUT_MS = 5 * 60 * 1000;
  * Unrotate a video (remove iPhone rotation metadata) using ffmpeg.
  * Uses spawn() with argument array to avoid command injection.
  * @param {string} inputUrl - Path to the input video file
- * @param {number} [timeoutMs] - Timeout in milliseconds (default: 5 minutes)
+ * @param {Object} [options] - Options
+ * @param {number} [options.timeoutMs] - Timeout in milliseconds (default: 5 minutes)
+ * @param {string} [options.tempDir] - Custom temp directory (default: os.tmpdir())
  * @returns {Promise<string>} Path to the unrotated temporary video file
  * @throws {FFmpegError} If ffmpeg fails or times out
  */
-function unrotateVideo(inputUrl, timeoutMs = DEFAULT_UNROTATE_TIMEOUT_MS) {
+function unrotateVideo(inputUrl, options = {}) {
+  const timeoutMs = options.timeoutMs || DEFAULT_UNROTATE_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
-    const out = path.join(tempDir, `unrotated-${randomUUID()}.mp4`);
+    const out = path.join(options.tempDir || os.tmpdir(), `unrotated-${randomUUID()}.mp4`);
     const args = ["-y", "-i", inputUrl, out];
     let timedOut = false;
 

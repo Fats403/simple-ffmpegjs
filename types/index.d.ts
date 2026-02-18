@@ -441,6 +441,8 @@ declare namespace SIMPLEFFMPEG {
     fontFile?: string;
     /** Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline). */
     emojiFont?: string;
+    /** Custom directory for temporary files — gradient images, unrotated videos, intermediate renders, text/ASS temp files. Defaults to os.tmpdir() or the output directory depending on the operation. Useful for fast SSDs, ramdisks, or environments with constrained /tmp. */
+    tempDir?: string;
   }
 
   /** Log entry passed to onLog callback */
@@ -492,6 +494,50 @@ declare namespace SIMPLEFFMPEG {
     /** Thumbnail height (maintains aspect if width omitted) */
     height?: number;
   }
+
+  /** Keyframe extraction mode */
+  type KeyframeMode = "scene-change" | "interval";
+
+  /** Output format for extracted keyframes */
+  type KeyframeFormat = "jpeg" | "png";
+
+  /** Base options for SIMPLEFFMPEG.extractKeyframes() */
+  interface ExtractKeyframesBaseOptions {
+    /** Extraction mode: 'scene-change' detects visual transitions, 'interval' samples at fixed spacing (default: 'scene-change') */
+    mode?: KeyframeMode;
+    /** Scene detection sensitivity 0-1, lower = more frames (default: 0.3). Only for scene-change mode. */
+    sceneThreshold?: number;
+    /** Seconds between frames (default: 5). Only for interval mode. */
+    intervalSeconds?: number;
+    /** Maximum number of frames to extract */
+    maxFrames?: number;
+    /** Output image format (default: 'jpeg') */
+    format?: KeyframeFormat;
+    /** JPEG quality 1-31, lower is better (default: 2). Only applies to JPEG. */
+    quality?: number;
+    /** Output width in pixels (maintains aspect ratio if height omitted) */
+    width?: number;
+    /** Output height in pixels (maintains aspect ratio if width omitted) */
+    height?: number;
+    /** Custom directory for temporary files (default: os.tmpdir()). Only used when outputDir is not set. Useful for fast SSDs, ramdisks, or environments with constrained /tmp. */
+    tempDir?: string;
+  }
+
+  /** Options with outputDir — writes to disk, returns string[] */
+  interface ExtractKeyframesToDiskOptions extends ExtractKeyframesBaseOptions {
+    /** Directory to write frame files to */
+    outputDir: string;
+  }
+
+  /** Options without outputDir — returns Buffer[] */
+  interface ExtractKeyframesToBufferOptions extends ExtractKeyframesBaseOptions {
+    outputDir?: undefined;
+  }
+
+  /** Combined options type for extractKeyframes */
+  type ExtractKeyframesOptions =
+    | ExtractKeyframesToDiskOptions
+    | ExtractKeyframesToBufferOptions;
 
   /** Options for SIMPLEFFMPEG.snapshot() — capture a single frame from a video */
   interface SnapshotOptions {
@@ -962,6 +1008,46 @@ declare class SIMPLEFFMPEG {
     filePath: string,
     options: SIMPLEFFMPEG.SnapshotOptions
   ): Promise<string>;
+
+  /**
+   * Extract keyframes from a video using scene-change detection or fixed time intervals.
+   *
+   * Scene-change mode uses FFmpeg's select=gt(scene,N) filter to detect visual transitions.
+   * Interval mode extracts frames at fixed time intervals.
+   *
+   * When outputDir is provided, frames are written to disk and the method returns file paths.
+   * Without outputDir, frames are returned as in-memory Buffer objects.
+   *
+   * @param filePath - Path to the source video file
+   * @param options - Extraction options (with outputDir → string[], without → Buffer[])
+   * @throws {SIMPLEFFMPEG.SimpleffmpegError} If arguments are invalid
+   * @throws {SIMPLEFFMPEG.FFmpegError} If FFmpeg fails during extraction
+   *
+   * @example
+   * // Scene-change detection — returns Buffer[]
+   * const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "scene-change",
+   *   sceneThreshold: 0.4,
+   *   maxFrames: 8,
+   * });
+   *
+   * @example
+   * // Fixed interval — writes to disk, returns string[]
+   * const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "interval",
+   *   intervalSeconds: 5,
+   *   outputDir: "./frames/",
+   *   format: "png",
+   * });
+   */
+  static extractKeyframes(
+    filePath: string,
+    options: SIMPLEFFMPEG.ExtractKeyframesToDiskOptions
+  ): Promise<string[]>;
+  static extractKeyframes(
+    filePath: string,
+    options?: SIMPLEFFMPEG.ExtractKeyframesToBufferOptions
+  ): Promise<Buffer[]>;
 
   /**
    * Format validation result as human-readable string
