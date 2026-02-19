@@ -167,9 +167,9 @@ declare namespace SIMPLEFFMPEG {
 
     // Font
     fontFile?: string;
-    fontFamily?: string;
-    fontSize?: number;
-    fontColor?: string;
+    fontFamily?: string; // defaults to 'Sans' via fontconfig
+    fontSize?: number; // default 48
+    fontColor?: string; // default '#FFFFFF'
 
     // Position (xPercent/yPercent are percentages 0-1, x/y are pixels)
     /** Horizontal position as percentage (0 = left, 0.5 = center, 1 = right) */
@@ -270,19 +270,24 @@ declare namespace SIMPLEFFMPEG {
     | "letterbox";
 
   interface EffectParamsBase {
+    /** Base blend amount from 0 to 1 (default: 1) */
     amount?: number;
   }
 
   interface VignetteEffectParams extends EffectParamsBase {
+    /** Vignette angle in radians (default: PI/5) */
     angle?: number;
   }
 
   interface FilmGrainEffectParams extends EffectParamsBase {
+    /** Noise intensity 0-1 (default: 0.35). Independent from blend amount. */
     strength?: number;
+    /** Temporal grain changes every frame (default: true) */
     temporal?: boolean;
   }
 
   interface GaussianBlurEffectParams extends EffectParamsBase {
+    /** Gaussian blur sigma (default derived from amount) */
     sigma?: number;
   }
 
@@ -296,19 +301,24 @@ declare namespace SIMPLEFFMPEG {
   interface SepiaEffectParams extends EffectParamsBase {}
 
   interface BlackAndWhiteEffectParams extends EffectParamsBase {
+    /** Optional contrast boost (default: 1, range 0-3) */
     contrast?: number;
   }
 
   interface SharpenEffectParams extends EffectParamsBase {
+    /** Unsharp amount (default: 1.0, range 0-3) */
     strength?: number;
   }
 
   interface ChromaticAberrationEffectParams extends EffectParamsBase {
+    /** Horizontal pixel offset for R/B channels (default: 4, range 0-20) */
     shift?: number;
   }
 
   interface LetterboxEffectParams extends EffectParamsBase {
+    /** Bar height as fraction of frame height (default: 0.12, range 0-0.5) */
     size?: number;
+    /** Bar color (default: "black") */
     color?: string;
   }
 
@@ -327,11 +337,17 @@ declare namespace SIMPLEFFMPEG {
   interface EffectClip {
     type: "effect";
     effect: EffectName;
+    /** Start time on timeline in seconds. Required for effect clips. */
     position: number;
+    /** End time on timeline in seconds. Mutually exclusive with duration. */
     end?: number;
+    /** Duration in seconds (alternative to end). end = position + duration. */
     duration?: number;
+    /** Ramp-in duration in seconds */
     fadeIn?: number;
+    /** Ramp-out duration in seconds */
     fadeOut?: number;
+    /** Effect-specific params */
     params: EffectParams;
   }
 
@@ -435,6 +451,10 @@ declare namespace SIMPLEFFMPEG {
     validationMode?: "warn" | "strict";
     /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
     fontFile?: string;
+    /** Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline). */
+    emojiFont?: string;
+    /** Custom directory for temporary files — gradient images, unrotated videos, intermediate renders, text/ASS temp files. Defaults to os.tmpdir() or the output directory depending on the operation. Useful for fast SSDs, ramdisks, or environments with constrained /tmp. */
+    tempDir?: string;
   }
 
   /** Log entry passed to onLog callback */
@@ -471,16 +491,65 @@ declare namespace SIMPLEFFMPEG {
     comment?: string;
     date?: string;
     genre?: string;
+    /** Custom metadata key-value pairs */
     custom?: Record<string, string>;
   }
 
   /** Thumbnail generation options */
   interface ThumbnailOptions {
+    /** Output path for thumbnail image */
     outputPath: string;
+    /** Time in seconds to capture (default: 0) */
     time?: number;
+    /** Thumbnail width (maintains aspect if height omitted) */
     width?: number;
+    /** Thumbnail height (maintains aspect if width omitted) */
     height?: number;
   }
+
+  /** Keyframe extraction mode */
+  type KeyframeMode = "scene-change" | "interval";
+
+  /** Output format for extracted keyframes */
+  type KeyframeFormat = "jpeg" | "png";
+
+  /** Base options for SIMPLEFFMPEG.extractKeyframes() */
+  interface ExtractKeyframesBaseOptions {
+    /** Extraction mode: 'scene-change' detects visual transitions, 'interval' samples at fixed spacing (default: 'scene-change') */
+    mode?: KeyframeMode;
+    /** Scene detection sensitivity 0-1, lower = more frames (default: 0.3). Only for scene-change mode. */
+    sceneThreshold?: number;
+    /** Seconds between frames (default: 5). Only for interval mode. */
+    intervalSeconds?: number;
+    /** Maximum number of frames to extract */
+    maxFrames?: number;
+    /** Output image format (default: 'jpeg') */
+    format?: KeyframeFormat;
+    /** JPEG quality 1-31, lower is better (default: 2). Only applies to JPEG. */
+    quality?: number;
+    /** Output width in pixels (maintains aspect ratio if height omitted) */
+    width?: number;
+    /** Output height in pixels (maintains aspect ratio if width omitted) */
+    height?: number;
+    /** Custom directory for temporary files (default: os.tmpdir()). Only used when outputDir is not set. Useful for fast SSDs, ramdisks, or environments with constrained /tmp. */
+    tempDir?: string;
+  }
+
+  /** Options with outputDir — writes to disk, returns string[] */
+  interface ExtractKeyframesToDiskOptions extends ExtractKeyframesBaseOptions {
+    /** Directory to write frame files to */
+    outputDir: string;
+  }
+
+  /** Options without outputDir — returns Buffer[] */
+  interface ExtractKeyframesToBufferOptions extends ExtractKeyframesBaseOptions {
+    outputDir?: undefined;
+  }
+
+  /** Combined options type for extractKeyframes */
+  type ExtractKeyframesOptions =
+    | ExtractKeyframesToDiskOptions
+    | ExtractKeyframesToBufferOptions;
 
   /** Options for SIMPLEFFMPEG.snapshot() — capture a single frame from a video */
   interface SnapshotOptions {
@@ -496,6 +565,7 @@ declare namespace SIMPLEFFMPEG {
     quality?: number;
   }
 
+  /** Hardware acceleration options */
   type HardwareAcceleration =
     | "auto"
     | "videotoolbox"
@@ -504,6 +574,7 @@ declare namespace SIMPLEFFMPEG {
     | "qsv"
     | "none";
 
+  /** Video codec options */
   type VideoCodec =
     | "libx264"
     | "libx265"
@@ -520,6 +591,7 @@ declare namespace SIMPLEFFMPEG {
     | "hevc_qsv"
     | string;
 
+  /** Audio codec options */
   type AudioCodec =
     | "aac"
     | "libmp3lame"
@@ -529,6 +601,7 @@ declare namespace SIMPLEFFMPEG {
     | "copy"
     | string;
 
+  /** Encoding preset options */
   type EncodingPreset =
     | "ultrafast"
     | "superfast"
@@ -540,6 +613,7 @@ declare namespace SIMPLEFFMPEG {
     | "slower"
     | "veryslow";
 
+  /** Resolution presets */
   type ResolutionPreset = "480p" | "720p" | "1080p" | "1440p" | "4k";
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -556,82 +630,147 @@ declare namespace SIMPLEFFMPEG {
 
   /** Custom position using percentages (0-1) */
   interface WatermarkPositionPercent {
+    /** Horizontal position as percentage (0 = left, 0.5 = center, 1 = right) */
     xPercent: number;
+    /** Vertical position as percentage (0 = top, 0.5 = center, 1 = bottom) */
     yPercent: number;
   }
 
   /** Custom position using pixels */
   interface WatermarkPositionPixel {
+    /** X position in pixels from left */
     x: number;
+    /** Y position in pixels from top */
     y: number;
   }
 
+  /** Watermark position options */
   type WatermarkPosition =
     | WatermarkPositionPreset
     | WatermarkPositionPercent
     | WatermarkPositionPixel;
 
+  /** Base watermark options shared by image and text watermarks */
   interface BaseWatermarkOptions {
+    /** Position preset or custom coordinates (default: 'bottom-right') */
     position?: WatermarkPosition;
+    /** Margin from edge in pixels when using preset positions (default: 20) */
     margin?: number;
+    /** Opacity from 0 (transparent) to 1 (opaque) (default: 1) */
     opacity?: number;
+    /** Start time in seconds (default: 0, start of video) */
     startTime?: number;
+    /** End time in seconds (default: end of video) */
     endTime?: number;
   }
 
+  /** Image watermark options */
   interface ImageWatermarkOptions extends BaseWatermarkOptions {
     type: "image";
+    /** Path to the watermark image file */
     url: string;
+    /** Scale relative to video width, 0-1 (default: 0.15, i.e., 15% of width) */
     scale?: number;
   }
 
+  /** Text watermark options */
   interface TextWatermarkOptions extends BaseWatermarkOptions {
     type: "text";
+    /** Text to display as watermark */
     text: string;
+    /** Font size in pixels (default: 24) */
     fontSize?: number;
+    /** Font color in hex format (default: '#FFFFFF') */
     fontColor?: string;
+    /** Font family name (default: 'Sans') */
     fontFamily?: string;
+    /** Path to custom font file */
     fontFile?: string;
+    /** Border/outline color */
     borderColor?: string;
+    /** Border/outline width in pixels */
     borderWidth?: number;
+    /** Shadow color */
     shadowColor?: string;
+    /** Shadow X offset */
     shadowX?: number;
+    /** Shadow Y offset */
     shadowY?: number;
   }
 
+  /** Watermark configuration - either image or text */
   type WatermarkOptions = ImageWatermarkOptions | TextWatermarkOptions;
 
   interface ExportOptions {
+    // ─────────────────────────────────────────────────────────────────────────
     // Output
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Output file path (default: './output.mp4') */
     outputPath?: string;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Video Encoding
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Video codec (default: 'libx264') */
     videoCodec?: VideoCodec;
+    /** Quality level 0-51, lower is better (default: 23) */
     crf?: number;
+    /** Encoding speed/quality tradeoff (default: 'medium') */
     preset?: EncodingPreset;
+    /** Target video bitrate (e.g., '5M', '2500k'). Overrides CRF when set. */
     videoBitrate?: string;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Audio Encoding
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Audio codec (default: 'aac') */
     audioCodec?: AudioCodec;
+    /** Audio bitrate (default: '192k') */
     audioBitrate?: string;
+    /** Audio sample rate in Hz (default: 48000) */
     audioSampleRate?: number;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Hardware Acceleration
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Hardware acceleration mode (default: 'none') */
     hwaccel?: HardwareAcceleration;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Output Resolution
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Output width in pixels (scales the output) */
     outputWidth?: number;
+    /** Output height in pixels (scales the output) */
     outputHeight?: number;
+    /** Resolution preset ('720p', '1080p', '4k', etc.) */
     outputResolution?: ResolutionPreset;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Advanced Options
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Export audio only (no video) */
     audioOnly?: boolean;
+    /** Enable two-pass encoding for better quality at target bitrate */
     twoPass?: boolean;
+    /** Metadata to embed in output file */
     metadata?: MetadataOptions;
+    /** Generate a thumbnail from the output */
     thumbnail?: ThumbnailOptions;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Debug & Logging
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Enable verbose logging */
     verbose?: boolean;
+    /** FFmpeg log level (default: 'warning') */
     logLevel?:
       | "quiet"
       | "panic"
@@ -641,27 +780,49 @@ declare namespace SIMPLEFFMPEG {
       | "info"
       | "verbose"
       | "debug";
+    /** Save FFmpeg command to file for debugging */
     saveCommand?: string;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Callbacks & Control
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Progress callback for monitoring export progress */
     onProgress?: (progress: ProgressInfo) => void;
     /** FFmpeg log callback for real-time stderr/stdout output */
     onLog?: (entry: LogEntry) => void;
+    /** AbortSignal for cancelling the export */
     signal?: AbortSignal;
 
-    // Text Batching
+    // ─────────────────────────────────────────────────────────────────────────
+    // Text Batching (Advanced)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Maximum text overlay nodes per FFmpeg pass (default: 75) */
     textMaxNodesPerPass?: number;
+    /** Video codec for intermediate text passes (default: 'libx264') */
     intermediateVideoCodec?: string;
+    /** CRF for intermediate text passes (default: 18) */
     intermediateCrf?: number;
+    /** Preset for intermediate text passes (default: 'veryfast') */
     intermediatePreset?: string;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Watermark
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /** Add a watermark overlay (image or text) to the video */
     watermark?: WatermarkOptions;
 
+    // ─────────────────────────────────────────────────────────────────────────
     // Timeline
+    // ─────────────────────────────────────────────────────────────────────────
+
     /**
      * Automatically adjust text/subtitle timings to compensate for timeline
      * compression caused by xfade transitions (default: true).
+     * When enabled, text positioned at "15s" will appear at the visual 15s mark
+     * even if transitions have compressed the actual timeline.
      */
     compensateTransitions?: boolean;
   }
@@ -765,6 +926,7 @@ declare class SIMPLEFFMPEG {
 
   /**
    * Get available platform presets
+   * @returns Map of preset names to their configurations
    */
   static getPresets(): Record<
     SIMPLEFFMPEG.PlatformPreset,
@@ -773,6 +935,7 @@ declare class SIMPLEFFMPEG {
 
   /**
    * Get list of available preset names
+   * @returns Array of preset names
    */
   static getPresetNames(): SIMPLEFFMPEG.PlatformPreset[];
 
@@ -857,6 +1020,46 @@ declare class SIMPLEFFMPEG {
     filePath: string,
     options: SIMPLEFFMPEG.SnapshotOptions
   ): Promise<string>;
+
+  /**
+   * Extract keyframes from a video using scene-change detection or fixed time intervals.
+   *
+   * Scene-change mode uses FFmpeg's select=gt(scene,N) filter to detect visual transitions.
+   * Interval mode extracts frames at fixed time intervals.
+   *
+   * When outputDir is provided, frames are written to disk and the method returns file paths.
+   * Without outputDir, frames are returned as in-memory Buffer objects.
+   *
+   * @param filePath - Path to the source video file
+   * @param options - Extraction options (with outputDir → string[], without → Buffer[])
+   * @throws {SIMPLEFFMPEG.SimpleffmpegError} If arguments are invalid
+   * @throws {SIMPLEFFMPEG.FFmpegError} If FFmpeg fails during extraction
+   *
+   * @example
+   * // Scene-change detection — returns Buffer[]
+   * const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "scene-change",
+   *   sceneThreshold: 0.4,
+   *   maxFrames: 8,
+   * });
+   *
+   * @example
+   * // Fixed interval — writes to disk, returns string[]
+   * const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+   *   mode: "interval",
+   *   intervalSeconds: 5,
+   *   outputDir: "./frames/",
+   *   format: "png",
+   * });
+   */
+  static extractKeyframes(
+    filePath: string,
+    options: SIMPLEFFMPEG.ExtractKeyframesToDiskOptions
+  ): Promise<string[]>;
+  static extractKeyframes(
+    filePath: string,
+    options?: SIMPLEFFMPEG.ExtractKeyframesToBufferOptions
+  ): Promise<Buffer[]>;
 
   /**
    * Format validation result as human-readable string
