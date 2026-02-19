@@ -517,6 +517,100 @@ describe("Validation", () => {
     });
 
     describe("image clip validation", () => {
+      it("should reject invalid imageFit value", () => {
+        const clips = [
+          {
+            type: "image",
+            url: "./test.png",
+            position: 0,
+            end: 3,
+            imageFit: "stretch",
+          },
+        ];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(false);
+        expect(result.errors[0].code).toBe(ValidationCodes.INVALID_VALUE);
+        expect(result.errors[0].message).toContain("imageFit");
+      });
+
+      it("should accept valid imageFit values", () => {
+        for (const fit of ["cover", "contain", "blur-fill"]) {
+          const clips = [
+            {
+              type: "image",
+              url: "./test.png",
+              position: 0,
+              end: 3,
+              imageFit: fit,
+            },
+          ];
+          const result = validateConfig(clips);
+          expect(result.valid).toBe(true);
+        }
+      });
+
+      it("should accept image clip without imageFit (uses default)", () => {
+        const clips = [
+          {
+            type: "image",
+            url: "./test.png",
+            position: 0,
+            end: 3,
+          },
+        ];
+        const result = validateConfig(clips);
+        expect(result.valid).toBe(true);
+      });
+
+      it("should reject non-number blurIntensity", () => {
+        const clips = [
+          {
+            type: "image",
+            url: "./test.png",
+            position: 0,
+            end: 3,
+            blurIntensity: "high",
+          },
+        ];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(false);
+        expect(result.errors[0].code).toBe(ValidationCodes.INVALID_TYPE);
+        expect(result.errors[0].message).toContain("blurIntensity");
+      });
+
+      it("should reject blurIntensity <= 0", () => {
+        const clips = [
+          {
+            type: "image",
+            url: "./test.png",
+            position: 0,
+            end: 3,
+            blurIntensity: 0,
+          },
+        ];
+        const result = validateConfig(clips);
+
+        expect(result.valid).toBe(false);
+        expect(result.errors[0].code).toBe(ValidationCodes.INVALID_RANGE);
+        expect(result.errors[0].message).toContain("blurIntensity");
+      });
+
+      it("should accept valid blurIntensity", () => {
+        const clips = [
+          {
+            type: "image",
+            url: "./test.png",
+            position: 0,
+            end: 3,
+            blurIntensity: 60,
+          },
+        ];
+        const result = validateConfig(clips);
+        expect(result.valid).toBe(true);
+      });
+
       it("should reject invalid kenBurns value", () => {
         const clips = [
           {

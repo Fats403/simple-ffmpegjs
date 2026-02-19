@@ -185,6 +185,27 @@ function computeOverscanWidth(width, startZoom, endZoom) {
   return overscan;
 }
 
+function computeContainedSize(srcW, srcH, outW, outH) {
+  const srcAspect = srcW / srcH;
+  const outAspect = outW / outH;
+  let cw, ch;
+  if (srcAspect > outAspect) {
+    cw = outW;
+    ch = Math.round(outW / srcAspect);
+  } else {
+    ch = outH;
+    cw = Math.round(outH * srcAspect);
+  }
+  if (cw % 2 !== 0) cw += 1;
+  if (ch % 2 !== 0) ch += 1;
+  return { cw, ch };
+}
+
+function resolveImageFit(clip) {
+  if (clip.imageFit) return clip.imageFit;
+  return clip.kenBurns ? "cover" : "blur-fill";
+}
+
 function buildVideoFilter(project, videoClips) {
   let filterComplex = "";
   let videoIndex = 0;
@@ -241,7 +262,6 @@ function buildVideoFilter(project, videoClips) {
     if (clip.type === "image" && clip.kenBurns) {
       const frames = Math.max(1, Math.round(clipDuration * fps));
       const framesMinusOne = Math.max(1, frames - 1);
-      const s = `${width}x${height}`;
 
       const { startZoom, endZoom, startX, startY, endX, endY, easing } =
         resolveKenBurnsOptions(
@@ -251,23 +271,63 @@ function buildVideoFilter(project, videoClips) {
           clip.width,
           clip.height
         );
-      // Overscan provides enough pixel resolution for smooth zoompan motion.
-      const overscanW = computeOverscanWidth(width, startZoom, endZoom);
       const zoomExpr = buildZoomExpr(startZoom, endZoom, framesMinusOne, easing);
       const xPosExpr = buildPositionExpr(startX, endX, framesMinusOne, easing);
       const yPosExpr = buildPositionExpr(startY, endY, framesMinusOne, easing);
       const xExpr = `(iw - iw/zoom)*(${xPosExpr})`;
       const yExpr = `(ih - ih/zoom)*(${yPosExpr})`;
 
-      // Scale to cover target dimensions (upscaling if needed), then center crop
-      // force_original_aspect_ratio=increase ensures image covers the target area
-      // select='eq(n,0)' uses single quotes to protect the comma from the graph parser.
-      // zoompan z/x/y values are also single-quoted — commas inside are literal.
-      filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s}:fps=${fps},setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      let kbFit = resolveImageFit(clip);
+      const hasSrcDims = typeof clip.width === "number" && typeof clip.height === "number"
+        && clip.width > 0 && clip.height > 0;
+      if ((kbFit === "blur-fill" || kbFit === "contain") && !hasSrcDims) {
+        kbFit = "cover";
+      }
+
+      if (kbFit === "blur-fill") {
+        const { cw, ch } = computeContainedSize(clip.width, clip.height, width, height);
+        const sigma = typeof clip.blurIntensity === "number" && Number.isFinite(clip.blurIntensity) && clip.blurIntensity > 0
+          ? clip.blurIntensity : 40;
+        const overscanCW = computeOverscanWidth(cw, startZoom, endZoom);
+        const cs = `${cw}x${ch}`;
+        const kbbgLabel = `[kbbg${videoIndex}]`;
+        const kbfgLabel = `[kbfg${videoIndex}]`;
+        const kbbgrLabel = `[kbbgr${videoIndex}]`;
+        const kbfgrLabel = `[kbfgr${videoIndex}]`;
+        filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,split${kbbgLabel}${kbfgLabel};`;
+        filterComplex += `${kbbgLabel}scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,gblur=sigma=${sigma},loop=${frames - 1}:1:0,setpts=N/${fps}/TB,fps=${fps},settb=1/${fps}${kbbgrLabel};`;
+        filterComplex += `${kbfgLabel}scale=${cw}:${ch}:force_original_aspect_ratio=increase,setsar=1:1,crop=${cw}:${ch}:(iw-${cw})/2:(ih-${ch})/2,scale=${overscanCW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${cs}:fps=${fps},setsar=1:1,settb=1/${fps}${kbfgrLabel};`;
+        filterComplex += `${kbbgrLabel}${kbfgrLabel}overlay=(W-w)/2:(H-h)/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      } else if (kbFit === "contain") {
+        const { cw, ch } = computeContainedSize(clip.width, clip.height, width, height);
+        const overscanCW = computeOverscanWidth(cw, startZoom, endZoom);
+        const cs = `${cw}x${ch}`;
+        filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${cw}:${ch}:force_original_aspect_ratio=increase,setsar=1:1,crop=${cw}:${ch}:(iw-${cw})/2:(ih-${ch})/2,scale=${overscanCW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${cs}:fps=${fps},setsar=1:1,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,settb=1/${fps}${scaledLabel};`;
+      } else {
+        const s = `${width}x${height}`;
+        const overscanW = computeOverscanWidth(width, startZoom, endZoom);
+        filterComplex += `[${inputIndex}:v]select='eq(n,0)',setpts=PTS-STARTPTS,scale=${width}:${height}:force_original_aspect_ratio=increase,setsar=1:1,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,scale=${overscanW}:-1,zoompan=z='${zoomExpr}':x='${xExpr}':y='${yExpr}':d=${frames}:s=${s}:fps=${fps},setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      }
     } else {
-      filterComplex += `[${inputIndex}:v]trim=start=${
-        clip.cutFrom || 0
-      }:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${fps},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      const fit = clip.type === "image" ? resolveImageFit(clip) : null;
+      const trimPrefix = `[${inputIndex}:v]trim=start=${clip.cutFrom || 0}:duration=${clipDuration},setpts=PTS-STARTPTS,fps=${fps}`;
+
+      if (fit === "blur-fill") {
+        const sigma = typeof clip.blurIntensity === "number" && Number.isFinite(clip.blurIntensity) && clip.blurIntensity > 0
+          ? clip.blurIntensity : 40;
+        const bgLabel = `[bg${videoIndex}]`;
+        const fgLabel = `[fg${videoIndex}]`;
+        const bgrLabel = `[bgr${videoIndex}]`;
+        const fgrLabel = `[fgr${videoIndex}]`;
+        filterComplex += `${trimPrefix},split${bgLabel}${fgLabel};`;
+        filterComplex += `${bgLabel}scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,gblur=sigma=${sigma}${bgrLabel};`;
+        filterComplex += `${fgLabel}scale=${width}:${height}:force_original_aspect_ratio=decrease${fgrLabel};`;
+        filterComplex += `${bgrLabel}${fgrLabel}overlay=(W-w)/2:(H-h)/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      } else if (fit === "cover") {
+        filterComplex += `${trimPrefix},scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}:(iw-${width})/2:(ih-${height})/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      } else {
+        filterComplex += `${trimPrefix},scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,setsar=1:1,settb=1/${fps}${scaledLabel};`;
+      }
     }
 
     scaledStreams.push({

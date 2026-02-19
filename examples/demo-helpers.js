@@ -87,6 +87,10 @@ const FIXTURES = [
     cmd: `ffmpeg -y -f lavfi -i "color=c=#336699:s=640x480:d=1,drawgrid=w=80:h=80:t=2:c=white@0.5,drawtext=text='A':fontsize=100:fontcolor=white:x=60:y=40,drawtext=text='B':fontsize=100:fontcolor=white:x=520:y=40,drawtext=text='C':fontsize=100:fontcolor=white:x=60:y=340,drawtext=text='D':fontsize=100:fontcolor=white:x=520:y=340,drawbox=x=280:y=200:w=80:h=80:c=yellow:t=fill" -frames:v 1`,
   },
   {
+    name: "test-image-portrait.jpg",
+    cmd: `ffmpeg -y -f lavfi -i "color=c=#996633:s=480x640:d=1,drawgrid=w=80:h=80:t=2:c=white@0.5,drawtext=text='P':fontsize=100:fontcolor=white:x=180:y=40,drawtext=text='Q':fontsize=100:fontcolor=white:x=180:y=500,drawbox=x=200:y=280:w=80:h=80:c=cyan:t=fill" -frames:v 1`,
+  },
+  {
     name: "test-watermark.png",
     cmd: `ffmpeg -y -f lavfi -i "color=c=white:s=64x64:d=1,format=rgba" -frames:v 1`,
   },

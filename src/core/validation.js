@@ -970,6 +970,42 @@ function validateClip(clip, index, options = {}) {
 
   // Image clip validation
   if (clip.type === "image") {
+    if (clip.imageFit !== undefined) {
+      const validImageFit = ["cover", "contain", "blur-fill"];
+      if (!validImageFit.includes(clip.imageFit)) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.imageFit`,
+            `Invalid imageFit '${clip.imageFit}'. Expected: ${validImageFit.join(", ")}`,
+            clip.imageFit
+          )
+        );
+      }
+    }
+
+    if (clip.blurIntensity !== undefined) {
+      if (typeof clip.blurIntensity !== "number" || !Number.isFinite(clip.blurIntensity)) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_TYPE,
+            `${path}.blurIntensity`,
+            `blurIntensity must be a finite number`,
+            clip.blurIntensity
+          )
+        );
+      } else if (clip.blurIntensity <= 0) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_RANGE,
+            `${path}.blurIntensity`,
+            `blurIntensity must be > 0`,
+            clip.blurIntensity
+          )
+        );
+      }
+    }
+
     if (clip.kenBurns) {
       const validKenBurns = [
         "zoom-in",

@@ -68,7 +68,8 @@ _Click to watch a "Wonders of the World" video created with simple-ffmpeg — co
 
 **Video & Images**
 - **Video Concatenation** — Join multiple clips with optional xfade transitions
-- **Image Support** — Ken Burns effects (zoom, pan) for static images
+- **Image Support** — Ken Burns effects (zoom, pan) for static images with intelligent aspect ratio handling
+- **Image Fitting** — Automatic blur-fill, cover, or contain modes when image aspect ratio differs from output
 - **Color Clips** — Flat colors and gradients (linear, radial) as first-class timeline clips with full transition support
 
 **Audio**
@@ -272,7 +273,7 @@ Available modules:
 | ---------- | ----------------------------------------------------------- |
 | `video`    | Video clips, transitions, volume, trimming                  |
 | `audio`    | Standalone audio clips                                      |
-| `image`    | Image clips, Ken Burns effects                              |
+| `image`    | Image clips, Ken Burns effects, image fitting modes         |
 | `color`    | Color clips — flat colors, linear/radial gradients          |
 | `effect`   | Overlay adjustment effects — vignette, grain, blur, color adjust, sepia, B&W, sharpen, chromatic aberration, letterbox |
 | `text`     | Text overlays — all modes, animations, positioning, styling |
@@ -634,6 +635,8 @@ All [xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
   duration?: number;        // Duration in seconds (alternative to end)
   width?: number;           // Optional: source image width (skip probe / override)
   height?: number;          // Optional: source image height (skip probe / override)
+  imageFit?: "cover" | "contain" | "blur-fill";  // How to handle aspect ratio mismatch (see below)
+  blurIntensity?: number;   // Blur strength for blur-fill background (default: 40, range: 10-80)
   kenBurns?:
     | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down"
     | "smart" | "custom"
@@ -648,6 +651,58 @@ All [xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
         anchor?: "top" | "bottom" | "left" | "right";
         easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out";
       };
+}
+```
+
+**Image Fitting (`imageFit`):**
+
+When an image's aspect ratio doesn't match the output (e.g., a landscape photo in a portrait video), `imageFit` controls how the mismatch is resolved:
+
+| Mode | Behavior | Default for |
+|---|---|---|
+| `blur-fill` | Scale to fit, fill empty space with a blurred version of the image | Static images (no Ken Burns) |
+| `cover` | Scale to fill the entire frame, center-crop any excess | Ken Burns images |
+| `contain` | Scale to fit within the frame, pad with black bars | — |
+
+If `imageFit` is not specified, the library picks the best default: **`blur-fill`** for static images (produces polished output similar to TikTok/Reels) and **`cover`** for Ken Burns images (ensures full-frame cinematic motion).
+
+```ts
+// Landscape photo in a portrait video — blurred background fills the bars (default)
+{ type: "image", url: "./landscape.jpg", duration: 5 }
+
+// Explicit cover — crops to fill the frame
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "cover" }
+
+// Black bars (letterbox/pillarbox)
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "contain" }
+
+// Stronger blur effect
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "blur-fill", blurIntensity: 70 }
+```
+
+**Ken Burns + imageFit:** When using Ken Burns with `blur-fill` or `contain`, the pan/zoom motion applies only to the image content — the blurred background or black bars remain static, matching the behavior of modern phone video editors. Source dimensions (`width`/`height`) are required for KB + `blur-fill`/`contain`; without them it falls back to `cover`.
+
+```ts
+// Ken Burns zoom on contained image with blurred background
+{
+  type: "image",
+  url: "./landscape.jpg",
+  duration: 5,
+  width: 1920,
+  height: 1080,
+  kenBurns: "zoom-in",
+  imageFit: "blur-fill",
+}
+
+// Ken Burns pan with black bars
+{
+  type: "image",
+  url: "./landscape.jpg",
+  duration: 5,
+  width: 1920,
+  height: 1080,
+  kenBurns: "pan-right",
+  imageFit: "contain",
 }
 ```
 
@@ -1160,6 +1215,7 @@ When `position` is omitted, clips are placed sequentially — see [Auto-Sequenci
 > **Note:** Ken Burns effects work best with images at least as large as your output resolution. Smaller images are automatically upscaled (with a validation warning). Use `strictKenBurns: true` in validation options to enforce size requirements instead.
 > If you pass `width`/`height`, they override probed dimensions (useful for remote or generated images).
 > `smart` mode uses source vs output aspect (when known) to choose pan direction.
+> Ken Burns defaults to `imageFit: "cover"` (full-frame motion). Set `imageFit: "blur-fill"` or `"contain"` for phone-style editing where the motion applies to the contained image while the background stays static.
 
 ### Text & Animations
 
@@ -1678,6 +1734,7 @@ Available demo scripts (can also be run individually):
 | `demo-audio-mixing.js`          | Volume levels, background music, standalone audio, loop, multi-source mix              |
 | `demo-watermarks.js`            | Text/image watermarks, all positions, timed appearance, styled over transitions        |
 | `demo-karaoke-and-subtitles.js` | Smooth/instant karaoke, word timestamps, multiline, SRT, VTT, mixed text+karaoke       |
+| `demo-image-fit.js`             | Image fitting modes (blur-fill, cover, contain), Ken Burns + imageFit, mixed timelines |
 | `demo-torture-test.js`          | Kitchen sink, many clips+gaps+transitions, 6 simultaneous text animations, edge cases  |
 
 Each script header contains a `WHAT TO CHECK` section describing the expected visual output at every timestamp, making it easy to spot regressions.

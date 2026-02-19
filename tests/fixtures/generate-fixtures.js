@@ -38,6 +38,11 @@ const fixtures = [
     cmd: `ffmpeg -y -f lavfi -i "color=c=#336699:s=640x480:d=1,drawgrid=w=80:h=80:t=2:c=white@0.5,drawtext=text='A':fontsize=120:fontcolor=white:x=80:y=60,drawtext=text='B':fontsize=120:fontcolor=white:x=440:y=60,drawtext=text='C':fontsize=120:fontcolor=white:x=80:y=300,drawtext=text='D':fontsize=120:fontcolor=white:x=440:y=300,drawbox=x=280:y=200:w=80:h=80:c=yellow:t=fill" -frames:v 1`,
   },
   {
+    name: "test-image-portrait.png",
+    // Portrait grid pattern image (480x640) for testing aspect ratio mismatch with imageFit
+    cmd: `ffmpeg -y -f lavfi -i "color=c=#996633:s=480x640:d=1,drawgrid=w=80:h=80:t=2:c=white@0.5,drawtext=text='P':fontsize=120:fontcolor=white:x=180:y=60,drawtext=text='Q':fontsize=120:fontcolor=white:x=180:y=480,drawbox=x=200:y=280:w=80:h=80:c=cyan:t=fill" -frames:v 1`,
+  },
+  {
     name: "test-watermark.png",
     // Small 64x64 white circle on transparent background for watermark testing
     cmd: `ffmpeg -y -f lavfi -i "color=c=white:s=64x64:d=1,format=rgba" -frames:v 1`,

@@ -12,6 +12,8 @@ module.exports = {
   width?: number;                           // Optional: source image width (skip probe / override)
   height?: number;                          // Optional: source image height (skip probe / override)
   kenBurns?: KenBurnsEffect | KenBurnsSpec; // Optional: apply pan/zoom motion to the image
+  imageFit?: ImageFit;                     // Optional: how to fit image when aspect ratio differs from output (default: "blur-fill" without Ken Burns, "cover" with Ken Burns)
+  blurIntensity?: number;                  // Optional: blur strength for blur-fill background (Gaussian sigma). Default: 40. Higher = blurrier. Typical range: 10-80.
 }`,
   enums: {
     KenBurnsEffect: [
@@ -26,6 +28,7 @@ module.exports = {
     ],
     KenBurnsAnchor: ["top", "bottom", "left", "right"],
     KenBurnsEasing: ["linear", "ease-in", "ease-out", "ease-in-out"],
+    ImageFit: ["cover", "contain", "blur-fill"],
   },
   examples: [
     {
@@ -48,11 +51,24 @@ module.exports = {
       label: "Custom Ken Burns with explicit pan endpoints",
       code: `{ type: "image", url: "photo.jpg", duration: 4, kenBurns: { type: "custom", startX: 0.2, startY: 0.8, endX: 0.7, endY: 0.3 } }`,
     },
+    {
+      label: "Landscape image in portrait video with blurred background (default)",
+      code: `{ type: "image", url: "landscape.jpg", duration: 5 }`,
+    },
+    {
+      label: "Image with black bar padding (contain)",
+      code: `{ type: "image", url: "landscape.jpg", duration: 5, imageFit: "contain" }`,
+    },
+    {
+      label: "Image scaled to fill frame (cover, crops excess)",
+      code: `{ type: "image", url: "landscape.jpg", duration: 5, imageFit: "cover" }`,
+    },
   ],
   notes: [
     "If position is omitted, the clip is placed immediately after the previous video/image clip (auto-sequencing). The first clip defaults to position 0.",
     "Use duration instead of end to specify how long the image displays: end = position + duration. Cannot use both.",
-    "Images are scaled to fill the project canvas. For Ken Burns, use images at least as large as the output resolution for best quality.",
+    "imageFit controls how images are fitted when their aspect ratio differs from the output: 'blur-fill' (default) fills empty space with a blurred version of the image, 'cover' scales up and crops to fill the frame, 'contain' pads with black bars.",
+    "Ken Burns defaults to 'cover' but respects imageFit when set. With 'blur-fill' or 'contain', the Ken Burns motion applies to the contained image while the background stays static. Source dimensions (width/height) are required for KB + blur-fill/contain; without them it falls back to cover.",
     "If width/height are provided, they override probed dimensions (useful for remote or generated images).",
     "Image clips can be placed on the same timeline as video clips and can use transitions between them.",
     "Advanced Ken Burns accepts custom zoom/pan endpoints via normalized coordinates (0 = left/top, 1 = right/bottom).",

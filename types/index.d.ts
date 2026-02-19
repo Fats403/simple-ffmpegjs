@@ -115,12 +115,24 @@ declare namespace SIMPLEFFMPEG {
     easing?: KenBurnsEasing;
   }
 
+  /** How an image is fitted into the output frame when aspect ratios differ. */
+  type ImageFit = "cover" | "contain" | "blur-fill";
+
   interface ImageClip extends BaseClip {
     type: "image";
     url: string;
     width?: number;
     height?: number;
     kenBurns?: KenBurnsEffect | KenBurnsSpec;
+    /** How the image is fitted when its aspect ratio differs from the output.
+     *  - "blur-fill": scale to fit, fill bars with a blurred version of the image (default without Ken Burns)
+     *  - "cover": scale to fill the frame, center-crop excess (default with Ken Burns)
+     *  - "contain": scale to fit, pad with black bars
+     */
+    imageFit?: ImageFit;
+    /** Blur strength for the blur-fill background (Gaussian sigma). Higher = blurrier.
+     *  Only applies when imageFit is "blur-fill". Default: 40. Typical range: 10-80. */
+    blurIntensity?: number;
   }
 
   type TextMode = "static" | "word-replace" | "word-sequential" | "karaoke";

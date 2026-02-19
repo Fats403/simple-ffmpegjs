@@ -898,4 +898,302 @@ describe("buildVideoFilter", () => {
       expect(result.videoDuration).toBe(0);
     });
   });
+
+  describe("imageFit", () => {
+    it("should default to blur-fill for static images (no Ken Burns)", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.hasVideo).toBe(true);
+      expect(result.filter).toContain("split");
+      expect(result.filter).toContain("gblur=sigma=40");
+      expect(result.filter).toContain("overlay=(W-w)/2:(H-h)/2");
+      expect(result.filter).toContain("force_original_aspect_ratio=increase");
+      expect(result.filter).toContain("force_original_aspect_ratio=decrease");
+    });
+
+    it("should use blur-fill when explicitly set", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        imageFit: "blur-fill",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("split");
+      expect(result.filter).toContain("gblur=sigma=40");
+      expect(result.filter).toContain("overlay=(W-w)/2:(H-h)/2");
+    });
+
+    it("should use custom blurIntensity when provided", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        blurIntensity: 60,
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("gblur=sigma=60");
+    });
+
+    it("should ignore invalid blurIntensity and use default", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        blurIntensity: -5,
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("gblur=sigma=40");
+    });
+
+    it("should use contain (black bars) when imageFit is contain", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        imageFit: "contain",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("force_original_aspect_ratio=decrease");
+      expect(result.filter).toContain("pad=1080:1920:(ow-iw)/2:(oh-ih)/2");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+    });
+
+    it("should use cover (scale+crop) when imageFit is cover", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        imageFit: "cover",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("force_original_aspect_ratio=increase");
+      expect(result.filter).toContain("crop=1080:1920:(iw-1080)/2:(ih-1920)/2");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+      expect(result.filter).not.toContain("pad=");
+    });
+
+    it("should default to cover for Ken Burns images", () => {
+      const project = createProject();
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-in",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+    });
+
+    it("should use blur-fill with Ken Burns when imageFit is blur-fill and source dims available", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        width: 640,
+        height: 480,
+        kenBurns: "zoom-in",
+        imageFit: "blur-fill",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain("split");
+      expect(result.filter).toContain("gblur=sigma=40");
+      expect(result.filter).toContain("overlay=(W-w)/2:(H-h)/2");
+      // Foreground zoompan should operate at contained size, not full output
+      expect(result.filter).not.toContain("s=1080x1920");
+      expect(result.filter).toContain("loop=");
+    });
+
+    it("should use contain with Ken Burns when imageFit is contain and source dims available", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        width: 640,
+        height: 480,
+        kenBurns: "zoom-in",
+        imageFit: "contain",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain("pad=1080:1920:(ow-iw)/2:(oh-ih)/2");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+    });
+
+    it("should fall back to cover for KB + blur-fill when source dims missing", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./test.png",
+        position: 0,
+        end: 3,
+        kenBurns: "zoom-in",
+        imageFit: "blur-fill",
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("zoompan=");
+      expect(result.filter).toContain("s=1080x1920");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+    });
+
+    it("should respect blurIntensity for KB + blur-fill", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip = {
+        type: "image",
+        url: "./landscape.jpg",
+        position: 0,
+        end: 3,
+        width: 640,
+        height: 480,
+        kenBurns: "zoom-in",
+        imageFit: "blur-fill",
+        blurIntensity: 60,
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("gblur=sigma=60");
+    });
+
+    it("should generate unique labels for blur-fill in multi-clip timelines", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip1 = {
+        type: "image",
+        url: "./img1.jpg",
+        position: 0,
+        end: 3,
+      };
+      const clip2 = {
+        type: "image",
+        url: "./img2.jpg",
+        position: 3,
+        end: 6,
+      };
+      project.videoOrAudioClips.push(clip1);
+      project.videoOrAudioClips.push(clip2);
+
+      const result = buildVideoFilter(project, [clip1, clip2]);
+
+      expect(result.filter).toContain("[bg0]");
+      expect(result.filter).toContain("[fg0]");
+      expect(result.filter).toContain("[bgr0]");
+      expect(result.filter).toContain("[fgr0]");
+      expect(result.filter).toContain("[bg1]");
+      expect(result.filter).toContain("[fg1]");
+      expect(result.filter).toContain("[bgr1]");
+      expect(result.filter).toContain("[fgr1]");
+    });
+
+    it("should not affect video clips (videos always use contain/pad)", () => {
+      const project = createProject();
+      const clip = {
+        type: "video",
+        url: "./test.mp4",
+        position: 0,
+        end: 5,
+        cutFrom: 0,
+        mediaDuration: 10,
+      };
+      project.videoOrAudioClips.push(clip);
+
+      const result = buildVideoFilter(project, [clip]);
+
+      expect(result.filter).toContain("force_original_aspect_ratio=decrease");
+      expect(result.filter).toContain("pad=");
+      expect(result.filter).not.toContain("split");
+      expect(result.filter).not.toContain("gblur");
+    });
+
+    it("should mix imageFit modes in the same timeline", () => {
+      const project = createProject({ width: 1080, height: 1920 });
+      const clip1 = {
+        type: "image",
+        url: "./img1.jpg",
+        position: 0,
+        end: 3,
+        imageFit: "blur-fill",
+      };
+      const clip2 = {
+        type: "image",
+        url: "./img2.jpg",
+        position: 3,
+        end: 6,
+        imageFit: "contain",
+      };
+      const clip3 = {
+        type: "image",
+        url: "./img3.jpg",
+        position: 6,
+        end: 9,
+        imageFit: "cover",
+      };
+      project.videoOrAudioClips.push(clip1, clip2, clip3);
+
+      const result = buildVideoFilter(project, [clip1, clip2, clip3]);
+
+      expect(result.filter).toContain("gblur=sigma=40");
+      expect(result.filter).toContain("pad=1080:1920:(ow-iw)/2:(oh-ih)/2");
+      expect(result.filter).toContain("crop=1080:1920:(iw-1080)/2:(ih-1920)/2");
+      expect(result.filter).toContain("concat=n=3");
+    });
+  });
 });
