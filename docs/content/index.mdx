@@ -1,0 +1,76 @@
+---
+title: simple-ffmpegjs docs
+description: Programmatic video composition for Node.js using FFmpeg.
+---
+
+import { Cards, Callout } from "nextra/components";
+
+<img
+  src="/simple-ffmpeg.png"
+  alt="simple-ffmpeg banner"
+  style={{ width: "100%", borderRadius: "8px" }}
+/>
+
+<p
+  style={{
+    marginTop: "1rem",
+    display: "flex",
+    gap: "0.5rem",
+    justifyContent: "center",
+    flexWrap: "wrap",
+  }}
+>
+  <a href="https://www.npmjs.com/package/simple-ffmpegjs">
+    <img
+      src="https://img.shields.io/npm/v/simple-ffmpegjs.svg"
+      alt="npm version"
+    />
+  </a>
+  <a href="https://opensource.org/licenses/MIT">
+    <img
+      src="https://img.shields.io/badge/License-MIT-blue.svg"
+      alt="License: MIT"
+    />
+  </a>
+  <a href="https://nodejs.org">
+    <img
+      src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg"
+      alt="Node.js ≥18"
+    />
+  </a>
+  <a href="https://github.com/Fats403/simple-ffmpegjs">
+    <img
+      src="https://img.shields.io/github/stars/Fats403/simple-ffmpegjs?style=social"
+      alt="GitHub stars"
+    />
+  </a>
+</p>
+
+A lightweight Node.js library for programmatic video composition using FFmpeg.
+Define your timeline as a plain array of clips — the library builds the filter graph for you.
+
+## Why simple-ffmpeg?
+
+FFmpeg is incredibly powerful, but composing even a simple two-clip video with a crossfade requires navigating complex filter graphs, input mapping, and stream labeling by hand. `simple-ffmpegjs` abstracts all of that behind a declarative, config-driven API.
+
+You describe _what_ your video should look like. The library figures out _how_ to build the FFmpeg command.
+
+The entire timeline is expressed as a plain array of objects, making it straightforward to generate from any data source — databases, APIs, templates, or AI models. Structured validation with machine-readable error codes lets you catch problems early and handle them programmatically, whether that's surfacing feedback to a user, retrying with corrected input, or logging a warning before failing fast.
+
+## Get started
+
+<Cards>
+  <Cards.Card title="Installation" href="/installation" />
+  <Cards.Card title="Quick Start" href="/quick-start" />
+  <Cards.Card title="Features" href="/features" />
+  <Cards.Card title="Example Output" href="/example-output" />
+</Cards>
+
+## Go deeper
+
+<Cards>
+  <Cards.Card title="API Reference" href="/api" />
+  <Cards.Card title="Examples" href="/examples" />
+  <Cards.Card title="Guides" href="/guides/validation" />
+  <Cards.Card title="Advanced" href="/advanced/timeline-behavior" />
+</Cards>

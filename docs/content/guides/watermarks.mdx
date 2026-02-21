@@ -1,0 +1,77 @@
+---
+title: Watermarks
+---
+
+# Watermarks
+
+Add text or image watermarks via the `watermark` option in `project.export()`. Watermarks are composited on top of the final video.
+
+## Text watermark
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  watermark: {
+    type: "text",
+    text: "@myhandle",
+    position: "bottom-right",
+    fontSize: 24,
+    fontColor: "#FFFFFF",
+    opacity: 0.7,
+    margin: 20,
+  },
+});
+```
+
+## Image watermark
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  watermark: {
+    type: "image",
+    url: "./logo.png",
+    position: "top-right",
+    opacity: 0.8,
+    scale: 0.5,   // Scale to 50% of original size
+    margin: 15,
+  },
+});
+```
+
+## Timed visibility
+
+Show a watermark only during a specific time window:
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  watermark: {
+    type: "text",
+    text: "Limited Time!",
+    position: "top-left",
+    startTime: 5,   // Appear at 5 seconds
+    endTime: 15,    // Disappear at 15 seconds
+  },
+});
+```
+
+## Custom pixel position
+
+Use `x`/`y` for exact placement instead of a named `position`:
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  watermark: {
+    type: "text",
+    text: "Custom",
+    x: 100,
+    y: 50,
+  },
+});
+```
+
+## Position values
+
+Named `position` options: `top-left`, `top-right`, `bottom-left`, `bottom-right`, `center`.

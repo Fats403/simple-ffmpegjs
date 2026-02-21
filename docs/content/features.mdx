@@ -1,0 +1,59 @@
+---
+title: Features
+---
+
+# Features
+
+## Video and images
+
+- **Video concatenation** — join multiple clips with optional xfade transitions
+- **Image clips** — Ken Burns effects (zoom-in, zoom-out, pan, smart, custom) with easing control
+- **Image fitting** — `blur-fill`, `cover`, and `contain` modes for aspect ratio mismatches
+- **Color clips** — flat colors and linear/radial gradients as first-class timeline elements with full transition support
+
+## Audio
+
+- **Multi-source audio mixing** — layer voiceovers, sound effects, and background tracks
+- **Background music** — loop support for tracks shorter than the video
+- **Independent codec control** — audio codec, bitrate, and sample rate are configurable at export
+
+## Overlays and effects
+
+- **Text overlays** — static, word-replace, word-sequential, and karaoke modes
+- **Text animations** — fade variants, pop, pop-bounce, typewriter, scale-in, pulse
+- **Emoji support** — opt-in emoji rendering via a custom font; stripped by default to prevent blank glyphs
+- **Subtitle imports** — SRT, VTT, ASS, SSA files with optional style overrides
+- **Watermarks** — text or image watermarks with preset or custom positioning and optional timed visibility
+- **Effect clips** — timed overlay effects with smooth `fadeIn`/`fadeOut` envelopes:
+
+| Effect | Description |
+|---|---|
+| `vignette` | Darkened edges |
+| `filmGrain` | Noise overlay |
+| `gaussianBlur` | Gaussian blur |
+| `colorAdjust` | Brightness, contrast, saturation, gamma |
+| `sepia` | Warm vintage tone |
+| `blackAndWhite` | Desaturate to grayscale |
+| `sharpen` | Sharpen detail |
+| `chromaticAberration` | RGB channel split |
+| `letterbox` | Cinematic black bars |
+
+## Analysis and extraction
+
+- **`probe()`** — full media metadata via ffprobe (duration, codec, fps, rotation, and more)
+- **`snapshot()`** — capture a single frame to `.jpg`, `.png`, `.webp`, `.bmp`, or `.tiff`
+- **`extractKeyframes()`** — scene-change detection or fixed-interval frame sampling, returning `Buffer[]` or file paths
+
+## Developer experience
+
+- **Platform presets** — TikTok, YouTube, Instagram, Snapchat, and more
+- **Auto-sequencing** — omit `position` to place clips sequentially; use `duration` instead of `end`
+- **Pre-validation** — structured errors with machine-readable codes before any file I/O
+- **Schema export** — machine-readable clip spec for documentation, code generation, and AI pipelines
+- **Progress callbacks** — real-time `percent`, `phase`, `fps`, and `speed` during export
+- **Live FFmpeg logging** — `onLog` callback for raw FFmpeg stderr/stdout
+- **Cancellation** — `AbortController` support for stopping exports mid-render
+- **Auto-batching** — automatically splits oversized filter graphs to work within OS command-line limits
+- **Custom temp directory** — route intermediate files to fast storage (NVMe, ramdisk, etc.)
+- **TypeScript** — full type definitions included
+- **Zero runtime dependencies** — only requires FFmpeg on your system

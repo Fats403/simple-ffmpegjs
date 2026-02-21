@@ -1,0 +1,54 @@
+---
+title: Testing
+---
+
+# Testing
+
+## Automated tests
+
+Run from the repository root:
+
+```bash
+# Run all tests
+npm test
+
+# Unit tests only
+npm run test:unit
+
+# Integration tests only
+npm run test:integration
+
+# Watch mode
+npm run test:watch
+```
+
+## Manual verification
+
+Generate sample output videos to visually verify rendering behavior:
+
+```bash
+# Run all demos
+node examples/run-examples.js
+
+# Run specific demos by name (partial match)
+node examples/run-examples.js transitions
+node examples/run-examples.js torture ken
+```
+
+Output goes to `examples/output/`. Each demo script includes a `WHAT TO CHECK` section describing the expected visual result at every timestamp.
+
+## Demo scripts
+
+| Script | What it covers |
+|---|---|
+| `demo-color-clips.js` | Flat colors, linear/radial gradients, transitions, full composition with color clips |
+| `demo-effects.js` | All 9 effect types with smooth fade ramps |
+| `demo-transitions.js` | Fade, wipe, slide, dissolve, fadeblack/white, short/long durations, image transitions |
+| `demo-text-and-animations.js` | Positioning, fade, pop, pop-bounce, typewriter, scale-in, pulse, styling, word-replace |
+| `demo-emoji-text.js` | Emoji stripping (default) and opt-in rendering via `emojiFont`, fade, fallback behavior |
+| `demo-ken-burns.js` | All 6 presets, smart anchors, custom diagonal, slideshow with transitions |
+| `demo-audio-mixing.js` | Volume levels, background music, standalone audio, loop, multi-source mix |
+| `demo-watermarks.js` | Text/image watermarks, all positions, timed appearance, styled over transitions |
+| `demo-karaoke-and-subtitles.js` | Smooth/instant karaoke, word timestamps, multiline, SRT, VTT, mixed text+karaoke |
+| `demo-image-fit.js` | Fitting modes (blur-fill, cover, contain), Ken Burns + imageFit, mixed timelines |
+| `demo-torture-test.js` | Kitchen sink — many clips, gaps, transitions, 6 simultaneous text animations, edge cases |

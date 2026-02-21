@@ -1,0 +1,40 @@
+---
+title: Export Settings
+---
+
+# Export Settings
+
+```ts
+// High-quality H.265
+await project.export({
+  outputPath: "./output.mp4",
+  videoCodec: "libx265",
+  crf: 18,
+  preset: "slow",
+  audioCodec: "libopus",
+  audioBitrate: "256k",
+});
+
+// Hardware-accelerated (macOS)
+await project.export({
+  outputPath: "./output.mp4",
+  hwaccel: "videotoolbox",
+  videoCodec: "h264_videotoolbox",
+});
+
+// Two-pass bitrate target
+await project.export({
+  outputPath: "./output.mp4",
+  twoPass: true,
+  videoBitrate: "5M",
+  preset: "slow",
+});
+
+// Audio-only export
+await project.export({
+  outputPath: "./audio.mp3",
+  audioOnly: true,
+  audioCodec: "libmp3lame",
+  audioBitrate: "320k",
+});
+```

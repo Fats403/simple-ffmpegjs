@@ -1,0 +1,47 @@
+---
+title: Auto-Batching
+---
+
+import { Callout } from 'nextra/components'
+
+# Auto-Batching
+
+FFmpeg's `filter_complex` argument has platform-specific length limits:
+
+| Platform | Approximate limit |
+|---|---|
+| Windows | ~32 KB |
+| macOS | ~1 MB |
+| Linux | ~2 MB |
+
+With many text overlays or complex animation combinations, the generated filter graph can exceed these limits — causing FFmpeg to fail with a cryptic argument-too-long error.
+
+`simple-ffmpegjs` handles this automatically. It detects oversized filter graphs and splits text overlay passes into multiple sequential renders with intermediate files. No configuration required.
+
+## When it activates
+
+Batching kicks in for:
+
+- Typewriter animations with long text
+- Many simultaneous text overlays (default threshold: 75 filter nodes per pass)
+- Complex animation combinations (e.g. multiple `pop-bounce` or `pulse` clips)
+
+With `verbose: true` in export options, you'll see a log message when batching activates.
+
+## Tuning
+
+For very complex projects, you can adjust the thresholds:
+
+```ts
+await project.export({
+  outputPath: "./output.mp4",
+  textMaxNodesPerPass: 30,         // default: 75
+  intermediateVideoCodec: "libx264", // default
+  intermediateCrf: 18,             // default (high quality)
+  intermediatePreset: "veryfast",  // default (fast encoding for intermediate files)
+});
+```
+
+<Callout type="info">
+  Lower `textMaxNodesPerPass` values increase the number of intermediate passes but keep each command well within OS limits. The default of 75 works for most projects — only tune if you encounter issues.
+</Callout>

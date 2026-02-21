@@ -1,0 +1,85 @@
+---
+title: Schema Export
+---
+
+import { Callout } from 'nextra/components'
+
+# Schema Export
+
+`SIMPLEFFMPEG.getSchema()` returns a structured text description of all clip types accepted by `load()`. The output is designed to serve as context for LLMs, documentation generators, code generation tools, or anything that needs to understand the library's clip format.
+
+## Basic usage
+
+```ts
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+const schema = SIMPLEFFMPEG.getSchema();
+console.log(schema);
+```
+
+The output is a formatted text document with type definitions, allowed values, usage notes, and examples for each clip type.
+
+## Module filtering
+
+The schema is broken into modules — one per clip type. Include or exclude modules to control exactly what appears in the output:
+
+```ts
+// Only include video and image types
+const schema = SIMPLEFFMPEG.getSchema({ include: ["video", "image"] });
+
+// Include everything except text and subtitle
+const schema = SIMPLEFFMPEG.getSchema({ exclude: ["text", "subtitle"] });
+
+// List all available module IDs
+SIMPLEFFMPEG.getSchemaModules();
+// ['video', 'audio', 'image', 'color', 'effect', 'text', 'subtitle', 'music']
+```
+
+## Available modules
+
+| Module | Covers |
+|---|---|
+| `video` | Video clips, transitions, volume, trimming |
+| `audio` | Standalone audio clips |
+| `image` | Image clips, Ken Burns effects, image fitting modes |
+| `color` | Color clips — flat colors, linear/radial gradients |
+| `effect` | Overlay effects — vignette, grain, blur, color adjust, sepia, B&W, sharpen, chromatic aberration, letterbox |
+| `text` | Text overlays — all modes, animations, positioning, styling |
+| `subtitle` | Subtitle file import (SRT, VTT, ASS, SSA) |
+| `music` | Background music / background audio, looping |
+
+## Custom instructions
+
+Embed your own instructions into the schema output. Top-level instructions appear at the beginning; per-module instructions are placed inside the relevant section:
+
+```ts
+const schema = SIMPLEFFMPEG.getSchema({
+  include: ["video", "image", "music"],
+  instructions: [
+    "You are creating short cooking tutorials for TikTok.",
+    "Keep all videos under 30 seconds.",
+  ],
+  moduleInstructions: {
+    video: [
+      "Always use fade transitions at 0.5s.",
+      "Limit to 5 clips maximum.",
+    ],
+    music: "Always include background music at volume 0.15.",
+  },
+});
+```
+
+Both `instructions` and `moduleInstructions` values accept a `string` or `string[]`. Per-module instructions for excluded modules are silently ignored.
+
+## AI workflow pattern
+
+<Callout type="info">
+  See [Real-World Pipelines](/examples/real-world-pipelines) for a complete generate → validate → retry implementation.
+</Callout>
+
+1. Build schema with `include` + `instructions` scoped to your use case
+2. Request model output as a JSON array of clip objects
+3. Validate structure with `validate(..., { skipFileChecks: true })`
+4. Retry with structured validation feedback (`[CODE] path: message`)
+5. Verify media paths against known/expected assets
+6. Render with `load()` and `export()`

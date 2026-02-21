@@ -1,0 +1,74 @@
+---
+title: Installation
+---
+
+import { Callout, Tabs } from 'nextra/components'
+
+# Installation
+
+## Package
+
+```bash
+npm install simple-ffmpegjs
+```
+
+## Prerequisites
+
+FFmpeg must be installed and available in your `PATH`.
+
+<Tabs items={['macOS', 'Ubuntu / Debian', 'Alpine Linux', 'Windows']}>
+  <Tabs.Tab>
+  ```bash
+  brew install ffmpeg
+  ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+  ```bash
+  apt-get install ffmpeg
+  ```
+
+  For text overlays, also install font support:
+
+  ```bash
+  apt-get install -y ffmpeg fontconfig fonts-dejavu-core
+  ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+  ```bash
+  apk add --no-cache ffmpeg fontconfig ttf-dejavu
+  ```
+  </Tabs.Tab>
+  <Tabs.Tab>
+  Download from [ffmpeg.org/download.html](https://ffmpeg.org/download.html) and add the `bin/` folder to your `PATH`.
+  </Tabs.Tab>
+</Tabs>
+
+<Callout type="info">
+  For text overlays, your FFmpeg build should include `libfreetype` and `fontconfig`. Most standard package manager builds include these by default. On minimal Linux environments (Docker, Alpine), you may need to install a font package explicitly — see the Alpine and Ubuntu tabs above.
+</Callout>
+
+## Optional: Emoji rendering
+
+By default, emoji characters in text overlays are detected and silently stripped to prevent blank glyphs (tofu). To render emoji instead, provide a path to an emoji font at construction time:
+
+```js
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+const project = new SIMPLEFFMPEG({
+  width: 1920,
+  height: 1080,
+  emojiFont: "/path/to/NotoEmoji-Regular.ttf",
+});
+```
+
+**Recommended font:** [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji) (~2 MB, SIL OFL license). Download from [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Emoji) or [GitHub](https://github.com/google/fonts/raw/main/ofl/notoemoji/NotoEmoji%5Bwght%5D.ttf).
+
+<Callout type="warning">
+  Emoji render as monochrome outlines. This is a limitation of `libass`, which does not yet support color emoji font formats. The shapes are correct and legible — just not multi-colored.
+</Callout>
+
+| Behavior | Without `emojiFont` | With `emojiFont` |
+|---|---|---|
+| Emoji in text | Stripped silently | Rendered via `libass` |
+| Rendering style | — | Monochrome outline |
+| One-time warning | Logged on first strip | Not logged |

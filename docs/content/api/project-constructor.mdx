@@ -1,0 +1,83 @@
+---
+title: Constructor
+---
+
+import { Callout } from 'nextra/components'
+
+# Constructor
+
+```ts
+new SIMPLEFFMPEG(options?: {
+  width?: number;
+  height?: number;
+  fps?: number;
+  validationMode?: "warn" | "strict";
+  preset?: string;
+  fontFile?: string;
+  emojiFont?: string;
+  tempDir?: string;
+})
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `width` | `number` | `1920` | Output width in pixels |
+| `height` | `number` | `1080` | Output height in pixels |
+| `fps` | `number` | `30` | Output frame rate |
+| `validationMode` | `'warn' \| 'strict'` | `'warn'` | Whether validation issues throw or warn |
+| `preset` | `string` | — | Platform preset name (e.g. `'tiktok'`, `'youtube'`) |
+| `fontFile` | `string` | — | Default font file path for all text clips |
+| `emojiFont` | `string` | — | Emoji font `.ttf` path for opt-in emoji rendering |
+| `tempDir` | `string` | `os.tmpdir()` | Custom directory for intermediate temp files |
+
+<Callout type="info">
+  `preset` is the easiest way to get started. It sets `width`, `height`, and `fps` for the target platform. You can still override individual values after specifying a preset.
+</Callout>
+
+## Using a preset
+
+```ts
+const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+
+// Override individual preset values
+const project = new SIMPLEFFMPEG({
+  preset: "tiktok",
+  fps: 60,
+});
+```
+
+See [Platform Presets](/guides/presets) for the full list.
+
+## Global font file
+
+When `fontFile` is set at the project level, every text clip inherits it automatically. Individual clips can still override it:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  preset: "tiktok",
+  fontFile: "./fonts/Montserrat-Bold.ttf",
+});
+
+await project.load([
+  { type: "video", url: "intro.mp4", position: 0, end: 10 },
+  // Uses the global font
+  { type: "text", text: "Hello!", position: 1, end: 4, fontSize: 72 },
+  // Overrides with a different font
+  { type: "text", text: "Special", position: 5, end: 8, fontFile: "./fonts/Italic.otf" },
+]);
+```
+
+## Custom temp directory
+
+Set `tempDir` to route all intermediate files (gradient images, batch renders, subtitle temp files) to a specific location. Useful for fast SSDs, ramdisks, or Docker containers with limited `/tmp`:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  preset: "youtube",
+  tempDir: "/mnt/fast-nvme/tmp",
+});
+```
+
+Cross-filesystem moves are handled automatically. When not set, temp files go to `os.tmpdir()` or next to the output file depending on the operation.

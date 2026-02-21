@@ -1,0 +1,44 @@
+---
+title: Auto-Sequencing & Duration Shorthand
+---
+
+# Auto-Sequencing & Duration Shorthand
+
+For `video`, `image`, and `audio` clips, you can reduce timeline boilerplate with two shortcuts:
+
+- **`duration`** — use instead of `end`. The library computes `end = position + duration`. You cannot specify both on the same clip.
+- **Omit `position`** — the clip is placed immediately after the previous clip on its track. Video and image clips share the visual track; audio clips have their own track. The first clip defaults to `position: 0`.
+
+```ts
+// Before: manual position and end for every clip
+await project.load([
+  { type: "video", url: "./a.mp4", position: 0, end: 5 },
+  { type: "video", url: "./b.mp4", position: 5, end: 10 },
+  { type: "video", url: "./c.mp4", position: 10, end: 18, cutFrom: 3 },
+]);
+
+// After: auto-sequencing + duration shorthand
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 },
+  { type: "video", url: "./b.mp4", duration: 5 },
+  { type: "video", url: "./c.mp4", duration: 8, cutFrom: 3 },
+]);
+```
+
+## Mixing explicit and implicit positioning
+
+You can mix explicit `position` values with auto-sequenced clips freely. Clips with an explicit `position` are placed there; subsequent auto-sequenced clips follow from the last placed clip's end:
+
+```ts
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 },        // position: 0, end: 5
+  { type: "video", url: "./b.mp4", position: 10, end: 15 }, // explicit gap
+  { type: "video", url: "./c.mp4", duration: 5 },        // position: 15, end: 20
+]);
+```
+
+## Text overlays require explicit timing
+
+Text clips always need an explicit `position` (and `end` or `duration`) — they target specific visual moments and don't participate in track sequencing.
+
+Background music and subtitle clips have their own defaults (`position: 0`, `end: project duration`) and also don't auto-sequence.

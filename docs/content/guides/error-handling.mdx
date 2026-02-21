@@ -1,0 +1,56 @@
+---
+title: Error Handling
+---
+
+# Error Handling
+
+`simple-ffmpegjs` throws structured error classes so you can handle different failure modes programmatically.
+
+## Error classes
+
+| Class | When thrown | Key properties |
+|---|---|---|
+| `ValidationError` | Invalid clip configuration | `errors[]`, `warnings[]` — each with `code`, `path`, `message` |
+| `FFmpegError` | FFmpeg command fails | `stderr`, `command`, `exitCode`, `details` |
+| `MediaNotFoundError` | File not found or unreadable | `path` |
+| `ExportCancelledError` | Export aborted via `AbortController` | — |
+
+## Full example
+
+```ts
+try {
+  await project.export({ outputPath: "./out.mp4" });
+} catch (error) {
+  if (error.name === "ValidationError") {
+    error.errors.forEach((e) =>
+      console.error(`[${e.code}] ${e.path}: ${e.message}`),
+    );
+    error.warnings.forEach((w) =>
+      console.warn(`[${w.code}] ${w.path}: ${w.message}`),
+    );
+  } else if (error.name === "FFmpegError") {
+    // details contains the last 50 lines of stderr, the full command, and exit code
+    console.error("FFmpeg failed:", error.details);
+  } else if (error.name === "MediaNotFoundError") {
+    console.error("File not found:", error.path);
+  } else if (error.name === "ExportCancelledError") {
+    console.log("Export was cancelled");
+  }
+}
+```
+
+## Validation error codes
+
+Use `ValidationCodes` to match specific error types programmatically:
+
+```ts
+const { ValidationCodes } = SIMPLEFFMPEG;
+
+if (result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)) {
+  // Handle gap-specific logic
+}
+```
+
+Available codes: `INVALID_TYPE`, `MISSING_REQUIRED`, `INVALID_VALUE`, `INVALID_RANGE`, `INVALID_TIMELINE`, `TIMELINE_GAP`, `FILE_NOT_FOUND`, `INVALID_FORMAT`, `INVALID_WORD_TIMING`, `OUTSIDE_BOUNDS`.
+
+See [Validation](/guides/validation) for pre-render validation patterns.

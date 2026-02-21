@@ -1,0 +1,98 @@
+---
+title: Clips & Transitions
+---
+
+# Clips & Transitions
+
+## Two clips with a crossfade
+
+```ts
+await project.load([
+  { type: "video", url: "./a.mp4", position: 0, end: 5 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    position: 5,
+    end: 10,
+    transition: { type: "fade", duration: 0.5 },
+  },
+]);
+```
+
+All [FFmpeg xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported: `fade`, `wipeleft`, `wiperight`, `dissolve`, `slideup`, `circleopen`, and many more.
+
+## Image slideshow with Ken Burns
+
+```ts
+await project.load([
+  { type: "image", url: "./photo1.jpg", duration: 3, kenBurns: "zoom-in" },
+  { type: "image", url: "./photo2.jpg", duration: 3, kenBurns: "pan-right" },
+  { type: "image", url: "./photo3.jpg", duration: 3, kenBurns: "zoom-out" },
+  { type: "music", url: "./music.mp3", volume: 0.3 },
+]);
+```
+
+## Custom Ken Burns
+
+Use the object form for precise control over zoom levels, pan coordinates, anchoring, and easing:
+
+```ts
+await project.load([
+  // Smart anchor — adjusts pan direction based on image vs output aspect ratio
+  {
+    type: "image",
+    url: "./portrait.jpg",
+    duration: 5,
+    kenBurns: {
+      type: "smart",
+      anchor: "bottom",
+      startZoom: 1.05,
+      endZoom: 1.2,
+      easing: "ease-in-out",
+    },
+  },
+  // Custom diagonal pan — full control over start/end coordinates
+  {
+    type: "image",
+    url: "./wide.jpg",
+    duration: 4,
+    kenBurns: {
+      type: "custom",
+      startX: 0.15,   // 0 = left, 1 = right
+      startY: 0.7,    // 0 = top, 1 = bottom
+      endX: 0.85,
+      endY: 0.2,
+      easing: "ease-in-out",
+    },
+  },
+]);
+```
+
+## Color clip intro / outro
+
+Use `color` clips for title cards, intros, and outros — they support transitions too:
+
+```ts
+await project.load([
+  {
+    type: "color",
+    color: { type: "linear-gradient", colors: ["#0a0a2e", "#4a148c"] },
+    position: 0,
+    end: 3,
+  },
+  {
+    type: "video",
+    url: "./main.mp4",
+    position: 3,
+    end: 13,
+    transition: { type: "fade", duration: 0.5 },
+  },
+  {
+    type: "color",
+    color: "black",
+    position: 13,
+    end: 16,
+    transition: { type: "fade", duration: 0.5 },
+  },
+]);
+```

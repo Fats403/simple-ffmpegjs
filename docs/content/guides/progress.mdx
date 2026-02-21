@@ -1,0 +1,83 @@
+---
+title: Progress, Logging, Cancellation
+---
+
+import { Callout } from 'nextra/components'
+
+# Progress, Logging, Cancellation
+
+## Progress callback
+
+The `onProgress` callback fires during export with real-time status:
+
+```ts
+await project.export({
+  outputPath: "./out.mp4",
+  onProgress: ({ percent, phase, fps, speed }) => {
+    if (phase === "batching") {
+      console.log("Applying text overlays...");
+    } else {
+      console.log(`${percent}% — ${fps} fps — ${speed}x realtime`);
+    }
+  },
+});
+```
+
+### Progress payload
+
+| Field | Type | Description |
+|---|---|---|
+| `percent` | `number` | 0–100 progress percentage |
+| `phase` | `string` | `"rendering"` or `"batching"` |
+| `timeProcessed` | `number` | Seconds of video processed so far |
+| `frame` | `number` | Current frame number |
+| `fps` | `number` | Processing speed in frames per second |
+| `speed` | `number` | Speed multiplier (e.g. `2.0` = 2× realtime) |
+
+### Understanding phases
+
+- **`"rendering"`** — the main video export pass. Includes `percent`, `frame`, `fps`, and `speed`.
+- **`"batching"`** — text overlay passes are running (fired once when batching starts, while rendering continues). The video may hit 100% and then continue into batching.
+
+<Callout type="info">
+  When `phase === "batching"`, `percent` may not update. Use the phase value to update your UI with a message like "Applying text overlays…" rather than showing a stalled progress bar.
+</Callout>
+
+## FFmpeg logs
+
+Use `onLog` to receive raw FFmpeg output for debugging or custom logging pipelines:
+
+```ts
+await project.export({
+  outputPath: "./out.mp4",
+  onLog: ({ level, message }) => {
+    console.log(`[ffmpeg:${level}] ${message}`);
+  },
+});
+```
+
+Each entry has `level` (`"stderr"` or `"stdout"`) and the raw `message` string. The callback fires for every data chunk FFmpeg writes and works alongside `onProgress`.
+
+## Cancellation
+
+Pass an `AbortController` signal to stop an export mid-render:
+
+```ts
+const controller = new AbortController();
+
+// Cancel after 5 seconds
+setTimeout(() => controller.abort(), 5000);
+
+try {
+  await project.export({
+    outputPath: "./out.mp4",
+    signal: controller.signal,
+  });
+} catch (error) {
+  if (error.name === "ExportCancelledError") {
+    console.log("Export was cancelled");
+  }
+}
+```
+
+Cancelled exports throw `ExportCancelledError`. See [Error Handling](/guides/error-handling) for the full error class reference.

@@ -1,0 +1,151 @@
+---
+title: Static Helpers
+---
+
+# Static Helpers
+
+These are static methods on the `SIMPLEFFMPEG` class — no project instance required.
+
+---
+
+## `SIMPLEFFMPEG.getDuration(clips)`
+
+Computes the total visual timeline duration from a clips array. Handles `duration` shorthand, auto-sequencing, and transition overlap subtraction. Pure function — no file I/O.
+
+```ts
+const clips = [
+  { type: "video", url: "./a.mp4", duration: 5 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    duration: 10,
+    transition: { type: "fade", duration: 0.5 },
+  },
+];
+
+SIMPLEFFMPEG.getDuration(clips); // 14.5
+```
+
+Useful for computing text overlay timings or background music end times before calling `load()`.
+
+---
+
+## `SIMPLEFFMPEG.probe(filePath)`
+
+Returns ffprobe-derived metadata for video, audio, or image files.
+
+```ts
+const info = await SIMPLEFFMPEG.probe("./video.mp4");
+// {
+//   duration: 30.5,         // seconds
+//   width: 1920,
+//   height: 1080,
+//   hasVideo: true,
+//   hasAudio: true,
+//   rotation: 0,            // mobile rotation metadata
+//   videoCodec: "h264",
+//   audioCodec: "aac",
+//   format: "mov,mp4,m4a,3gp,3g2,mj2",
+//   fps: 30,
+//   size: 15728640,         // bytes
+//   bitrate: 4125000,       // bits/sec
+//   sampleRate: 48000,      // Hz
+//   channels: 2
+// }
+```
+
+Fields that don't apply to the file type are `null` (e.g. `width`/`height`/`fps` for audio-only files).
+
+Throws `MediaNotFoundError` if the file cannot be found or probed.
+
+---
+
+## `SIMPLEFFMPEG.snapshot(filePath, options)`
+
+Captures a single frame from a video and writes it as an image. Format is determined by the `outputPath` extension.
+
+```ts
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./frame.png",
+  time: 5,
+});
+
+// JPEG with quality control and resize
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./thumb.jpg",
+  time: 10,
+  width: 640,
+  quality: 4,
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `outputPath` | `string` | — | **Required.** Extension determines output format. |
+| `time` | `number` | `0` | Time in seconds to capture the frame at |
+| `width` | `number` | — | Output width (maintains aspect ratio if `height` omitted) |
+| `height` | `number` | — | Output height (maintains aspect ratio if `width` omitted) |
+| `quality` | `number` | `2` | JPEG quality 1–31, lower is better (`.jpg`/`.jpeg` only) |
+
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`.
+
+---
+
+## `SIMPLEFFMPEG.extractKeyframes(filePath, options)`
+
+Extracts representative frames using scene-change detection or fixed time intervals.
+
+- With `outputDir` — writes frames to disk and returns `string[]` file paths
+- Without `outputDir` — returns in-memory `Buffer[]` (no temp files left behind)
+
+```ts
+// Scene-change detection — returns Buffer[]
+const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "scene-change",
+  sceneThreshold: 0.4,
+  maxFrames: 8,
+  format: "jpeg",
+});
+
+// Fixed interval — writes to disk, returns string[]
+const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "interval",
+  intervalSeconds: 5,
+  outputDir: "./frames/",
+  format: "png",
+});
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `mode` | `string` | `'scene-change'` | `'scene-change'` or `'interval'` |
+| `sceneThreshold` | `number` | `0.3` | Sensitivity 0–1 (lower = more frames). Scene-change mode only. |
+| `intervalSeconds` | `number` | `5` | Seconds between frames. Interval mode only. |
+| `maxFrames` | `number` | — | Maximum number of frames to extract |
+| `format` | `string` | `'jpeg'` | `'jpeg'` or `'png'` |
+| `quality` | `number` | — | JPEG quality 1–31, lower is better |
+| `width` | `number` | — | Output width |
+| `height` | `number` | — | Output height |
+| `outputDir` | `string` | — | Directory to write frames to. Returns `string[]` when set. |
+| `tempDir` | `string` | `os.tmpdir()` | Temp directory for buffer-mode extraction |
+
+Throws `FFmpegError` if extraction fails.
+
+---
+
+## `SIMPLEFFMPEG.validate(clips, options?)`
+
+Validates clip descriptors before creating a project. See the [Validation guide](/guides/validation) for full usage.
+
+## `SIMPLEFFMPEG.getSchema(options?)`
+
+Exports a structured text description of all accepted clip types. See the [Schema Export guide](/guides/schema-export) for full usage.
+
+## `SIMPLEFFMPEG.getPresets()` / `SIMPLEFFMPEG.getPresetNames()`
+
+Returns available platform preset configurations:
+
+```ts
+SIMPLEFFMPEG.getPresetNames(); // ['tiktok', 'youtube-short', 'youtube', ...]
+SIMPLEFFMPEG.getPresets();     // { tiktok: { width: 1080, height: 1920, fps: 30 }, ... }
+```

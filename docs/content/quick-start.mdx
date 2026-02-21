@@ -1,0 +1,69 @@
+---
+title: Quick Start
+---
+
+import { Cards, Callout } from 'nextra/components'
+
+# Quick Start
+
+The example below creates a short video with two clips, a crossfade transition, an animated title card, and looping background music — using a YouTube platform preset:
+
+```js
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+// Use a platform preset — or set width/height/fps manually
+const project = new SIMPLEFFMPEG({ preset: "youtube" });
+
+await project.load([
+  // Clip 1: 6 seconds. No position needed — first clip defaults to 0.
+  { type: "video", url: "./opening-shot.mp4", duration: 6 },
+
+  // Clip 2: follows clip 1 automatically.
+  // transition applies at the join point between clip 1 and clip 2.
+  {
+    type: "video",
+    url: "./highlights.mp4",
+    duration: 12,
+    cutFrom: 3,  // start 3s into the source file
+    transition: { type: "fade", duration: 0.5 },
+  },
+
+  // Text overlay: centered, 100px above center, with a pop animation.
+  // Text clips always need explicit position/end — they target a visual moment.
+  {
+    type: "text",
+    text: "Summer Highlights 2025",
+    position: 0.5,
+    end: 4,
+    fontFile: "./fonts/Montserrat-Bold.ttf",
+    fontSize: 72,
+    fontColor: "#FFFFFF",
+    borderColor: "#000000",
+    borderWidth: 2,
+    xPercent: 0.5,
+    yPercent: 0.4,
+    animation: { type: "pop", in: 0.3 },
+  },
+
+  // Background music — loops to fill the whole video
+  { type: "music", url: "./chill-beat.mp3", volume: 0.2, loop: true },
+]);
+
+await project.export({
+  outputPath: "./summer-highlights.mp4",
+  onProgress: ({ percent }) => console.log(`${percent}% complete`),
+});
+```
+
+<Callout type="info">
+  Omitting `position` and using `duration` instead of `end` is called **auto-sequencing** — clips are placed back-to-back automatically. See [Auto-Sequencing & Duration Shorthand](/api/auto-sequencing) for details.
+</Callout>
+
+## Next steps
+
+<Cards>
+  <Cards.Card title="API Reference" href="/api" />
+  <Cards.Card title="Clip Types" href="/api/clip-types" />
+  <Cards.Card title="Validation Guide" href="/guides/validation" />
+  <Cards.Card title="Examples" href="/examples" />
+</Cards>

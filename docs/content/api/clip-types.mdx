@@ -1,0 +1,318 @@
+---
+title: Clip Types
+---
+
+import { Callout } from 'nextra/components'
+
+# Clip Types
+
+All clips are plain objects with a `type` field. Supported types:
+
+| Type | Description |
+|---|---|
+| `video` | Video file clip |
+| `image` | Image clip with optional Ken Burns effect |
+| `color` | Flat color or gradient background |
+| `effect` | Timed overlay effect (vignette, blur, grain, etc.) |
+| `text` | Text overlay with optional animation |
+| `subtitle` | External subtitle file (SRT, VTT, ASS, SSA) |
+| `audio` | Standalone audio clip |
+| `music` / `backgroundAudio` | Background music track |
+
+---
+
+## Video clip
+
+```ts
+{
+  type: "video";
+  url: string;              // File path
+  position?: number;        // Timeline start (seconds). Omit to auto-sequence.
+  end?: number;             // Timeline end. Use end OR duration, not both.
+  duration?: number;        // Duration in seconds (alternative to end)
+  cutFrom?: number;         // Source file offset in seconds (default: 0)
+  volume?: number;          // Audio volume multiplier (default: 1)
+  transition?: {
+    type: string;           // Any xfade transition name (e.g. 'fade', 'wipeleft', 'dissolve')
+    duration: number;       // Transition duration in seconds
+  };
+}
+```
+
+All [FFmpeg xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
+
+---
+
+## Image clip
+
+```ts
+{
+  type: "image";
+  url: string;
+  position?: number;        // Omit to auto-sequence after the previous video/image clip
+  end?: number;             // Use end OR duration, not both
+  duration?: number;        // Duration in seconds (alternative to end)
+  width?: number;           // Source image width (skips probe; useful for remote/generated images)
+  height?: number;          // Source image height
+  imageFit?: "cover" | "contain" | "blur-fill";
+  blurIntensity?: number;   // Blur strength for blur-fill (default: 40, range: 10–80)
+  kenBurns?:
+    | "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down"
+    | "smart" | "custom"
+    | {
+        type?: "zoom-in" | "zoom-out" | "pan-left" | "pan-right" | "pan-up" | "pan-down" | "smart" | "custom";
+        startZoom?: number;
+        endZoom?: number;
+        startX?: number;     // 0 = left, 1 = right
+        startY?: number;     // 0 = top, 1 = bottom
+        endX?: number;
+        endY?: number;
+        anchor?: "top" | "bottom" | "left" | "right";
+        easing?: "linear" | "ease-in" | "ease-out" | "ease-in-out";
+      };
+}
+```
+
+### Image fitting (`imageFit`)
+
+When an image's aspect ratio doesn't match the output (e.g. a landscape photo in a portrait video), `imageFit` controls how the mismatch is resolved. The library picks a sensible default based on whether Ken Burns is active:
+
+| Mode | Behavior | Default for |
+|---|---|---|
+| `blur-fill` | Scale to fit, fill empty space with a blurred version of the image | Static images |
+| `cover` | Scale to fill the entire frame, center-crop any excess | Ken Burns images |
+| `contain` | Scale to fit within the frame, pad with black bars | — |
+
+```ts
+// Default for static images — blurred background fills the bars
+{ type: "image", url: "./landscape.jpg", duration: 5 }
+
+// Explicit cover — crops to fill the frame
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "cover" }
+
+// Black bars (letterbox / pillarbox)
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "contain" }
+
+// Stronger blur effect
+{ type: "image", url: "./landscape.jpg", duration: 5, imageFit: "blur-fill", blurIntensity: 70 }
+```
+
+<Callout type="info">
+  **Ken Burns + `blur-fill` or `contain`:** The pan/zoom motion applies only to the image content — the blurred background or black bars remain static. Source `width`/`height` are required for this combination; without them the library falls back to `cover`.
+</Callout>
+
+```ts
+// Ken Burns on a contained image with blurred background
+{
+  type: "image",
+  url: "./landscape.jpg",
+  duration: 5,
+  width: 1920,
+  height: 1080,
+  kenBurns: "zoom-in",
+  imageFit: "blur-fill",
+}
+```
+
+<Callout>
+  Ken Burns works best with images at least as large as the output resolution. Smaller images are upscaled with a validation warning. Use `strictKenBurns: true` in `validate()` options to treat this as an error instead.
+</Callout>
+
+---
+
+## Color clip
+
+Color clips are first-class visual elements. They support transitions and text overlays just like video clips. Use them for intros, outros, title cards, or any background.
+
+```ts
+{
+  type: "color";
+  color: string | {
+    type: "linear-gradient" | "radial-gradient";
+    colors: string[];              // 2+ color stops (named, hex, or 0x hex)
+    direction?: "vertical" | "horizontal";  // Linear gradients only (default: "vertical")
+  };
+  position?: number;
+  end?: number;
+  duration?: number;
+  transition?: { type: string; duration: number };
+}
+```
+
+`color` accepts any valid FFmpeg color name or hex code:
+
+```ts
+{ type: "color", color: "navy", position: 0, end: 3 }
+{ type: "color", color: "#1a1a2e", position: 0, end: 3 }
+```
+
+**Gradients:**
+
+```ts
+// Vertical linear gradient (default)
+{ type: "color", color: { type: "linear-gradient", colors: ["#0a0a2e", "#4a148c"] }, duration: 4 }
+
+// Horizontal linear gradient
+{
+  type: "color",
+  color: { type: "linear-gradient", colors: ["#e74c3c", "#f1c40f", "#2ecc71"], direction: "horizontal" },
+  duration: 4,
+}
+
+// Radial gradient
+{ type: "color", color: { type: "radial-gradient", colors: ["#ff8c00", "#1a0000"] }, duration: 3 }
+```
+
+<Callout type="warning">
+  Timeline gaps (periods with no visual content) always produce a validation error. If you need a gap, fill it with a `type: "color"` clip.
+</Callout>
+
+---
+
+## Effect clip
+
+Effect clips are overlay adjustment layers that apply to the already-composed video for a time window. They can ramp in and out smoothly.
+
+```ts
+{
+  type: "effect";
+  effect: EffectName;         // See table below
+  position: number;           // Required
+  end?: number;               // Use end OR duration, not both
+  duration?: number;
+  fadeIn?: number;            // Smooth ramp-in duration (seconds)
+  fadeOut?: number;           // Smooth ramp-out duration (seconds)
+  params: EffectParams;       // Effect-specific parameters (see table below)
+}
+```
+
+All effects accept `params.amount` (0–1, default `1`) to control blend intensity. Additional per-effect parameters:
+
+| Effect | Description | Extra params |
+|---|---|---|
+| `vignette` | Darkened edges | `angle` — radians (default: `PI/5`) |
+| `filmGrain` | Noise overlay | `strength` 0–1 (default `0.35`), `temporal` boolean (default `true`) |
+| `gaussianBlur` | Gaussian blur | `sigma` — blur radius |
+| `colorAdjust` | Color grading | `brightness` −1..1, `contrast` 0..3, `saturation` 0..3, `gamma` 0.1..10 |
+| `sepia` | Warm vintage tone | — |
+| `blackAndWhite` | Desaturate to grayscale | `contrast` — boost 0–3 (default `1`) |
+| `sharpen` | Sharpen detail | `strength` — unsharp amount 0–3 (default `1`) |
+| `chromaticAberration` | RGB channel split | `shift` — pixel offset 0–20 (default `4`) |
+| `letterbox` | Cinematic bars | `size` — bar height as fraction of frame 0–0.5 (default `0.12`), `color` (default `"black"`) |
+
+---
+
+## Text clip
+
+```ts
+{
+  type: "text";
+  position: number;           // Required — text always needs explicit timing
+  end?: number;               // Use end OR duration, not both
+  duration?: number;
+
+  // Content
+  text?: string;
+  mode?: "static" | "word-replace" | "word-sequential" | "karaoke";
+  words?: Array<{ text: string; start: number; end: number }>;
+  wordTimestamps?: number[];
+
+  // Styling
+  fontFile?: string;          // Custom font file path
+  fontFamily?: string;        // System font (default: 'Sans')
+  fontSize?: number;          // Default: 48
+  fontColor?: string;         // Default: '#FFFFFF'
+  borderColor?: string;
+  borderWidth?: number;
+  shadowColor?: string;
+  shadowX?: number;
+  shadowY?: number;
+
+  // Positioning (defaults to center when all omitted)
+  xPercent?: number;          // 0 = left, 0.5 = center, 1 = right
+  yPercent?: number;          // 0 = top, 0.5 = center, 1 = bottom
+  x?: number;                 // Absolute X position in pixels
+  y?: number;                 // Absolute Y position in pixels
+  xOffset?: number;           // Pixel offset added to X
+  yOffset?: number;           // Pixel offset added to Y
+
+  // Animation
+  animation?: {
+    type: "none" | "fade-in" | "fade-in-out" | "fade-out"
+        | "pop" | "pop-bounce" | "typewriter" | "scale-in" | "pulse";
+    in?: number;              // Intro duration (seconds)
+    out?: number;             // Outro duration (seconds)
+    speed?: number;           // Chars/sec for typewriter, pulses/sec for pulse
+    intensity?: number;       // Size variation 0–1 for scale-in and pulse
+  };
+
+  // Karaoke
+  highlightColor?: string;    // Default: '#FFFF00'
+  highlightStyle?: "smooth" | "instant";  // Default: 'smooth'
+}
+```
+
+---
+
+## Subtitle clip
+
+```ts
+{
+  type: "subtitle";
+  url: string;              // Path to subtitle file (.srt, .vtt, .ass, .ssa)
+  position?: number;        // Time offset in seconds (default: 0)
+
+  // Styling — for SRT/VTT only; ASS/SSA files use their embedded styles
+  fontFamily?: string;
+  fontSize?: number;
+  fontColor?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  opacity?: number;
+}
+```
+
+Use `position` to delay all subtitle timestamps (e.g. `position: 2.5` shifts everything forward by 2.5 seconds).
+
+---
+
+## Audio clip
+
+```ts
+{
+  type: "audio";
+  url: string;
+  position?: number;        // Omit to auto-sequence after previous audio clip
+  end?: number;             // Use end OR duration, not both
+  duration?: number;
+  cutFrom?: number;
+  volume?: number;
+}
+```
+
+---
+
+## Music clip
+
+```ts
+{
+  type: "music";            // or "backgroundAudio"
+  url: string;
+  position?: number;        // Default: 0
+  end?: number;             // Default: project duration
+  cutFrom?: number;
+  volume?: number;          // Default: 0.2
+  loop?: boolean;           // Loop to fill the video duration
+}
+```
+
+Background music is mixed **after** transitions — video crossfades do not duck the music volume.
+
+**Looping music:** If your track is shorter than the video, set `loop: true`:
+
+```ts
+await project.load([
+  { type: "video", url: "./video.mp4", position: 0, end: 120 },
+  { type: "music", url: "./30s-track.mp3", volume: 0.3, loop: true },
+]);
+```

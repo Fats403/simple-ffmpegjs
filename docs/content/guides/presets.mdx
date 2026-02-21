@@ -1,0 +1,49 @@
+---
+title: Platform Presets
+---
+
+# Platform Presets
+
+Use a preset to configure output dimensions and frame rate for a target platform in one line:
+
+```ts
+const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+```
+
+## Available presets
+
+| Preset | Resolution | Aspect ratio | Use case |
+|---|---|---|---|
+| `tiktok` | 1080 × 1920 | 9:16 | TikTok vertical videos |
+| `youtube-short` | 1080 × 1920 | 9:16 | YouTube Shorts |
+| `instagram-reel` | 1080 × 1920 | 9:16 | Instagram Reels |
+| `instagram-story` | 1080 × 1920 | 9:16 | Instagram Stories |
+| `snapchat` | 1080 × 1920 | 9:16 | Snapchat |
+| `instagram-post` | 1080 × 1080 | 1:1 | Instagram feed posts |
+| `instagram-square` | 1080 × 1080 | 1:1 | Square format |
+| `youtube` | 1920 × 1080 | 16:9 | YouTube standard |
+| `twitter` | 1920 × 1080 | 16:9 | Twitter / X horizontal |
+| `facebook` | 1920 × 1080 | 16:9 | Facebook horizontal |
+| `landscape` | 1920 × 1080 | 16:9 | General landscape |
+| `twitter-portrait` | 1080 × 1350 | 4:5 | Twitter portrait |
+| `instagram-portrait` | 1080 × 1350 | 4:5 | Instagram portrait |
+
+All presets default to 30fps.
+
+## Overriding preset values
+
+Individual options override the preset:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  preset: "tiktok",
+  fps: 60,
+});
+```
+
+## Programmatic inspection
+
+```ts
+SIMPLEFFMPEG.getPresetNames(); // ['tiktok', 'youtube-short', ...]
+SIMPLEFFMPEG.getPresets();     // { tiktok: { width: 1080, height: 1920, fps: 30 }, ... }
+```

@@ -1,0 +1,45 @@
+---
+title: Timeline Behavior
+---
+
+import { Callout } from 'nextra/components'
+
+# Timeline Behavior
+
+## Timing model
+
+- Clip timings are `[position, end)` intervals in seconds
+- Transitions overlap clips, compressing the total output duration
+- Background music is mixed **after** visual transitions — crossfades do not affect music volume
+
+## Transition compensation
+
+FFmpeg's `xfade` transitions **overlap** two clips, compressing the timeline. A 1s transition between two 10s clips produces 19s of output, not 20s. With multiple transitions, this compounds.
+
+```
+Clips:   [  A (10s)  ][  B (10s)  ]
+          ↑ 0         ↑ 10
+With 1s fade:
+Output:  [  A  ][fade][  B  ]   = 19s total
+```
+
+By default, `simple-ffmpegjs` automatically adjusts text and subtitle timings to compensate. When you position text at "15s", it appears at the visual 15-second mark regardless of how many transitions preceded it:
+
+```ts
+await project.load([
+  { type: "video", url: "./a.mp4", position: 0, end: 10 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    position: 10,
+    end: 20,
+    transition: { type: "fade", duration: 1 },
+  },
+  // This appears at the visual 15s mark, even though the output is only 19s long
+  { type: "text", text: "Appears at 15s visual", position: 15, end: 18 },
+]);
+```
+
+<Callout type="info">
+  Disable compensation with `compensateTransitions: false` in export options if you have pre-calculated your own timing offsets.
+</Callout>

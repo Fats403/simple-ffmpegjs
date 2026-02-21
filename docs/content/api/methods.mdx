@@ -1,0 +1,203 @@
+---
+title: Methods
+---
+
+# Methods
+
+## `project.load(clips)`
+
+```ts
+await project.load(clips: Clip[]): Promise<void[]>
+```
+
+Load clip descriptors into the project. Validates the timeline and reads media metadata.
+
+## `SIMPLEFFMPEG.getDuration(clips)`
+
+Calculate total visual timeline duration from a clips array.
+
+- Handles `duration` shorthand
+- Handles auto-sequencing shorthand
+- Subtracts transition overlap
+- Pure function (no file I/O)
+
+```ts
+const clips = [
+  { type: "video", url: "./a.mp4", duration: 5 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    duration: 10,
+    transition: { type: "fade", duration: 0.5 },
+  },
+];
+
+SIMPLEFFMPEG.getDuration(clips); // 14.5
+```
+
+Useful when computing text timing and background music boundaries before `load()`.
+
+## `SIMPLEFFMPEG.probe(filePath)`
+
+Probe media with `ffprobe` and return normalized metadata for video/audio/image files.
+
+```ts
+const info = await SIMPLEFFMPEG.probe("./video.mp4");
+// {
+//   duration: 30.5,         // seconds
+//   width: 1920,            // pixels
+//   height: 1080,           // pixels
+//   hasVideo: true,
+//   hasAudio: true,
+//   rotation: 0,            // mobile rotation metadata
+//   videoCodec: "h264",
+//   audioCodec: "aac",
+//   format: "mov,mp4,m4a,3gp,3g2,mj2",
+//   fps: 30,
+//   size: 15728640,         // bytes
+//   bitrate: 4125000,       // bits/sec
+//   sampleRate: 48000,      // Hz
+//   channels: 2             // stereo
+// }
+```
+
+Fields that do not apply to a file type are `null` (for example, video fields on audio-only files).
+
+Throws `MediaNotFoundError` when the file cannot be found or probed.
+
+## `SIMPLEFFMPEG.snapshot(filePath, options)`
+
+Capture one frame from a video and write it as an image.
+
+```ts
+await SIMPLEFFMPEG.snapshot("./video.mp4", {
+  outputPath: "./frame.png",
+  time: 5,
+});
+```
+
+### Snapshot options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `outputPath` | `string` | - | Required output image path (extension sets format) |
+| `time` | `number` | `0` | Timestamp in seconds |
+| `width` | `number` | - | Output width (keeps aspect ratio if `height` omitted) |
+| `height` | `number` | - | Output height (keeps aspect ratio if `width` omitted) |
+| `quality` | `number` | `2` | JPEG quality 1-31, lower is better (`.jpg`/`.jpeg` only) |
+
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`.
+
+## `SIMPLEFFMPEG.extractKeyframes(filePath, options)`
+
+Extract representative frames using either:
+
+- `scene-change` mode (default; FFmpeg scene detection)
+- `interval` mode (fixed time spacing)
+
+If `outputDir` is set, returns `string[]` paths.  
+If `outputDir` is omitted, returns in-memory `Buffer[]`.
+
+```ts
+const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "scene-change",
+  sceneThreshold: 0.4,
+  maxFrames: 8,
+  format: "jpeg",
+});
+
+const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
+  mode: "interval",
+  intervalSeconds: 5,
+  outputDir: "./frames/",
+  format: "png",
+});
+```
+
+### Keyframe options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `mode` | `string` | `'scene-change'` | `'scene-change'` or `'interval'` |
+| `sceneThreshold` | `number` | `0.3` | Sensitivity 0-1 (lower = more frames), scene mode only |
+| `intervalSeconds` | `number` | `5` | Interval seconds, interval mode only |
+| `maxFrames` | `number` | - | Maximum number of frames |
+| `format` | `string` | `'jpeg'` | `'jpeg'` or `'png'` |
+| `quality` | `number` | - | JPEG quality 1-31, lower is better |
+| `width` | `number` | - | Output width |
+| `height` | `number` | - | Output height |
+| `outputDir` | `string` | - | Write files to disk, return `string[]` |
+| `tempDir` | `string` | `os.tmpdir()` | Temp directory for buffer mode |
+
+Throws `FFmpegError` if extraction fails.
+
+## `project.export(options?)`
+
+```ts
+await project.export(options?: ExportOptions): Promise<string>
+```
+
+Build and execute the FFmpeg command to render final output.
+
+### Export options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `outputPath` | `string` | `'./output.mp4'` | Output path |
+| `videoCodec` | `string` | `'libx264'` | Video codec (`libx264`, `libx265`, `libvpx-vp9`, `prores_ks`, hardware codecs) |
+| `crf` | `number` | `23` | Quality level (0-51, lower is better) |
+| `preset` | `string` | `'medium'` | Encoding preset (`ultrafast` .. `veryslow`) |
+| `videoBitrate` | `string` | - | Target bitrate (overrides CRF) |
+| `audioCodec` | `string` | `'aac'` | Audio codec (`aac`, `libmp3lame`, `libopus`, `flac`, `copy`) |
+| `audioBitrate` | `string` | `'192k'` | Audio bitrate |
+| `audioSampleRate` | `number` | `48000` | Audio sample rate |
+| `hwaccel` | `string` | `'none'` | Hardware acceleration (`auto`, `videotoolbox`, `nvenc`, `vaapi`, `qsv`) |
+| `outputWidth` | `number` | - | Scale output width |
+| `outputHeight` | `number` | - | Scale output height |
+| `outputResolution` | `string` | - | Resolution preset (`'720p'`, `'1080p'`, `'4k'`) |
+| `audioOnly` | `boolean` | `false` | Audio-only export |
+| `twoPass` | `boolean` | `false` | Two-pass encoding |
+| `metadata` | `object` | - | Embed metadata |
+| `thumbnail` | `object` | - | Generate thumbnail |
+| `verbose` | `boolean` | `false` | Verbose logging |
+| `saveCommand` | `string` | - | Save generated FFmpeg command |
+| `onProgress` | `function` | - | Progress callback |
+| `onLog` | `function` | - | FFmpeg log callback |
+| `signal` | `AbortSignal` | - | Cancellation signal |
+| `watermark` | `object` | - | Watermark overlay config |
+| `compensateTransitions` | `boolean` | `true` | Compensate text/subtitle timings for transition overlap |
+
+## `project.preview(options?)`
+
+```ts
+await project.preview(options?: ExportOptions): Promise<{
+  command: string;
+  filterComplex: string;
+  totalDuration: number;
+}>
+```
+
+Returns the resolved command details without executing FFmpeg.
+
+## Validation and schema methods
+
+### `SIMPLEFFMPEG.validate(clips, options?)`
+
+Validate timeline descriptors before creating a project instance.
+
+```ts
+const result = SIMPLEFFMPEG.validate(clips, {
+  skipFileChecks: true,
+  width: 1920,
+  height: 1080,
+  strictKenBurns: false,
+});
+```
+
+### `SIMPLEFFMPEG.formatValidationResult(result)`
+
+Produces human-readable validation output.
+
+### `SIMPLEFFMPEG.getSchema(options?)`
+
+Exports schema text for clip model documentation/tooling.

@@ -1,0 +1,45 @@
+---
+title: Karaoke & Subtitles
+---
+
+# Karaoke & Subtitles
+
+Karaoke mode with word-level timing:
+
+```ts
+await project.load([
+  { type: "video", url: "./music-video.mp4", position: 0, end: 10 },
+  {
+    type: "text",
+    mode: "karaoke",
+    text: "Never gonna give you up",
+    position: 0,
+    end: 5,
+    words: [
+      { text: "Never", start: 0, end: 0.8 },
+      { text: "gonna", start: 0.8, end: 1.4 },
+      { text: "give", start: 1.4, end: 2.0 },
+      { text: "you", start: 2.0, end: 2.5 },
+      { text: "up", start: 2.5, end: 3.5 },
+    ],
+    highlightColor: "#00FF00",
+    fontSize: 52,
+    yPercent: 0.85,
+  },
+]);
+```
+
+Subtitle file import:
+
+```ts
+await project.load([
+  { type: "video", url: "./video.mp4", position: 0, end: 60 },
+  {
+    type: "subtitle",
+    url: "./subtitles.srt",
+    fontSize: 24,
+    fontColor: "#FFFFFF",
+    borderColor: "#000000",
+  },
+]);
+```

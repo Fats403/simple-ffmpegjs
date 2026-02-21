@@ -1,0 +1,99 @@
+---
+title: Export Options
+---
+
+import { Callout } from 'nextra/components'
+
+# Export Options
+
+```ts
+await project.export(options?: ExportOptions): Promise<string>
+```
+
+Returns the output file path when complete.
+
+## All options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `outputPath` | `string` | `'./output.mp4'` | Output file path |
+| `videoCodec` | `string` | `'libx264'` | Video codec (`libx264`, `libx265`, `libvpx-vp9`, `prores_ks`, hardware codecs) |
+| `crf` | `number` | `23` | Quality level (0–51, lower = better) |
+| `preset` | `string` | `'medium'` | Encoding speed preset (`ultrafast` … `veryslow`) |
+| `videoBitrate` | `string` | — | Target bitrate (e.g. `'5M'`). Overrides CRF when set. |
+| `audioCodec` | `string` | `'aac'` | Audio codec (`aac`, `libmp3lame`, `libopus`, `flac`, `copy`) |
+| `audioBitrate` | `string` | `'192k'` | Audio bitrate |
+| `audioSampleRate` | `number` | `48000` | Audio sample rate in Hz |
+| `hwaccel` | `string` | `'none'` | Hardware acceleration (`auto`, `videotoolbox`, `nvenc`, `vaapi`, `qsv`) |
+| `outputWidth` | `number` | — | Scale output width |
+| `outputHeight` | `number` | — | Scale output height |
+| `outputResolution` | `string` | — | Resolution shorthand (`'720p'`, `'1080p'`, `'4k'`) |
+| `audioOnly` | `boolean` | `false` | Export audio only (no video stream) |
+| `twoPass` | `boolean` | `false` | Two-pass encoding for better quality at target bitrate |
+| `metadata` | `object` | — | Embed metadata (e.g. `{ title, artist, date }`) |
+| `thumbnail` | `object` | — | Generate a thumbnail image alongside the video |
+| `verbose` | `boolean` | `false` | Enable verbose FFmpeg logging |
+| `saveCommand` | `string` | — | Save the generated FFmpeg command to this file path |
+| `onProgress` | `function` | — | Progress callback — see [Progress, Logging, Cancellation](/guides/progress) |
+| `onLog` | `function` | — | Raw FFmpeg log callback |
+| `signal` | `AbortSignal` | — | Cancellation signal from `AbortController` |
+| `watermark` | `object` | — | Watermark overlay — see [Watermarks](/guides/watermarks) |
+| `compensateTransitions` | `boolean` | `true` | Auto-adjust text/subtitle timings for transition overlap |
+
+## Example configurations
+
+```ts
+// High-quality H.265 with embedded metadata
+await project.export({
+  outputPath: "./output.mp4",
+  videoCodec: "libx265",
+  crf: 18,
+  preset: "slow",
+  audioCodec: "libopus",
+  audioBitrate: "256k",
+  metadata: { title: "My Video", artist: "My Name", date: "2025" },
+});
+
+// Hardware-accelerated encoding (macOS)
+await project.export({
+  outputPath: "./output.mp4",
+  hwaccel: "videotoolbox",
+  videoCodec: "h264_videotoolbox",
+});
+
+// Two-pass encoding for a target file size
+await project.export({
+  outputPath: "./output.mp4",
+  twoPass: true,
+  videoBitrate: "5M",
+  preset: "slow",
+});
+
+// Scale to 720p
+await project.export({ outputPath: "./720p.mp4", outputResolution: "720p" });
+
+// Audio-only export
+await project.export({
+  outputPath: "./audio.mp3",
+  audioOnly: true,
+  audioCodec: "libmp3lame",
+  audioBitrate: "320k",
+});
+
+// Generate a thumbnail at 5s alongside the video
+await project.export({
+  outputPath: "./output.mp4",
+  thumbnail: { outputPath: "./thumb.jpg", time: 5, width: 640 },
+});
+
+// Debug — inspect the generated FFmpeg command
+await project.export({
+  outputPath: "./output.mp4",
+  verbose: true,
+  saveCommand: "./ffmpeg-command.txt",
+});
+```
+
+<Callout type="info">
+  `compensateTransitions` is `true` by default. FFmpeg's `xfade` transitions compress the timeline — a 1s fade between two clips reduces total duration by 1s. With compensation enabled, text and subtitle timings are adjusted so they appear at the correct visual moment regardless of how many transitions precede them. Set to `false` only if you have pre-calculated offsets yourself. See [Timeline Behavior](/advanced/timeline-behavior) for details.
+</Callout>

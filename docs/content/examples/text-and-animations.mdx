@@ -1,0 +1,104 @@
+---
+title: Text & Animations
+---
+
+import { Callout } from 'nextra/components'
+
+# Text & Animations
+
+## Static text with positioning
+
+Text is centered by default. Use `xPercent`/`yPercent` for percentage-based positioning, `x`/`y` for absolute pixels, or `xOffset`/`yOffset` to nudge from any base:
+
+```ts
+await project.load([
+  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
+  // Title: centered, 100px above center
+  {
+    type: "text",
+    text: "Main Title",
+    position: 0,
+    end: 5,
+    fontSize: 72,
+    yOffset: -100,
+  },
+  // Subtitle: centered, 50px below center
+  {
+    type: "text",
+    text: "Subtitle here",
+    position: 0.5,
+    end: 5,
+    fontSize: 36,
+    yOffset: 50,
+  },
+]);
+```
+
+## Animations
+
+```ts
+// Pop in
+{ type: "text", text: "Hello!", position: 0, end: 4,
+  animation: { type: "pop", in: 0.3 } }
+
+// Typewriter — letters appear one at a time
+{ type: "text", text: "Appearing letter by letter...", position: 1, end: 4,
+  animation: { type: "typewriter", speed: 15 } }
+
+// Pulse — rhythmic scaling
+{ type: "text", text: "Pulsing...", position: 0.5, end: 4.5,
+  animation: { type: "pulse", speed: 2, intensity: 0.2 } }
+
+// Fade in and out
+{ type: "text", text: "Fade", position: 2, end: 6,
+  animation: { type: "fade-in-out", in: 0.5, out: 0.5 } }
+```
+
+Available animation types: `none`, `fade-in`, `fade-out`, `fade-in-out`, `pop`, `pop-bounce`, `typewriter`, `scale-in`, `pulse`.
+
+## Word-by-word replacement
+
+Replace the displayed word on each beat:
+
+```ts
+{
+  type: "text",
+  mode: "word-replace",
+  text: "One Two Three Four",
+  position: 2,
+  end: 6,
+  wordTimestamps: [2, 3, 4, 5, 6],
+  animation: { type: "fade-in", in: 0.2 },
+  fontSize: 72,
+  fontColor: "white",
+}
+```
+
+## Emoji in text overlays
+
+By default, emoji are automatically detected and stripped to prevent blank glyphs. To render emoji, configure an `emojiFont` path on the project:
+
+```ts
+const project = new SIMPLEFFMPEG({
+  width: 1920,
+  height: 1080,
+  emojiFont: "./fonts/NotoEmoji-Regular.ttf",
+});
+
+await project.load([
+  { type: "video", url: "./bg.mp4", position: 0, end: 10 },
+  {
+    type: "text",
+    text: "Movie night! 🎬🍿✨",
+    position: 1,
+    end: 5,
+    fontSize: 48,
+    fontColor: "#FFFFFF",
+    animation: { type: "fade-in-out", in: 0.5, out: 0.5 },
+  },
+]);
+```
+
+<Callout type="warning">
+  Emoji render as monochrome outlines via the `libass` path. Fade animations work with emoji. Other animation types (`pop`, `typewriter`, etc.) cause emoji to be stripped with a console warning.
+</Callout>

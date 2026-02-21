@@ -1,0 +1,89 @@
+---
+title: Validation
+---
+
+import { Callout, Steps } from 'nextra/components'
+
+# Validation
+
+Use `SIMPLEFFMPEG.validate()` to check clip configurations before creating a project. This is useful in data pipelines, form-based editors, or any workflow where configurations are generated dynamically.
+
+```ts
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+const clips = [
+  { type: "video", url: "./intro.mp4", position: 0, end: 5 },
+  { type: "text", text: "Hello", position: 1, end: 4 },
+];
+
+const result = SIMPLEFFMPEG.validate(clips, {
+  skipFileChecks: true,  // Skip file existence checks (useful when files aren't on disk yet)
+  width: 1920,           // Project dimensions (used for Ken Burns size validation)
+  height: 1080,
+  strictKenBurns: false, // If true, undersized Ken Burns images error instead of warn
+});
+
+if (!result.valid) {
+  result.errors.forEach((err) => {
+    console.log(`[${err.code}] ${err.path}: ${err.message}`);
+    // e.g. [MISSING_REQUIRED] clips[0].url: URL is required for media clips
+  });
+}
+
+// Or get a human-readable summary
+console.log(SIMPLEFFMPEG.formatValidationResult(result));
+```
+
+## Validation codes
+
+Use `ValidationCodes` to match specific error types programmatically:
+
+```ts
+const { ValidationCodes } = SIMPLEFFMPEG;
+
+if (result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)) {
+  // Handle gap-specific logic
+}
+```
+
+Available codes:
+
+| Code | Description |
+|---|---|
+| `INVALID_TYPE` | Unknown or invalid clip type |
+| `MISSING_REQUIRED` | A required field is absent |
+| `INVALID_VALUE` | A field has an unacceptable value |
+| `INVALID_RANGE` | A numeric value is out of the allowed range |
+| `INVALID_TIMELINE` | Clip timing is invalid (e.g. end before position) |
+| `TIMELINE_GAP` | A gap exists in the visual timeline |
+| `FILE_NOT_FOUND` | A referenced file does not exist on disk |
+| `INVALID_FORMAT` | File format is not supported |
+| `INVALID_WORD_TIMING` | Word timestamps are invalid or out of order |
+| `OUTSIDE_BOUNDS` | A clip or overlay extends outside the timeline bounds |
+
+## Recommended pipeline
+
+<Steps>
+
+### Run `validate()` before `load()`
+
+Catch issues early — before any file I/O or FFmpeg invocations.
+
+### Fail fast on `errors`
+
+Surface errors to users, retry with corrected input, or log and abort.
+
+### Surface `warnings` to developers
+
+Warnings indicate degraded behavior (e.g. image too small for Ken Burns) but won't prevent rendering.
+
+### Proceed to `load()` and `export()` only when valid
+
+```ts
+if (result.valid) {
+  await project.load(clips);
+  await project.export({ outputPath: "./out.mp4" });
+}
+```
+
+</Steps>

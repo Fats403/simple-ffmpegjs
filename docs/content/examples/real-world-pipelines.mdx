@@ -1,0 +1,184 @@
+---
+title: Real-World Pipelines
+---
+
+import { Callout } from 'nextra/components'
+
+# Real-World Pipelines
+
+## Data pipeline
+
+Generate videos from structured data — database records, API responses, CMS content, etc. This example builds property tour videos from real estate listings:
+
+```js
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+const listings = await db.getActiveListings();
+
+async function generateListingVideo(listing, outputPath) {
+  const slideDuration = 4;
+  const transitionDuration = 0.5;
+
+  // Build an image slideshow from listing photos with alternating Ken Burns effects
+  const photoClips = listing.photos.map((photo, i) => ({
+    type: "image",
+    url: photo,
+    duration: slideDuration,
+    kenBurns: i % 2 === 0 ? "zoom-in" : "pan-right",
+    ...(i > 0 && {
+      transition: { type: "fade", duration: transitionDuration },
+    }),
+  }));
+
+  const totalDuration = SIMPLEFFMPEG.getDuration(photoClips);
+
+  const clips = [
+    ...photoClips,
+    // Price banner at the top
+    {
+      type: "text",
+      text: listing.price,
+      position: 0.5,
+      end: totalDuration - 0.5,
+      fontSize: 36,
+      fontColor: "#FFFFFF",
+      borderColor: "#000000",
+      borderWidth: 2,
+      xPercent: 0.5,
+      yPercent: 0.1,
+    },
+    // Address at the bottom
+    {
+      type: "text",
+      text: listing.address,
+      position: 0.5,
+      end: totalDuration - 0.5,
+      fontSize: 28,
+      fontColor: "#FFFFFF",
+      borderColor: "#000000",
+      borderWidth: 2,
+      xPercent: 0.5,
+      yPercent: 0.9,
+    },
+    { type: "music", url: "./assets/ambient.mp3", volume: 0.15, loop: true },
+  ];
+
+  const project = new SIMPLEFFMPEG({ preset: "instagram-reel" });
+  await project.load(clips);
+  return project.export({ outputPath });
+}
+
+// Batch generate for all active listings
+for (const listing of listings) {
+  await generateListingVideo(listing, `./output/${listing.id}.mp4`);
+}
+```
+
+## AI generation loop
+
+Combine `getSchema()`, `validate()`, and structured error codes to build a robust AI-driven pipeline. The schema gives the model a precise specification; the validation loop lets it self-correct:
+
+```js
+import SIMPLEFFMPEG from "simple-ffmpegjs";
+
+// 1. Build the schema context for the AI
+const schema = SIMPLEFFMPEG.getSchema({
+  include: ["video", "image", "text", "music"],
+  instructions: [
+    "You are composing a short-form video for TikTok.",
+    "Keep total duration under 30 seconds.",
+    "Return ONLY valid JSON — an array of clip objects.",
+  ],
+  moduleInstructions: {
+    video: "Use fade transitions between clips. Keep each clip 3–6 seconds.",
+    text: [
+      "Add a title in the first 2 seconds with fontSize 72.",
+      "Use white text with a black border for readability.",
+    ],
+    music: "Always include looping background music at volume 0.15.",
+  },
+});
+
+async function askAI(systemPrompt, userPrompt) {
+  // Replace with your LLM provider (OpenAI, Anthropic, etc.)
+  const response = await llm.chat({
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
+  });
+  return JSON.parse(response.content);
+}
+
+// 2. Generate → Validate → Retry loop
+async function generateVideo(userPrompt, media) {
+  const mediaList = media
+    .map((m) => `  - ${m.file} (${m.duration}s) — ${m.description}`)
+    .join("\n");
+
+  const systemPrompt = [
+    "You are a video editor. Given the user's request and available media,",
+    "produce a clips array that follows this schema:\n",
+    schema,
+    "\nAvailable media (use these exact file paths):",
+    mediaList,
+  ].join("\n");
+
+  const knownPaths = media.map((m) => m.file);
+
+  // First attempt
+  let clips = await askAI(systemPrompt, userPrompt);
+  let result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+  let attempts = 1;
+
+  // Self-correction: feed structured errors back to the model
+  while (!result.valid && attempts < 3) {
+    const errorFeedback = result.errors
+      .map((e) => `[${e.code}] ${e.path}: ${e.message}`)
+      .join("\n");
+
+    clips = await askAI(
+      systemPrompt,
+      [
+        `Your previous output had validation errors:\n${errorFeedback}`,
+        `\nOriginal request: ${userPrompt}`,
+        "\nPlease fix the errors and return the corrected clips array.",
+      ].join("\n"),
+    );
+
+    result = SIMPLEFFMPEG.validate(clips, { skipFileChecks: true });
+    attempts++;
+  }
+
+  if (!result.valid) {
+    throw new Error(
+      `Failed to generate valid config after ${attempts} attempts:\n` +
+        SIMPLEFFMPEG.formatValidationResult(result),
+    );
+  }
+
+  // 3. Guard against hallucinated file paths
+  const usedPaths = clips.filter((c) => c.url).map((c) => c.url);
+  const unknownPaths = usedPaths.filter((p) => !knownPaths.includes(p));
+  if (unknownPaths.length > 0) {
+    throw new Error(`AI used unknown media paths: ${unknownPaths.join(", ")}`);
+  }
+
+  // 4. Build and export
+  const project = new SIMPLEFFMPEG({ preset: "tiktok" });
+  await project.load(clips);
+  return project.export({
+    outputPath: "./output.mp4",
+    onProgress: ({ percent }) => console.log(`Rendering: ${percent}%`),
+  });
+}
+```
+
+<Callout type="info">
+  **Key parts of this pattern:**
+
+  1. `getSchema()` with `include` and `instructions` gives the model a scoped, opinionated specification.
+  2. `validate(..., { skipFileChecks: true })` checks structural correctness — types, timelines, required fields — without touching the filesystem.
+  3. The retry loop feeds machine-readable error codes back to the model. Most failures resolve in one retry.
+  4. The path guard catches hallucinated file paths before `load()` hits disk. You can optionally move it inside the retry loop.
+</Callout>
