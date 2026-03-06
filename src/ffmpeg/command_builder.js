@@ -186,9 +186,9 @@ function buildTextBatchCommand({
       ? "-profile:v main -pix_fmt yuv420p "
       : "";
   return `ffmpeg -y -i "${escapeFilePath(
-    inputPath
+    inputPath,
   )}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} ${compatFlags}-preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(
-    outputPath
+    outputPath,
   )}"`;
 }
 
@@ -197,7 +197,7 @@ function buildTextBatchCommand({
  */
 function buildThumbnailCommand({ inputPath, outputPath, time, width, height }) {
   let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(
-    inputPath
+    inputPath,
   )}" -vframes 1 `;
 
   if (width || height) {
@@ -232,7 +232,7 @@ function buildSnapshotCommand({
   quality,
 }) {
   let cmd = `ffmpeg -y -ss ${time} -i "${escapeFilePath(
-    inputPath
+    inputPath,
   )}" -vframes 1 `;
 
   if (width || height) {
@@ -255,7 +255,7 @@ function buildSnapshotCommand({
 function escapeMetadata(value) {
   return String(value)
     .replace(/\\/g, "\\\\")
-    .replace(/"/g, '\\"')
+    .replace(/"/g, "\\\"")
     .replace(/\n/g, "\\n");
 }
 
@@ -302,7 +302,7 @@ function sanitizeFilterComplex(fc) {
       throw new SimpleffmpegError(
         `Empty filter name detected in filter_complex chain segment ${i}: "${chain}". ` +
         `This usually means an effect or transition is not producing a valid FFmpeg filter. ` +
-        `Full filter_complex (truncated): "${sanitized.slice(0, 500)}..."`
+        `Full filter_complex (truncated): "${sanitized.slice(0, 500)}..."`,
       );
     }
   }

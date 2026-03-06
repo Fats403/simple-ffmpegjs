@@ -21,7 +21,7 @@ function isFFmpegAvailable() {
 
 function fixturesExist() {
   return fs.existsSync(
-    path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4")
+    path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
   );
 }
 
@@ -51,38 +51,38 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
 
   it("should throw if filePath is missing", async () => {
     await expect(SIMPLEFFMPEG.extractKeyframes(null)).rejects.toThrow(
-      /requires a filePath/
+      /requires a filePath/,
     );
     await expect(SIMPLEFFMPEG.extractKeyframes("")).rejects.toThrow(
-      /requires a filePath/
+      /requires a filePath/,
     );
   });
 
   it("should throw for invalid mode", async () => {
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { mode: "invalid" })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { mode: "invalid" }),
     ).rejects.toThrow(/invalid mode/);
   });
 
   it("should throw for invalid format", async () => {
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { format: "gif" })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { format: "gif" }),
     ).rejects.toThrow(/invalid format/);
   });
 
   it("should throw for out-of-range sceneThreshold", async () => {
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { sceneThreshold: -0.1 })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { sceneThreshold: -0.1 }),
     ).rejects.toThrow(/sceneThreshold/);
 
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { sceneThreshold: 1.5 })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { sceneThreshold: 1.5 }),
     ).rejects.toThrow(/sceneThreshold/);
 
     await expect(
       SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
         sceneThreshold: "high",
-      })
+      }),
     ).rejects.toThrow(/sceneThreshold/);
   });
 
@@ -91,24 +91,24 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
         mode: "interval",
         intervalSeconds: 0,
-      })
+      }),
     ).rejects.toThrow(/intervalSeconds/);
 
     await expect(
       SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
         mode: "interval",
         intervalSeconds: -5,
-      })
+      }),
     ).rejects.toThrow(/intervalSeconds/);
   });
 
   it("should throw for invalid maxFrames", async () => {
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { maxFrames: 0 })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { maxFrames: 0 }),
     ).rejects.toThrow(/maxFrames/);
 
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { maxFrames: 1.5 })
+      SIMPLEFFMPEG.extractKeyframes("./video.mp4", { maxFrames: 1.5 }),
     ).rejects.toThrow(/maxFrames/);
   });
 
@@ -116,13 +116,13 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
     await expect(
       SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
         tempDir: "/nonexistent/tmp/dir",
-      })
+      }),
     ).rejects.toThrow(/does not exist/);
   });
 
   it("should throw FFmpegError for non-existent file", async () => {
     await expect(
-      SIMPLEFFMPEG.extractKeyframes("/nonexistent/video.mp4")
+      SIMPLEFFMPEG.extractKeyframes("/nonexistent/video.mp4"),
     ).rejects.toThrow();
   });
 
@@ -137,7 +137,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           {
             mode: "scene-change",
             sceneThreshold: 0.3,
-          }
+          },
         );
 
         expect(Array.isArray(frames)).toBe(true);
@@ -154,7 +154,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           {
             mode: "scene-change",
             sceneThreshold: 0.3,
-          }
+          },
         );
 
         // 3 distinct scenes (red→blue→green) should produce at least 2 scene-change frames
@@ -168,7 +168,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             mode: "scene-change",
             sceneThreshold: 0.3,
             maxFrames: 1,
-          }
+          },
         );
 
         expect(frames.length).toBeLessThanOrEqual(1);
@@ -182,7 +182,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             sceneThreshold: 0.3,
             format: "png",
             maxFrames: 2,
-          }
+          },
         );
 
         expect(frames.length).toBeGreaterThan(0);
@@ -203,7 +203,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             sceneThreshold: 0.3,
             format: "jpeg",
             maxFrames: 2,
-          }
+          },
         );
 
         expect(frames.length).toBeGreaterThan(0);
@@ -213,7 +213,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           expect(frame[1]).toBe(0xd8);
         });
       });
-    }
+    },
   );
 
   // ── Interval mode ─────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           {
             mode: "interval",
             intervalSeconds: 2,
-          }
+          },
         );
 
         expect(Array.isArray(frames)).toBe(true);
@@ -243,12 +243,12 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             mode: "interval",
             intervalSeconds: 1,
             maxFrames: 2,
-          }
+          },
         );
 
         expect(frames.length).toBeLessThanOrEqual(2);
       });
-    }
+    },
   );
 
   // ── outputDir mode ────────────────────────────────────────────────────────
@@ -264,7 +264,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             mode: "scene-change",
             sceneThreshold: 0.3,
             outputDir: outDir,
-          }
+          },
         );
 
         expect(Array.isArray(paths)).toBe(true);
@@ -288,7 +288,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             mode: "interval",
             intervalSeconds: 3,
             outputDir: outDir,
-          }
+          },
         );
 
         expect(fs.existsSync(outDir)).toBe(true);
@@ -305,7 +305,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             outputDir: outDir,
             format: "png",
             maxFrames: 2,
-          }
+          },
         );
 
         expect(paths.length).toBeGreaterThan(0);
@@ -324,7 +324,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
             outputDir: outDir,
             format: "jpeg",
             maxFrames: 2,
-          }
+          },
         );
 
         expect(paths.length).toBeGreaterThan(0);
@@ -332,7 +332,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           expect(p).toMatch(/\.jpg$/);
         });
       });
-    }
+    },
   );
 
   // ── Resize ────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           maxFrames: 1,
           width: 160,
           format: "jpeg",
-        }
+        },
       );
 
       expect(frames.length).toBeGreaterThan(0);
@@ -371,7 +371,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           sceneThreshold: 0.3,
           maxFrames: 1,
           tempDir: customTmp,
-        }
+        },
       );
 
       expect(Array.isArray(frames)).toBe(true);
@@ -379,7 +379,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       expect(Buffer.isBuffer(frames[0])).toBe(true);
       // Temp dir should be cleaned up (no leftover subdirectories)
       const remaining = fs.readdirSync(customTmp).filter((f) =>
-        f.startsWith("simpleffmpeg-keyframes-")
+        f.startsWith("simpleffmpeg-keyframes-"),
       );
       expect(remaining).toHaveLength(0);
     });
@@ -397,7 +397,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           maxFrames: 1,
           outputDir: outDir,
           tempDir: customTmp,
-        }
+        },
       );
 
       expect(paths.length).toBeGreaterThan(0);
@@ -405,7 +405,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       paths.forEach((p) => expect(p).toContain(outDir));
       // tempDir should have no keyframe files in it
       const tmpFiles = fs.readdirSync(customTmp).filter((f) =>
-        f.startsWith("frame-")
+        f.startsWith("frame-"),
       );
       expect(tmpFiles).toHaveLength(0);
     });
@@ -416,7 +416,7 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("defaults", () => {
     it("should use scene-change mode and jpeg format by default", async () => {
       const frames = await SIMPLEFFMPEG.extractKeyframes(
-        path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4")
+        path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
       );
 
       expect(Array.isArray(frames)).toBe(true);

@@ -12,7 +12,7 @@ const {
 describe("Command Builder", () => {
   describe("buildMainCommand", () => {
     const baseParams = {
-      inputs: '-i "input.mp4"',
+      inputs: "-i \"input.mp4\"",
       filterComplex: "[0:v]scale=1920:1080[outv]",
       mapVideo: "[outv]",
       mapAudio: "[outa]",
@@ -32,7 +32,7 @@ describe("Command Builder", () => {
       const cmd = buildMainCommand(baseParams);
 
       expect(cmd).toContain("ffmpeg -y");
-      expect(cmd).toContain('-i "input.mp4"');
+      expect(cmd).toContain("-i \"input.mp4\"");
       expect(cmd).toContain("-filter_complex");
       expect(cmd).toContain("-c:v libx264");
       expect(cmd).toContain("-preset medium");
@@ -40,7 +40,7 @@ describe("Command Builder", () => {
       expect(cmd).toContain("-c:a aac");
       expect(cmd).toContain("-b:a 192k");
       expect(cmd).toContain("-movflags +faststart");
-      expect(cmd).toContain('"./output.mp4"');
+      expect(cmd).toContain("\"./output.mp4\"");
     });
 
     it("should use videoBitrate instead of CRF when provided", () => {
@@ -88,7 +88,7 @@ describe("Command Builder", () => {
       });
 
       expect(cmd).not.toContain("-c:v");
-      expect(cmd).not.toContain('-map "[outv]"');
+      expect(cmd).not.toContain("-map \"[outv]\"");
       expect(cmd).toContain("-c:a aac");
     });
 
@@ -102,9 +102,9 @@ describe("Command Builder", () => {
         },
       });
 
-      expect(cmd).toContain('-metadata title="My Video"');
-      expect(cmd).toContain('-metadata artist="Test Artist"');
-      expect(cmd).toContain('-metadata comment="Test comment"');
+      expect(cmd).toContain("-metadata title=\"My Video\"");
+      expect(cmd).toContain("-metadata artist=\"Test Artist\"");
+      expect(cmd).toContain("-metadata comment=\"Test comment\"");
     });
 
     it("should handle custom metadata", () => {
@@ -117,7 +117,7 @@ describe("Command Builder", () => {
         },
       });
 
-      expect(cmd).toContain('-metadata mykey="myvalue"');
+      expect(cmd).toContain("-metadata mykey=\"myvalue\"");
     });
 
     it("should handle two-pass encoding first pass", () => {
@@ -131,7 +131,7 @@ describe("Command Builder", () => {
       });
 
       expect(cmd).toContain("-pass 1");
-      expect(cmd).toContain('-passlogfile "/tmp/ffmpeg2pass"');
+      expect(cmd).toContain("-passlogfile \"/tmp/ffmpeg2pass\"");
       expect(cmd).toContain("-f null /dev/null");
     });
 
@@ -146,9 +146,9 @@ describe("Command Builder", () => {
       });
 
       expect(cmd).toContain("-pass 2");
-      expect(cmd).toContain('-passlogfile "/tmp/ffmpeg2pass"');
+      expect(cmd).toContain("-passlogfile \"/tmp/ffmpeg2pass\"");
       expect(cmd).not.toContain("-f null");
-      expect(cmd).toContain('"./output.mp4"');
+      expect(cmd).toContain("\"./output.mp4\"");
     });
 
     it("should add sample rate when provided", () => {
@@ -201,9 +201,9 @@ describe("Command Builder", () => {
 
       expect(cmd).toContain("ffmpeg -y");
       expect(cmd).toContain("-ss 5");
-      expect(cmd).toContain('-i "./video.mp4"');
+      expect(cmd).toContain("-i \"./video.mp4\"");
       expect(cmd).toContain("-vframes 1");
-      expect(cmd).toContain('"./thumb.jpg"');
+      expect(cmd).toContain("\"./thumb.jpg\"");
     });
 
     it("should add scale filter when dimensions provided", () => {
@@ -215,7 +215,7 @@ describe("Command Builder", () => {
         height: 360,
       });
 
-      expect(cmd).toContain('-vf "scale=640:360"');
+      expect(cmd).toContain("-vf \"scale=640:360\"");
     });
 
     it("should handle width only (maintain aspect)", () => {
@@ -226,7 +226,7 @@ describe("Command Builder", () => {
         width: 320,
       });
 
-      expect(cmd).toContain('-vf "scale=320:-1"');
+      expect(cmd).toContain("-vf \"scale=320:-1\"");
     });
   });
 
@@ -240,9 +240,9 @@ describe("Command Builder", () => {
 
       expect(cmd).toContain("ffmpeg -y");
       expect(cmd).toContain("-ss 5");
-      expect(cmd).toContain('-i "./video.mp4"');
+      expect(cmd).toContain("-i \"./video.mp4\"");
       expect(cmd).toContain("-vframes 1");
-      expect(cmd).toContain('"./frame.png"');
+      expect(cmd).toContain("\"./frame.png\"");
     });
 
     it("should default time to 0", () => {
@@ -263,7 +263,7 @@ describe("Command Builder", () => {
         height: 360,
       });
 
-      expect(cmd).toContain('-vf "scale=640:360"');
+      expect(cmd).toContain("-vf \"scale=640:360\"");
     });
 
     it("should handle width only (maintain aspect ratio)", () => {
@@ -274,7 +274,7 @@ describe("Command Builder", () => {
         width: 320,
       });
 
-      expect(cmd).toContain('-vf "scale=320:-1"');
+      expect(cmd).toContain("-vf \"scale=320:-1\"");
     });
 
     it("should handle height only (maintain aspect ratio)", () => {
@@ -285,7 +285,7 @@ describe("Command Builder", () => {
         height: 240,
       });
 
-      expect(cmd).toContain('-vf "scale=-1:240"');
+      expect(cmd).toContain("-vf \"scale=-1:240\"");
     });
 
     it("should include quality flag when provided", () => {
@@ -314,19 +314,19 @@ describe("Command Builder", () => {
         inputPath: "./video.mp4",
         outputPath: "./frame.png",
       });
-      expect(pngCmd).toContain('"./frame.png"');
+      expect(pngCmd).toContain("\"./frame.png\"");
 
       const webpCmd = buildSnapshotCommand({
         inputPath: "./video.mp4",
         outputPath: "./frame.webp",
       });
-      expect(webpCmd).toContain('"./frame.webp"');
+      expect(webpCmd).toContain("\"./frame.webp\"");
 
       const bmpCmd = buildSnapshotCommand({
         inputPath: "./video.mp4",
         outputPath: "./frame.bmp",
       });
-      expect(bmpCmd).toContain('"./frame.bmp"');
+      expect(bmpCmd).toContain("\"./frame.bmp\"");
     });
   });
 
@@ -336,7 +336,7 @@ describe("Command Builder", () => {
     });
 
     it("should escape double quotes", () => {
-      expect(escapeMetadata('say "hello"')).toBe('say \\"hello\\"');
+      expect(escapeMetadata("say \"hello\"")).toBe("say \\\"hello\\\"");
     });
 
     it("should escape newlines", () => {
@@ -344,8 +344,8 @@ describe("Command Builder", () => {
     });
 
     it("should handle mixed escapes", () => {
-      expect(escapeMetadata('test\\path\n"quoted"')).toBe(
-        'test\\\\path\\n\\"quoted\\"'
+      expect(escapeMetadata("test\\path\n\"quoted\"")).toBe(
+        "test\\\\path\\n\\\"quoted\\\"",
       );
     });
   });
@@ -354,29 +354,29 @@ describe("Command Builder", () => {
 describe("sanitizeFilterComplex", () => {
   it("strips trailing semicolons", () => {
     expect(sanitizeFilterComplex("[0:v]scale=1920:1080[outv];")).toBe(
-      "[0:v]scale=1920:1080[outv]"
+      "[0:v]scale=1920:1080[outv]",
     );
   });
 
   it("strips leading semicolons", () => {
     expect(sanitizeFilterComplex(";[0:v]scale=1920:1080[outv]")).toBe(
-      "[0:v]scale=1920:1080[outv]"
+      "[0:v]scale=1920:1080[outv]",
     );
   });
 
   it("collapses double semicolons", () => {
     expect(
       sanitizeFilterComplex(
-        "[0:v]scale=1920:1080[outv];;[outv]vignette=angle=0.6283[fxout0]"
-      )
+        "[0:v]scale=1920:1080[outv];;[outv]vignette=angle=0.6283[fxout0]",
+      ),
     ).toBe(
-      "[0:v]scale=1920:1080[outv];[outv]vignette=angle=0.6283[fxout0]"
+      "[0:v]scale=1920:1080[outv];[outv]vignette=angle=0.6283[fxout0]",
     );
   });
 
   it("collapses triple semicolons", () => {
     expect(
-      sanitizeFilterComplex("filter1[a];;;filter2[b]")
+      sanitizeFilterComplex("filter1[a];;;filter2[b]"),
     ).toBe("filter1[a];filter2[b]");
   });
 
@@ -394,7 +394,7 @@ describe("sanitizeFilterComplex", () => {
 
   it("throws on chain segment with only labels (empty filter name)", () => {
     expect(() =>
-      sanitizeFilterComplex("[a][b];[c][d]xfade=transition=dissolve[e]")
+      sanitizeFilterComplex("[a][b];[c][d]xfade=transition=dissolve[e]"),
     ).toThrow(/Empty filter name/);
   });
 
@@ -416,10 +416,10 @@ describe("buildKeyframeCommand", () => {
     });
 
     expect(cmd).toContain("ffmpeg -y");
-    expect(cmd).toContain('-i "./video.mp4"');
+    expect(cmd).toContain("-i \"./video.mp4\"");
     expect(cmd).toContain("select='gt(scene,0.3)'");
     expect(cmd).toContain("-vsync vfr");
-    expect(cmd).toContain('"/tmp/frame-%04d.jpg"');
+    expect(cmd).toContain("\"/tmp/frame-%04d.jpg\"");
     expect(cmd).not.toContain("-frames:v");
   });
 

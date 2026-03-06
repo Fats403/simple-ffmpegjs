@@ -4,12 +4,109 @@ title: Contributing
 
 # Contributing
 
-Contributions are welcome.
+Contributions are welcome! Whether it's a bug fix, new feature, documentation improvement, or test — we appreciate the help.
 
-1. Fork the repository
-2. Create a feature branch
-3. Add or update tests
-4. Ensure test suite passes
-5. Open a pull request
+## Prerequisites
 
-For large changes, open an issue first so scope and direction can be discussed before implementation.
+- **Node.js** >= 18
+- **FFmpeg** installed and available in your `PATH`
+- **Git**
+
+## Getting started
+
+```bash
+# Fork and clone the repository
+git clone https://github.com/<your-username>/simple-ffmpeg.git
+cd simple-ffmpeg
+
+# Install dependencies
+npm install
+
+# Run the test suite
+npm test
+```
+
+## Development workflow
+
+| Command | Description |
+| --- | --- |
+| `npm test` | Run all tests |
+| `npm run test:unit` | Run unit tests only |
+| `npm run test:integration` | Run integration tests only (requires FFmpeg) |
+| `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |
+| `npm run lint` | Check for lint errors |
+| `npm run lint:fix` | Auto-fix lint errors |
+
+## Making changes
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Add or update tests for any new behavior
+4. Run `npm run lint` and `npm test` to verify everything passes
+5. Commit your changes and open a pull request
+
+## Code style
+
+Code style is enforced by **ESLint** with the `@stylistic` plugin. Run `npm run lint:fix` to auto-format. Key conventions:
+
+- **2-space indentation**
+- **Double quotes** for strings
+- **Semicolons** required
+- **Trailing commas** in multiline structures
+- **`const`** by default, `let` only when reassignment is needed
+- **No `var`**
+- **Zero runtime dependencies** — the library only depends on FFmpeg being installed
+
+## Project structure
+
+```
+src/
+├── simpleffmpeg.js          # Main class — load(), export(), validate()
+├── loaders.js               # Per-clip-type async loaders
+├── core/
+│   ├── validation.js        # Pre-export validation with structured error codes
+│   ├── errors.js            # Custom error classes
+│   ├── constants.js         # Platform presets, defaults
+│   ├── media_info.js        # FFmpeg probe wrapper
+│   ├── resolve.js           # Clip timeline resolution
+│   ├── gaps.js              # Visual gap detection
+│   └── rotation.js          # iPhone video rotation handling
+├── ffmpeg/
+│   ├── command_builder.js   # FFmpeg command orchestration
+│   ├── video_builder.js     # Video filter chains
+│   ├── audio_builder.js     # Audio mixing filters
+│   ├── text_renderer.js     # drawtext overlay rendering
+│   ├── text_passes.js       # Multi-pass text rendering
+│   ├── subtitle_builder.js  # ASS subtitle generation
+│   ├── effect_builder.js    # Effect filter generation
+│   ├── watermark_builder.js # Watermark overlay
+│   ├── bgm_builder.js       # Background music
+│   └── strings.js           # FFmpeg string escaping
+├── schema/                  # Machine-readable schema export
+└── lib/
+    ├── utils.js             # FFmpeg execution, formatting helpers
+    └── gradient.js          # Gradient PPM generation
+```
+
+## Tests
+
+Tests live in `tests/` and use [Vitest](https://vitest.dev/).
+
+- **Unit tests** (`tests/unit/`) test individual modules in isolation — no FFmpeg required
+- **Integration tests** (`tests/integration/`) run real FFmpeg commands — require FFmpeg installed
+
+When adding a new feature, add unit tests at minimum. Integration tests are appreciated for anything that changes the FFmpeg command output.
+
+## Reporting bugs
+
+When opening an issue, please include:
+
+- Node.js version (`node --version`)
+- FFmpeg version (`ffmpeg -version`)
+- Minimal code to reproduce the issue
+- Expected vs. actual behavior
+
+## Proposing large changes
+
+For large features or architectural changes, please open an issue first so we can discuss scope and direction before you invest time in implementation.

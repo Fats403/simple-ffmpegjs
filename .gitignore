@@ -10,6 +10,7 @@ test/
 test-files/
 test-local.js
 *.tgz
+coverage/
 
 # Examples - keep scripts, ignore all generated files
 examples/output/

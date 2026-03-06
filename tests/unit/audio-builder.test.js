@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 const { buildAudioForVideoClips } = await import(
-  "../../src/ffmpeg/audio_builder.js"
+  "../../src/ffmpeg/audio_builder.js",
 );
 
 // Helper to create a mock project with videoOrAudioClips

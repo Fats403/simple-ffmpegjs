@@ -171,7 +171,7 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.path === "clips[0].position")).toBe(
-          true
+          true,
         );
       });
 
@@ -275,8 +275,8 @@ describe("Validation", () => {
           result.errors.some(
             (e) =>
               e.code === ValidationCodes.INVALID_FORMAT &&
-              e.path === "clips[0].url"
-          )
+              e.path === "clips[0].url",
+          ),
         ).toBe(true);
       });
 
@@ -289,8 +289,8 @@ describe("Validation", () => {
           result.errors.some(
             (e) =>
               e.code === ValidationCodes.INVALID_FORMAT &&
-              e.path === "clips[0].url"
-          )
+              e.path === "clips[0].url",
+          ),
         ).toBe(true);
       });
 
@@ -315,7 +315,7 @@ describe("Validation", () => {
 
         // Still valid (warnings don't block) but there's a gap warning
         expect(
-          result.warnings.some((w) => w.code === ValidationCodes.FILE_NOT_FOUND)
+          result.warnings.some((w) => w.code === ValidationCodes.FILE_NOT_FOUND),
         ).toBe(true);
       });
 
@@ -327,7 +327,7 @@ describe("Validation", () => {
         const result = validateConfig(clips, { skipFileChecks: true });
 
         expect(
-          result.warnings.some((w) => w.code === ValidationCodes.FILE_NOT_FOUND)
+          result.warnings.some((w) => w.code === ValidationCodes.FILE_NOT_FOUND),
         ).toBe(false);
       });
     });
@@ -341,7 +341,7 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(false);
         expect(
-          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)
+          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP),
         ).toBe(true);
       });
 
@@ -354,7 +354,7 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(false);
         expect(
-          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)
+          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP),
         ).toBe(true);
       });
 
@@ -366,9 +366,9 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(false);
         const gapError = result.errors.find(
-          (e) => e.code === ValidationCodes.TIMELINE_GAP
+          (e) => e.code === ValidationCodes.TIMELINE_GAP,
         );
-        expect(gapError.message).toContain('{ type: "color" }');
+        expect(gapError.message).toContain("{ type: \"color\" }");
       });
 
       it("should not report gap where a color clip fills it", () => {
@@ -379,7 +379,7 @@ describe("Validation", () => {
         const result = validateConfig(clips);
 
         expect(
-          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP)
+          result.errors.some((e) => e.code === ValidationCodes.TIMELINE_GAP),
         ).toBe(false);
       });
 
@@ -390,7 +390,7 @@ describe("Validation", () => {
         const result = validateConfig(clips);
 
         const gapError = result.errors.find(
-          (e) => e.code === ValidationCodes.TIMELINE_GAP
+          (e) => e.code === ValidationCodes.TIMELINE_GAP,
         );
         expect(gapError.received).toEqual({ start: 0, end: 2 });
       });
@@ -426,7 +426,7 @@ describe("Validation", () => {
         const result = validateConfig(clips);
 
         expect(
-          result.warnings.some((w) => w.code === ValidationCodes.OUTSIDE_BOUNDS)
+          result.warnings.some((w) => w.code === ValidationCodes.OUTSIDE_BOUNDS),
         ).toBe(true);
       });
 
@@ -698,7 +698,7 @@ describe("Validation", () => {
         expect(result.valid).toBe(false);
         expect(result.errors[0].code).toBe(ValidationCodes.INVALID_VALUE);
         expect(result.errors[0].message).toContain(
-          "smaller than project dimensions"
+          "smaller than project dimensions",
         );
       });
 
@@ -744,7 +744,7 @@ describe("Validation", () => {
         expect(result.valid).toBe(true);
         expect(result.warnings.length).toBeGreaterThan(0);
         expect(
-          result.warnings.some((w) => w.message.includes("Ken Burns"))
+          result.warnings.some((w) => w.message.includes("Ken Burns")),
         ).toBe(true);
       });
 
@@ -802,10 +802,10 @@ describe("Validation", () => {
 
         // Should have errors from different clips
         expect(result.errors.some((e) => e.path.includes("clips[0]"))).toBe(
-          true
+          true,
         );
         expect(result.errors.some((e) => e.path.includes("clips[1]"))).toBe(
-          true
+          true,
         );
       });
     });
@@ -823,8 +823,8 @@ describe("Validation", () => {
         result.errors.some(
           (e) =>
             e.path === "clips[0].duration" &&
-            e.code === ValidationCodes.INVALID_VALUE
-        )
+            e.code === ValidationCodes.INVALID_VALUE,
+        ),
       ).toBe(true);
     });
 
@@ -839,8 +839,8 @@ describe("Validation", () => {
         result.errors.some(
           (e) =>
             e.path === "clips[0].duration" &&
-            e.code === ValidationCodes.INVALID_VALUE
-        )
+            e.code === ValidationCodes.INVALID_VALUE,
+        ),
       ).toBe(true);
     });
 
@@ -855,8 +855,8 @@ describe("Validation", () => {
         result.errors.some(
           (e) =>
             e.path === "clips[0].duration" &&
-            e.code === ValidationCodes.INVALID_VALUE
-        )
+            e.code === ValidationCodes.INVALID_VALUE,
+        ),
       ).toBe(true);
     });
 
@@ -871,8 +871,8 @@ describe("Validation", () => {
         result.errors.some(
           (e) =>
             e.path === "clips[0].duration" &&
-            e.code === ValidationCodes.INVALID_RANGE
-        )
+            e.code === ValidationCodes.INVALID_RANGE,
+        ),
       ).toBe(true);
     });
 
@@ -887,8 +887,8 @@ describe("Validation", () => {
         result.errors.some(
           (e) =>
             e.path === "clips[0].duration" &&
-            e.code === ValidationCodes.INVALID_RANGE
-        )
+            e.code === ValidationCodes.INVALID_RANGE,
+        ),
       ).toBe(true);
     });
 
@@ -910,8 +910,8 @@ describe("Validation", () => {
           (e) =>
             e.code === ValidationCodes.INVALID_VALUE &&
             e.message.includes("duration") &&
-            e.message.includes("end")
-        )
+            e.message.includes("end"),
+        ),
       ).toBe(true);
     });
   });
@@ -1253,8 +1253,8 @@ describe("Validation", () => {
       expect(
         result.errors.some(
           (e) =>
-            e.path === "clips[0]" && e.code === ValidationCodes.INVALID_TIMELINE
-        )
+            e.path === "clips[0]" && e.code === ValidationCodes.INVALID_TIMELINE,
+        ),
       ).toBe(true);
     });
 
@@ -1293,7 +1293,7 @@ describe("Validation", () => {
 
       expect(result.valid).toBe(true);
       const colorWarnings = result.warnings.filter((w) =>
-        w.message.includes("Invalid color")
+        w.message.includes("Invalid color"),
       );
       expect(colorWarnings).toHaveLength(0);
     });
@@ -1311,7 +1311,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.path.includes("fontColor")
+        w.path.includes("fontColor"),
       );
       expect(colorWarnings).toHaveLength(1);
       expect(colorWarnings[0].message).toContain("Invalid color");
@@ -1330,7 +1330,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.path.includes("borderColor")
+        w.path.includes("borderColor"),
       );
       expect(colorWarnings).toHaveLength(1);
     });
@@ -1348,7 +1348,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.path.includes("backgroundColor")
+        w.path.includes("backgroundColor"),
       );
       expect(colorWarnings).toHaveLength(1);
     });
@@ -1368,7 +1368,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.message.includes("Invalid color")
+        w.message.includes("Invalid color"),
       );
       expect(colorWarnings).toHaveLength(3);
     });
@@ -1385,7 +1385,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.message.includes("Invalid color")
+        w.message.includes("Invalid color"),
       );
       expect(colorWarnings).toHaveLength(0);
     });
@@ -1402,7 +1402,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.message.includes("Invalid color")
+        w.message.includes("Invalid color"),
       );
       expect(colorWarnings).toHaveLength(0);
     });
@@ -1418,7 +1418,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.path.includes("fontColor")
+        w.path.includes("fontColor"),
       );
       expect(colorWarnings).toHaveLength(1);
       expect(colorWarnings[0].message).toContain("Invalid color");
@@ -1435,7 +1435,7 @@ describe("Validation", () => {
       const result = validateConfig(clips);
 
       const colorWarnings = result.warnings.filter((w) =>
-        w.path.includes("borderColor")
+        w.path.includes("borderColor"),
       );
       expect(colorWarnings).toHaveLength(1);
     });

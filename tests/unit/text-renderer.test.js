@@ -29,7 +29,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain("drawtext=");
@@ -64,7 +64,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain("text='One'");
@@ -93,7 +93,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // First window shows "Hello", second shows "Hello World"
@@ -122,7 +122,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain(":alpha=");
@@ -149,7 +149,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain(":alpha=");
@@ -176,7 +176,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // Pop animation modifies fontsize dynamically
@@ -203,7 +203,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain(":x=100");
@@ -230,7 +230,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // xPercent: 0.5 * 1920 = 960
@@ -259,7 +259,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // The apostrophe must survive two levels of av_get_token parsing.
@@ -290,7 +290,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // Colons should be escaped with \: for the drawtext filter
@@ -317,7 +317,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain("fontfile='/path/to/font.ttf'");
@@ -348,7 +348,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       expect(result.filterString).toContain(":bordercolor=black");
@@ -488,7 +488,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // fade-out should have alpha expression that fades at the end
@@ -517,7 +517,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // scale-in should have fontsize expression and alpha fade
@@ -546,7 +546,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // pulse should have oscillating fontsize
@@ -575,7 +575,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // typewriter should generate multiple drawtext calls for progressive reveal
@@ -606,12 +606,12 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // Should have center calculation + offset
       expect(result.filterString).toContain(
-        `y=(${canvasHeight} - text_h)/2+100`
+        `y=(${canvasHeight} - text_h)/2+100`,
       );
     });
 
@@ -635,12 +635,12 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // Should have center calculation + negative offset
       expect(result.filterString).toContain(
-        `x=(${canvasWidth} - text_w)/2+-50`
+        `x=(${canvasWidth} - text_w)/2+-50`,
       );
     });
 
@@ -664,7 +664,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // Should have pixel position + offset
@@ -691,7 +691,7 @@ describe("TextRenderer", () => {
         textClips,
         canvasWidth,
         canvasHeight,
-        initialVideoLabel
+        initialVideoLabel,
       );
 
       // yPercent 0.25 on 1080 height = 270, minus text_h/2, plus offset

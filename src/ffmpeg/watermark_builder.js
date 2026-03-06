@@ -328,7 +328,7 @@ function validateWatermarkConfig(config) {
     if (config[prop] != null && typeof config[prop] === "string") {
       if (!isValidFFmpegColor(config[prop])) {
         errors.push(
-          `watermark.${prop} "${config[prop]}" is not a valid FFmpeg color. Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`
+          `watermark.${prop} "${config[prop]}" is not a valid FFmpeg color. Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`,
         );
       }
     }

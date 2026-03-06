@@ -20,7 +20,7 @@ async function loadVideo(project, clipObj) {
               message: `cutFrom exceeds source duration`,
             },
           ],
-        }
+        },
       );
     }
   }
@@ -37,7 +37,7 @@ async function loadVideo(project, clipObj) {
       console.warn(
         `Video clip overruns source by ${(
           requestedDuration - maxAvailable
-        ).toFixed(3)}s. Clamping end from ${clipObj.end}s to ${clampedEnd}s.`
+        ).toFixed(3)}s. Clamping end from ${clipObj.end}s to ${clampedEnd}s.`,
       );
       clipObj.end = clampedEnd;
     }
@@ -65,7 +65,7 @@ async function loadAudio(project, clipObj) {
               message: `cutFrom exceeds source duration`,
             },
           ],
-        }
+        },
       );
     }
   }
@@ -82,7 +82,7 @@ async function loadAudio(project, clipObj) {
       console.warn(
         `Audio clip overruns source by ${(
           requestedDuration - maxAvailable
-        ).toFixed(3)}s. Clamping end from ${clipObj.end}s to ${clampedEnd}s.`
+        ).toFixed(3)}s. Clamping end from ${clipObj.end}s to ${clampedEnd}s.`,
       );
       clipObj.end = clampedEnd;
     }
@@ -126,7 +126,7 @@ async function loadBackgroundAudio(project, clipObj) {
               message: `cutFrom exceeds source duration`,
             },
           ],
-        }
+        },
       );
     }
   }
@@ -143,7 +143,7 @@ async function loadBackgroundAudio(project, clipObj) {
       console.warn(
         `Background audio overruns source by ${(
           requestedDuration - maxAvailable
-        ).toFixed(3)}s. Clamping end from ${clip.end}s to ${clampedEnd}s.`
+        ).toFixed(3)}s. Clamping end from ${clip.end}s to ${clampedEnd}s.`,
       );
       clip.end = clampedEnd;
     }
@@ -206,7 +206,7 @@ function loadSubtitle(project, clipObj) {
             message: `Unsupported subtitle format '${ext}'`,
           },
         ],
-      }
+      },
     );
   }
 
@@ -237,7 +237,7 @@ async function loadColor(project, clipObj) {
 
     const tempPath = path.join(
       project.options.tempDir || os.tmpdir(),
-      `simpleffmpeg-gradient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ppm`
+      `simpleffmpeg-gradient-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.ppm`,
     );
     fs.writeFileSync(tempPath, ppmBuffer);
 

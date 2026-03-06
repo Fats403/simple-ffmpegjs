@@ -16,7 +16,7 @@ function buildAudioForVideoClips(project, videoClips, transitionOffsets) {
       : project.videoOrAudioClips.indexOf(clip);
     const requestedDuration = Math.max(
       0,
-      (clip.end || 0) - (clip.position || 0)
+      (clip.end || 0) - (clip.position || 0),
     );
     const maxAvailable =
       typeof clip.mediaDuration === "number" && typeof clip.cutFrom === "number"

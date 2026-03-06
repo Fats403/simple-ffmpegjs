@@ -33,7 +33,7 @@ function baseYExpression(baseClip, canvasHeight) {
   return `(${canvasHeight} - text_h)/2${offsetStr}`;
 }
 
-function buildYParamAnimated(baseClip, canvasHeight, start, end) {
+function buildYParamAnimated(baseClip, canvasHeight, _start, _end) {
   const baseY = baseYExpression(baseClip, canvasHeight);
   return `:y=${baseY}`;
 }
@@ -70,7 +70,7 @@ function buildAlphaParam(baseClip, start, end) {
   return "";
 }
 
-function buildFontsizeParam(baseClip, start, end) {
+function buildFontsizeParam(baseClip, start, _end) {
   const anim = baseClip.animation || {};
   const type = anim.type || "none";
   const baseSize = baseClip.fontSize;
@@ -79,9 +79,9 @@ function buildFontsizeParam(baseClip, start, end) {
     const entry =
       typeof anim.in === "number" ? anim.in : C.DEFAULT_TEXT_ANIM_IN;
     return `:fontsize=if(lt(t\\,${start + entry})\\,${(baseSize * 0.7).toFixed(
-      3
+      3,
     )}+${(baseSize * 0.3).toFixed(
-      3
+      3,
     )}*sin(PI/2*(t-${start})/${entry})\\,${baseSize})`;
   }
 
@@ -98,11 +98,11 @@ function buildFontsizeParam(baseClip, start, end) {
     const phase2Duration = (entry * 0.4).toFixed(4);
     // Phase 1: 0.7 -> 1.1 (ease-out), Phase 2: 1.1 -> 1.0 (ease-in-out)
     return `:fontsize=if(lt(t\\,${growEnd.toFixed(
-      4
+      4,
     )})\\,${minSize}+${growAmount}*sin(PI/2*(t-${start})/${phase1Duration})\\,if(lt(t\\,${
       start + entry
     })\\,${overshoot}-${settleAmount}*sin(PI/2*(t-${growEnd.toFixed(
-      4
+      4,
     )})/${phase2Duration})\\,${baseSize}))`;
   }
 
@@ -144,13 +144,13 @@ function buildDrawtextParams(
   canvasWidth,
   canvasHeight,
   start,
-  end
+  end,
 ) {
   const fontSpec = baseClip.fontFile
     ? `fontfile='${Strings.escapeTextFilePath(baseClip.fontFile)}'`
     : baseClip.fontFamily
-    ? `font=${baseClip.fontFamily}`
-    : `font=Sans`;
+      ? `font=${baseClip.fontFamily}`
+      : `font=Sans`;
 
   // Use textfile approach if a temp file path is provided (for problematic characters)
   // Only use textfile if the text matches the original clip text (not for typewriter frames, etc.)
@@ -282,7 +282,7 @@ function buildTextFilters(
   textClips,
   canvasWidth,
   canvasHeight,
-  initialVideoLabel
+  initialVideoLabel,
 ) {
   let filterString = "";
   let currentLabel = initialVideoLabel;
@@ -311,7 +311,7 @@ function buildTextFilters(
           canvasWidth,
           canvasHeight,
           w.start,
-          w.end
+          w.end,
         );
         // Use gte/lt for non-overlapping windows (inclusive start, exclusive end)
         // Last window uses inclusive end so text stays visible
@@ -332,7 +332,7 @@ function buildTextFilters(
         canvasWidth,
         canvasHeight,
         clip.position,
-        clip.end
+        clip.end,
       );
       const enable = `:enable='between(t,${clip.position},${clip.end})'`;
       const outLabel = nextLabel();
@@ -355,7 +355,7 @@ function buildTextFilters(
           canvasWidth,
           canvasHeight,
           w.start,
-          w.end
+          w.end,
         );
         const enable = `:enable='between(t,${w.start},${w.end})'`;
         const outLabel = nextLabel();
@@ -375,7 +375,7 @@ function buildTextFilters(
           canvasWidth,
           canvasHeight,
           w.start,
-          w.end
+          w.end,
         );
         const enable = `:enable='between(t,${w.start},${w.end})'`;
         const outLabel = nextLabel();
@@ -392,7 +392,7 @@ function buildTextFilters(
       canvasWidth,
       canvasHeight,
       clip.position,
-      clip.end
+      clip.end,
     );
     const enable = `:enable='between(t,${clip.position},${clip.end})'`;
     const outLabel = nextLabel();
@@ -477,7 +477,7 @@ function buildFiltersForWindows(
   windows,
   canvasWidth,
   canvasHeight,
-  initialVideoLabel
+  initialVideoLabel,
 ) {
   let filterString = "";
   let currentLabel = initialVideoLabel;
@@ -495,7 +495,7 @@ function buildFiltersForWindows(
       canvasWidth,
       canvasHeight,
       win.start,
-      win.end
+      win.end,
     );
     const enable = `:enable='between(t,${win.start},${win.end})'`;
     const outLabel = nextLabel();

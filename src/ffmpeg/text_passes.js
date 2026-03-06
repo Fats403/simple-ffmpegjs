@@ -43,7 +43,7 @@ function runCmd(cmd, onLog) {
         new FFmpegError(`FFmpeg text batch process error: ${error.message}`, {
           stderr,
           command: cmd,
-        })
+        }),
       );
     });
 
@@ -55,7 +55,7 @@ function runCmd(cmd, onLog) {
             stderr,
             command: cmd,
             exitCode: code,
-          })
+          }),
         );
         return;
       }
@@ -87,12 +87,12 @@ async function runTextPasses({
       batch,
       canvasWidth,
       canvasHeight,
-      "[invid]"
+      "[invid]",
     );
 
     const batchOutput = path.join(
       intermediateDir,
-      `textpass_${i}_${path.basename(baseOutputPath)}`
+      `textpass_${i}_${path.basename(baseOutputPath)}`,
     );
     tempOutputs.push(batchOutput);
 

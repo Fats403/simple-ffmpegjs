@@ -51,8 +51,8 @@ function resolveModules(options = {}) {
       if (!ALL_MODULES[id]) {
         throw new Error(
           `Unknown schema module "${id}". Available modules: ${ALL_MODULE_IDS.join(
-            ", "
-          )}`
+            ", ",
+          )}`,
         );
       }
     }
@@ -64,8 +64,8 @@ function resolveModules(options = {}) {
       if (!ALL_MODULES[id]) {
         throw new Error(
           `Unknown schema module "${id}". Available modules: ${ALL_MODULE_IDS.join(
-            ", "
-          )}`
+            ", ",
+          )}`,
         );
       }
     }

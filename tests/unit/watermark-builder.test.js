@@ -19,7 +19,7 @@ describe("watermark_builder", () => {
         { position: "top-left", margin: 20 },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("20");
       expect(pos.y).toBe("20");
@@ -30,7 +30,7 @@ describe("watermark_builder", () => {
         { position: "top-right", margin: 20 },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("W-w-20");
       expect(pos.y).toBe("20");
@@ -41,7 +41,7 @@ describe("watermark_builder", () => {
         { position: "bottom-left", margin: 20 },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("20");
       expect(pos.y).toBe("H-h-20");
@@ -52,7 +52,7 @@ describe("watermark_builder", () => {
         { position: "bottom-right", margin: 20 },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("W-w-20");
       expect(pos.y).toBe("H-h-20");
@@ -63,7 +63,7 @@ describe("watermark_builder", () => {
         { position: "center" },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("(W-w)/2");
       expect(pos.y).toBe("(H-h)/2");
@@ -74,7 +74,7 @@ describe("watermark_builder", () => {
         { position: "bottom-right", margin: 10 },
         canvasWidth,
         canvasHeight,
-        true
+        true,
       );
       expect(pos.x).toBe(`${canvasWidth}-tw-10`);
       expect(pos.y).toBe(`${canvasHeight}-th-10`);
@@ -85,7 +85,7 @@ describe("watermark_builder", () => {
         { position: { xPercent: 0.5, yPercent: 0.5 } },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe(`${0.5 * canvasWidth}-w/2`);
       expect(pos.y).toBe(`${0.5 * canvasHeight}-h/2`);
@@ -96,7 +96,7 @@ describe("watermark_builder", () => {
         { position: { x: 100, y: 200 } },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("100");
       expect(pos.y).toBe("200");
@@ -107,7 +107,7 @@ describe("watermark_builder", () => {
         { position: "top-left" },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("20");
       expect(pos.y).toBe("20");
@@ -118,7 +118,7 @@ describe("watermark_builder", () => {
         { position: "unknown", margin: 15 },
         canvasWidth,
         canvasHeight,
-        false
+        false,
       );
       expect(pos.x).toBe("W-w-15");
       expect(pos.y).toBe("H-h-15");
@@ -140,7 +140,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.finalLabel).toBe("[outwm]");
@@ -165,7 +165,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("colorchannelmixer=aa=0.5");
@@ -185,7 +185,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("enable='between(t,5,20)'");
@@ -205,7 +205,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        30
+        30,
       );
 
       expect(result.filter).not.toContain("enable=");
@@ -224,7 +224,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("overlay=W-w-50:H-h-50");
@@ -245,7 +245,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.finalLabel).toBe("[outwm]");
@@ -269,7 +269,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       // Opacity 0.5 = 128 in hex = 80 (Math.round(0.5 * 255) = 128)
@@ -289,7 +289,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("bordercolor=#000000");
@@ -310,7 +310,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("shadowcolor=#000000");
@@ -331,7 +331,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("enable='between(t,10,25)'");
@@ -349,7 +349,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("fontfile='/path/to/font.ttf'");
@@ -366,7 +366,7 @@ describe("watermark_builder", () => {
         "[invid]",
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       // Text should be escaped for drawtext
@@ -383,7 +383,7 @@ describe("watermark_builder", () => {
         null,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toBe("");
@@ -403,7 +403,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("overlay");
@@ -423,7 +423,7 @@ describe("watermark_builder", () => {
         null,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("drawtext");
@@ -442,7 +442,7 @@ describe("watermark_builder", () => {
         2,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toContain("overlay");
@@ -459,7 +459,7 @@ describe("watermark_builder", () => {
         null,
         canvasWidth,
         canvasHeight,
-        totalDuration
+        totalDuration,
       );
 
       expect(result.filter).toBe("");
@@ -590,8 +590,8 @@ describe("watermark_builder", () => {
       expect(result.valid).toBe(false);
       expect(
         result.errors.some(
-          (e) => e.includes("xPercent") || e.includes("yPercent")
-        )
+          (e) => e.includes("xPercent") || e.includes("yPercent"),
+        ),
       ).toBe(true);
     });
 

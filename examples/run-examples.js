@@ -28,16 +28,16 @@ const __dirname = path.dirname(__filename);
 // ============================================================================
 
 const DEMOS = [
-  { name: "color-clips",             file: "demo-color-clips.js" },
-  { name: "effects",                 file: "demo-effects.js" },
-  { name: "transitions",            file: "demo-transitions.js" },
-  { name: "text-and-animations",    file: "demo-text-and-animations.js" },
-  { name: "emoji-text",             file: "demo-emoji-text.js" },
-  { name: "ken-burns",              file: "demo-ken-burns.js" },
-  { name: "audio-mixing",           file: "demo-audio-mixing.js" },
-  { name: "watermarks",             file: "demo-watermarks.js" },
-  { name: "karaoke-and-subtitles",  file: "demo-karaoke-and-subtitles.js" },
-  { name: "torture-test",           file: "demo-torture-test.js" },
+  { name: "color-clips", file: "demo-color-clips.js" },
+  { name: "effects", file: "demo-effects.js" },
+  { name: "transitions", file: "demo-transitions.js" },
+  { name: "text-and-animations", file: "demo-text-and-animations.js" },
+  { name: "emoji-text", file: "demo-emoji-text.js" },
+  { name: "ken-burns", file: "demo-ken-burns.js" },
+  { name: "audio-mixing", file: "demo-audio-mixing.js" },
+  { name: "watermarks", file: "demo-watermarks.js" },
+  { name: "karaoke-and-subtitles", file: "demo-karaoke-and-subtitles.js" },
+  { name: "torture-test", file: "demo-torture-test.js" },
 ];
 
 // ============================================================================

@@ -87,7 +87,7 @@ class SIMPLEFFMPEG {
       console.warn(
         `Unknown platform preset '${
           options.preset
-        }'. Valid presets: ${Object.keys(C.PLATFORM_PRESETS).join(", ")}`
+        }'. Valid presets: ${Object.keys(C.PLATFORM_PRESETS).join(", ")}`,
       );
     }
 
@@ -105,12 +105,12 @@ class SIMPLEFFMPEG {
     if (this.options.tempDir) {
       if (typeof this.options.tempDir !== "string") {
         throw new SimpleffmpegError(
-          "tempDir must be a string path to an existing directory."
+          "tempDir must be a string path to an existing directory.",
         );
       }
       if (!fs.existsSync(this.options.tempDir)) {
         throw new SimpleffmpegError(
-          `tempDir "${this.options.tempDir}" does not exist. Create it before constructing SIMPLEFFMPEG.`
+          `tempDir "${this.options.tempDir}" does not exist. Create it before constructing SIMPLEFFMPEG.`,
         );
       }
     }
@@ -119,7 +119,7 @@ class SIMPLEFFMPEG {
       const family = parseFontFamily(this.options.emojiFont);
       if (!family) {
         console.warn(
-          `simple-ffmpeg: Could not parse font family from "${this.options.emojiFont}". Emoji will be stripped from text.`
+          `simple-ffmpeg: Could not parse font family from "${this.options.emojiFont}". Emoji will be stripped from text.`,
         );
       } else {
         this._emojiFontInfo = {
@@ -189,7 +189,7 @@ class SIMPLEFFMPEG {
             console.error("Error cleaning up file:", error);
           }
         }
-      })
+      }),
     );
   }
 
@@ -257,7 +257,7 @@ class SIMPLEFFMPEG {
     // Guard against concurrent load() calls
     if (this._isLoading) {
       throw new SimpleffmpegError(
-        "Cannot call load() while another load() is in progress. Await the previous load() call first."
+        "Cannot call load() while another load() is in progress. Await the previous load() call first.",
       );
     }
 
@@ -335,7 +335,7 @@ class SIMPLEFFMPEG {
           if (clipObj.type === "subtitle") {
             return Loaders.loadSubtitle(this, clipObj);
           }
-        })
+        }),
       );
     } finally {
       this._isLoading = false;
@@ -435,7 +435,7 @@ class SIMPLEFFMPEG {
           this.filesToClean.push(unrotatedUrl);
           clip.url = unrotatedUrl;
         }
-      })
+      }),
     );
 
     // Build a mapping from clip to its FFmpeg input stream index.
@@ -453,13 +453,13 @@ class SIMPLEFFMPEG {
     }
 
     const videoClips = this.videoOrAudioClips.filter(
-      (clip) => clip.type === "video" || clip.type === "image" || clip.type === "color"
+      (clip) => clip.type === "video" || clip.type === "image" || clip.type === "color",
     );
     const audioClips = this.videoOrAudioClips.filter(
-      (clip) => clip.type === "audio"
+      (clip) => clip.type === "audio",
     );
     const backgroundClips = this.videoOrAudioClips.filter(
-      (clip) => clip.type === "music" || clip.type === "backgroundAudio"
+      (clip) => clip.type === "music" || clip.type === "backgroundAudio",
     );
 
     let filterComplex = "";
@@ -472,7 +472,7 @@ class SIMPLEFFMPEG {
       if (videoClips.length === 0) return 0;
       const baseSum = videoClips.reduce(
         (acc, c) => acc + Math.max(0, (c.end || 0) - (c.position || 0)),
-        0
+        0,
       );
       const transitionsOverlap = videoClips.reduce((acc, c) => {
         const d =
@@ -492,7 +492,7 @@ class SIMPLEFFMPEG {
         (c) =>
           c.type === "audio" ||
           c.type === "music" ||
-          c.type === "backgroundAudio"
+          c.type === "backgroundAudio",
       )
       .map((c) => (typeof c.end === "number" ? c.end : 0));
     const bgOrAudioEnd = audioEnds.length > 0 ? Math.max(...audioEnds) : 0;
@@ -553,7 +553,7 @@ class SIMPLEFFMPEG {
           : this.videoOrAudioClips.indexOf(clip);
         const { audioStringPart, audioConcatInput } = getClipAudioString(
           clip,
-          inputIndex
+          inputIndex,
         );
         audioString += audioStringPart;
         audioConcatInputs.push(audioConcatInput);
@@ -580,7 +580,7 @@ class SIMPLEFFMPEG {
         this,
         backgroundClips,
         hasAudio ? finalAudioLabel : null,
-        finalVisualEnd
+        finalVisualEnd,
       );
       filterComplex += bgres.filter;
       finalAudioLabel = bgres.finalAudioLabel || finalAudioLabel;
@@ -603,11 +603,11 @@ class SIMPLEFFMPEG {
         adjustedTextClips = this.textClips.map((clip) => {
           const adjustedPosition = this._adjustTimestampForTransitions(
             videoClips,
-            clip.position || 0
+            clip.position || 0,
           );
           const adjustedEnd = this._adjustTimestampForTransitions(
             videoClips,
-            clip.end || 0
+            clip.end || 0,
           );
           // Also adjust word timings if present
           let adjustedWords = clip.words;
@@ -616,11 +616,11 @@ class SIMPLEFFMPEG {
               ...word,
               start: this._adjustTimestampForTransitions(
                 videoClips,
-                word.start || 0
+                word.start || 0,
               ),
               end: this._adjustTimestampForTransitions(
                 videoClips,
-                word.end || 0
+                word.end || 0,
               ),
             }));
           }
@@ -628,7 +628,7 @@ class SIMPLEFFMPEG {
           let adjustedWordTimestamps = clip.wordTimestamps;
           if (Array.isArray(clip.wordTimestamps)) {
             adjustedWordTimestamps = clip.wordTimestamps.map((ts) =>
-              this._adjustTimestampForTransitions(videoClips, ts)
+              this._adjustTimestampForTransitions(videoClips, ts),
             );
           }
           return {
@@ -660,7 +660,7 @@ class SIMPLEFFMPEG {
           } else {
             console.warn(
               `simple-ffmpeg: Text "${textContent.slice(0, 40)}..." contains emoji but uses '${animType}' animation ` +
-                `which is not supported in ASS. Emoji will be stripped.`
+              `which is not supported in ASS. Emoji will be stripped.`,
             );
             drawtextClips.push({ ...clip, text: stripEmoji(textContent) });
           }
@@ -669,8 +669,8 @@ class SIMPLEFFMPEG {
             this._emojiStrippedWarned = true;
             console.warn(
               "simple-ffmpeg: Text contains emoji but no emojiFont is configured. " +
-                "Emoji will be stripped. To render emoji, pass emojiFont in the constructor: " +
-                "new SIMPLEFFMPEG({ emojiFont: '/path/to/NotoEmoji-Regular.ttf' })"
+              "Emoji will be stripped. To render emoji, pass emojiFont in the constructor: " +
+              "new SIMPLEFFMPEG({ emojiFont: '/path/to/NotoEmoji-Regular.ttf' })",
             );
           }
           drawtextClips.push({ ...clip, text: stripEmoji(textContent) });
@@ -680,7 +680,7 @@ class SIMPLEFFMPEG {
         if (!(clip.text || "").trim()) {
           console.warn(
             `simple-ffmpeg: Text clip at ${clip.position}s–${clip.end}s ` +
-              `has no visible text after emoji stripping. Skipping.`
+            `has no visible text after emoji stripping. Skipping.`,
           );
           return false;
         }
@@ -695,7 +695,7 @@ class SIMPLEFFMPEG {
         if (hasProblematicChars(textContent)) {
           const tempPath = path.join(
             textTempBase,
-            `.simpleffmpeg_text_${idx}_${Date.now()}.txt`
+            `.simpleffmpeg_text_${idx}_${Date.now()}.txt`,
           );
           const normalizedText = textContent.replace(/\r?\n/g, " ").replace(/ {2,}/g, " ");
           try {
@@ -703,7 +703,7 @@ class SIMPLEFFMPEG {
           } catch (writeError) {
             throw new SimpleffmpegError(
               `Failed to write temporary text file "${tempPath}": ${writeError.message}`,
-              { cause: writeError }
+              { cause: writeError },
             );
           }
           this.filesToClean.push(tempPath);
@@ -728,7 +728,7 @@ class SIMPLEFFMPEG {
             adjustedTextClips,
             this.options.width,
             this.options.height,
-            finalVideoLabel
+            finalVideoLabel,
           );
 
         // Auto-batch if filter_complex would exceed safe command length limit
@@ -737,18 +737,18 @@ class SIMPLEFFMPEG {
           // Calculate optimal batch size based on filter length
           const avgNodeLength = filterString.length / textWindows.length;
           const safeNodes = Math.floor(
-            (C.MAX_FILTER_COMPLEX_LENGTH - filterComplex.length) / avgNodeLength
+            (C.MAX_FILTER_COMPLEX_LENGTH - filterComplex.length) / avgNodeLength,
           );
           exportOptions.textMaxNodesPerPass = Math.max(
             10,
-            Math.min(safeNodes, 50)
+            Math.min(safeNodes, 50),
           );
           needTextPasses = true;
 
           if (exportOptions.verbose) {
             console.log(
               `simple-ffmpeg: Auto-batching text (filter too long: ${potentialLength} > ${C.MAX_FILTER_COMPLEX_LENGTH}). ` +
-                `Using ${exportOptions.textMaxNodesPerPass} nodes per pass.`
+              `Using ${exportOptions.textMaxNodesPerPass} nodes per pass.`,
             );
           }
         } else {
@@ -766,18 +766,18 @@ class SIMPLEFFMPEG {
             emojiClip,
             this.options.width,
             this.options.height,
-            emojiFont
+            emojiFont,
           );
           const assFilePath = path.join(
             this.options.tempDir || path.dirname(exportOptions.outputPath),
-            `.simpleffmpeg_emoji_${i}_${Date.now()}.ass`
+            `.simpleffmpeg_emoji_${i}_${Date.now()}.ass`,
           );
           try {
             fs.writeFileSync(assFilePath, assContent, "utf-8");
           } catch (writeError) {
             throw new SimpleffmpegError(
               `Failed to write temporary ASS file "${assFilePath}": ${writeError.message}`,
-              { cause: writeError }
+              { cause: writeError },
             );
           }
           this.filesToClean.push(assFilePath);
@@ -788,7 +788,7 @@ class SIMPLEFFMPEG {
           const uniqueLabel = `[outemoji${i}]`;
           const filter = assResult.filter.replace(
             assResult.finalLabel,
-            uniqueLabel
+            uniqueLabel,
           );
           filterComplex += filter + ";";
           finalVideoLabel = uniqueLabel;
@@ -810,11 +810,11 @@ class SIMPLEFFMPEG {
         ) {
           const adjustedPosition = this._adjustTimestampForTransitions(
             videoClips,
-            subClip.position || 0
+            subClip.position || 0,
           );
           const adjustedEnd = this._adjustTimestampForTransitions(
             videoClips,
-            subClip.end || 0
+            subClip.end || 0,
           );
           let adjustedWords = subClip.words;
           if (Array.isArray(subClip.words)) {
@@ -822,18 +822,18 @@ class SIMPLEFFMPEG {
               ...word,
               start: this._adjustTimestampForTransitions(
                 videoClips,
-                word.start || 0
+                word.start || 0,
               ),
               end: this._adjustTimestampForTransitions(
                 videoClips,
-                word.end || 0
+                word.end || 0,
               ),
             }));
           }
           let adjustedWordTimestamps = subClip.wordTimestamps;
           if (Array.isArray(subClip.wordTimestamps)) {
             adjustedWordTimestamps = subClip.wordTimestamps.map((ts) =>
-              this._adjustTimestampForTransitions(videoClips, ts)
+              this._adjustTimestampForTransitions(videoClips, ts),
             );
           }
           subClip = {
@@ -860,7 +860,7 @@ class SIMPLEFFMPEG {
               subClip.url,
               subClip,
               this.options.width,
-              this.options.height
+              this.options.height,
             );
           }
         } else if (subClip.mode === "karaoke") {
@@ -868,7 +868,7 @@ class SIMPLEFFMPEG {
           assContent = buildKaraokeASS(
             subClip,
             this.options.width,
-            this.options.height
+            this.options.height,
           );
         }
 
@@ -876,14 +876,14 @@ class SIMPLEFFMPEG {
         if (assContent && !assFilePath) {
           assFilePath = path.join(
             this.options.tempDir || path.dirname(exportOptions.outputPath),
-            `.simpleffmpeg_sub_${i}_${Date.now()}.ass`
+            `.simpleffmpeg_sub_${i}_${Date.now()}.ass`,
           );
           try {
             fs.writeFileSync(assFilePath, assContent, "utf-8");
           } catch (writeError) {
             throw new SimpleffmpegError(
               `Failed to write temporary ASS file "${assFilePath}": ${writeError.message}`,
-              { cause: writeError }
+              { cause: writeError },
             );
           }
           assFilesToClean.push(assFilePath);
@@ -897,7 +897,7 @@ class SIMPLEFFMPEG {
           const uniqueLabel = `[outsub${i}]`;
           const filter = assResult.filter.replace(
             assResult.finalLabel,
-            uniqueLabel
+            uniqueLabel,
           );
           filterComplex += filter + ";";
           finalVideoLabel = uniqueLabel;
@@ -913,7 +913,7 @@ class SIMPLEFFMPEG {
       const wmValidation = validateWatermarkConfig(exportOptions.watermark);
       if (!wmValidation.valid) {
         throw new Error(
-          `Watermark validation failed: ${wmValidation.errors.join(", ")}`
+          `Watermark validation failed: ${wmValidation.errors.join(", ")}`,
         );
       }
 
@@ -934,7 +934,7 @@ class SIMPLEFFMPEG {
         watermarkInputIndex,
         this.options.width,
         this.options.height,
-        totalVideoDuration
+        totalVideoDuration,
       );
 
       if (wmResult.filter) {
@@ -1048,7 +1048,7 @@ class SIMPLEFFMPEG {
     // Guard against concurrent export() calls
     if (this._isExporting) {
       throw new SimpleffmpegError(
-        "Cannot call export() while another export() is in progress. Await the previous export() call first."
+        "Cannot call export() while another export() is in progress. Await the previous export() call first.",
       );
     }
 
@@ -1082,7 +1082,7 @@ class SIMPLEFFMPEG {
     if (exportOptions.verbose) {
       console.log(
         "simple-ffmpeg: Export options:",
-        JSON.stringify(exportOptions, null, 2)
+        JSON.stringify(exportOptions, null, 2),
       );
     }
 
@@ -1091,12 +1091,12 @@ class SIMPLEFFMPEG {
       try {
         fs.writeFileSync(exportOptions.saveCommand, command, "utf8");
         console.log(
-          `simple-ffmpeg: Command saved to ${exportOptions.saveCommand}`
+          `simple-ffmpeg: Command saved to ${exportOptions.saveCommand}`,
         );
       } catch (writeError) {
         throw new SimpleffmpegError(
           `Failed to save command to "${exportOptions.saveCommand}": ${writeError.message}`,
-          { cause: writeError }
+          { cause: writeError },
         );
       }
     }
@@ -1108,7 +1108,7 @@ class SIMPLEFFMPEG {
       if (exportOptions.twoPass && exportOptions.videoBitrate && hasVideo) {
         const passLogFile = path.join(
           this.options.tempDir || path.dirname(exportOptions.outputPath),
-          `ffmpeg2pass-${Date.now()}`
+          `ffmpeg2pass-${Date.now()}`,
         );
 
         // First pass
@@ -1270,12 +1270,12 @@ class SIMPLEFFMPEG {
         fileSizeStr = formatBytes(size);
       } catch (_) {}
       console.log(
-        `simple-ffmpeg: Output -> ${exportOptions.outputPath} (${fileSizeStr})`
+        `simple-ffmpeg: Output -> ${exportOptions.outputPath} (${fileSizeStr})`,
       );
       console.log(
         `simple-ffmpeg: Export finished in ${(elapsedMs / 1000).toFixed(
-          2
-        )}s (video:${visualCount}, audio:${audioCount}, music:${musicCount}, textPasses:${passes})`
+          2,
+        )}s (video:${visualCount}, audio:${audioCount}, music:${musicCount}, textPasses:${passes})`,
       );
 
       await this._cleanup();
@@ -1360,14 +1360,14 @@ class SIMPLEFFMPEG {
 
     // Filter to visual clips (video + image + color)
     const visual = resolved.filter(
-      (c) => c.type === "video" || c.type === "image" || c.type === "color"
+      (c) => c.type === "video" || c.type === "image" || c.type === "color",
     );
 
     if (visual.length === 0) return 0;
 
     const baseSum = visual.reduce(
       (acc, c) => acc + Math.max(0, (c.end || 0) - (c.position || 0)),
-      0
+      0,
     );
 
     const transitionsOverlap = visual.reduce((acc, c) => {
@@ -1454,12 +1454,12 @@ class SIMPLEFFMPEG {
   static async snapshot(filePath, options = {}) {
     if (!filePath) {
       throw new SimpleffmpegError(
-        "snapshot() requires a filePath as the first argument"
+        "snapshot() requires a filePath as the first argument",
       );
     }
     if (!options.outputPath) {
       throw new SimpleffmpegError(
-        "snapshot() requires options.outputPath to be specified"
+        "snapshot() requires options.outputPath to be specified",
       );
     }
 
@@ -1531,7 +1531,7 @@ class SIMPLEFFMPEG {
   static async extractKeyframes(filePath, options = {}) {
     if (!filePath) {
       throw new SimpleffmpegError(
-        "extractKeyframes() requires a filePath as the first argument"
+        "extractKeyframes() requires a filePath as the first argument",
       );
     }
 
@@ -1550,13 +1550,13 @@ class SIMPLEFFMPEG {
 
     if (mode !== "scene-change" && mode !== "interval") {
       throw new SimpleffmpegError(
-        `extractKeyframes() invalid mode: "${mode}". Must be "scene-change" or "interval".`
+        `extractKeyframes() invalid mode: "${mode}". Must be "scene-change" or "interval".`,
       );
     }
 
     if (format !== "jpeg" && format !== "png") {
       throw new SimpleffmpegError(
-        `extractKeyframes() invalid format: "${format}". Must be "jpeg" or "png".`
+        `extractKeyframes() invalid format: "${format}". Must be "jpeg" or "png".`,
       );
     }
 
@@ -1567,7 +1567,7 @@ class SIMPLEFFMPEG {
         sceneThreshold > 1)
     ) {
       throw new SimpleffmpegError(
-        "extractKeyframes() sceneThreshold must be a number between 0 and 1."
+        "extractKeyframes() sceneThreshold must be a number between 0 and 1.",
       );
     }
 
@@ -1576,19 +1576,19 @@ class SIMPLEFFMPEG {
       (typeof intervalSeconds !== "number" || intervalSeconds <= 0)
     ) {
       throw new SimpleffmpegError(
-        "extractKeyframes() intervalSeconds must be a positive number."
+        "extractKeyframes() intervalSeconds must be a positive number.",
       );
     }
 
     if (maxFrames != null && (!Number.isInteger(maxFrames) || maxFrames < 1)) {
       throw new SimpleffmpegError(
-        "extractKeyframes() maxFrames must be a positive integer."
+        "extractKeyframes() maxFrames must be a positive integer.",
       );
     }
 
     if (tempDir != null && typeof tempDir === "string" && !fs.existsSync(tempDir)) {
       throw new SimpleffmpegError(
-        `extractKeyframes() tempDir "${tempDir}" does not exist.`
+        `extractKeyframes() tempDir "${tempDir}" does not exist.`,
       );
     }
 
@@ -1602,7 +1602,7 @@ class SIMPLEFFMPEG {
     } else {
       const tmpBase = tempDir || os.tmpdir();
       targetDir = await fsPromises.mkdtemp(
-        path.join(tmpBase, "simpleffmpeg-keyframes-")
+        path.join(tmpBase, "simpleffmpeg-keyframes-"),
       );
     }
 
@@ -1637,7 +1637,7 @@ class SIMPLEFFMPEG {
 
     if (useTemp) {
       const buffers = await Promise.all(
-        files.map((f) => fsPromises.readFile(path.join(targetDir, f)))
+        files.map((f) => fsPromises.readFile(path.join(targetDir, f))),
       );
       await fsPromises
         .rm(targetDir, { recursive: true, force: true })

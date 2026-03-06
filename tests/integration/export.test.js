@@ -38,7 +38,7 @@ function getVideoDuration(filepath) {
   try {
     const result = execSync(
       `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filepath}"`,
-      { encoding: "utf8" }
+      { encoding: "utf8" },
     );
     return parseFloat(result.trim());
   } catch {
@@ -185,7 +185,7 @@ describe("Integration Tests", () => {
       expect(progressCalls.length).toBeGreaterThan(0);
       // At least one progress call should have some data
       const hasProgressData = progressCalls.some(
-        (p) => p.frame !== undefined || p.timeProcessed !== undefined
+        (p) => p.frame !== undefined || p.timeProcessed !== undefined,
       );
       expect(hasProgressData).toBe(true);
     }, 30000);
@@ -509,7 +509,7 @@ describe("Integration Tests", () => {
       try {
         const info = execSync(
           `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
-          { encoding: "utf8" }
+          { encoding: "utf8" },
         );
         const [width] = info.trim().split(",").map(Number);
         expect(width).toBe(160);
@@ -520,13 +520,13 @@ describe("Integration Tests", () => {
 
     it("should throw if filePath is missing", async () => {
       await expect(
-        SIMPLEFFMPEG.snapshot(null, { outputPath: "./out.png" })
+        SIMPLEFFMPEG.snapshot(null, { outputPath: "./out.png" }),
       ).rejects.toThrow(/filePath/);
     });
 
     it("should throw if outputPath is missing", async () => {
       await expect(
-        SIMPLEFFMPEG.snapshot("./video.mp4", {})
+        SIMPLEFFMPEG.snapshot("./video.mp4", {}),
       ).rejects.toThrow(/outputPath/);
     });
   });
@@ -585,7 +585,7 @@ describe("Integration Tests", () => {
         try {
           const info = execSync(
             `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
-            { encoding: "utf8" }
+            { encoding: "utf8" },
           );
           const [width, height] = info.trim().split(",").map(Number);
           expect(width).toBe(320);
@@ -624,7 +624,7 @@ describe("Integration Tests", () => {
         try {
           const info = execSync(
             `ffprobe -v error -show_entries format_tags=title,artist -of json "${outputPath}"`,
-            { encoding: "utf8" }
+            { encoding: "utf8" },
           );
           const data = JSON.parse(info);
           expect(data.format.tags.title).toBe("Test Video");
@@ -689,7 +689,7 @@ describe("Integration Tests", () => {
         expect(cmdContent).toContain("ffmpeg");
         expect(cmdContent).toContain("test-savecmd.mp4");
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
@@ -717,7 +717,7 @@ describe("Integration Tests", () => {
         try {
           const info = execSync(
             `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
-            { encoding: "utf8" }
+            { encoding: "utf8" },
           );
           const [width, height] = info.trim().split(",").map(Number);
           expect(width).toBe(1080);
@@ -749,7 +749,7 @@ describe("Integration Tests", () => {
         try {
           const info = execSync(
             `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
-            { encoding: "utf8" }
+            { encoding: "utf8" },
           );
           const [width, height] = info.trim().split(",").map(Number);
           expect(width).toBe(1920);
@@ -781,7 +781,7 @@ describe("Integration Tests", () => {
         try {
           const info = execSync(
             `ffprobe -v error -select_streams v:0 -show_entries stream=width,height -of csv=p=0 "${outputPath}"`,
-            { encoding: "utf8" }
+            { encoding: "utf8" },
           );
           const [width, height] = info.trim().split(",").map(Number);
           expect(width).toBe(1080);
@@ -790,7 +790,7 @@ describe("Integration Tests", () => {
           // ffprobe may not be available
         }
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
@@ -908,7 +908,7 @@ describe("Integration Tests", () => {
         expect(result).toBe(outputPath);
         expect(fs.existsSync(outputPath)).toBe(true);
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("watermarks", () => {
@@ -1120,7 +1120,7 @@ First subtitle
 2
 00:00:01,800 --> 00:00:02,800
 Second subtitle
-`
+`,
           );
         }
 
@@ -1162,7 +1162,7 @@ First cue
 
 00:01.800 --> 00:02.800
 Second cue
-`
+`,
           );
         }
 
@@ -1203,7 +1203,7 @@ First subtitle
 2
 00:00:01,800 --> 00:00:02,800
 Second subtitle
-`
+`,
           );
         }
 
@@ -1270,7 +1270,7 @@ Second subtitle
         expect(result).toBe(outputPath);
         expect(fs.existsSync(outputPath)).toBe(true);
       }, 30000);
-    }
+    },
   );
 
   // ========================================================================
@@ -1774,7 +1774,7 @@ Second subtitle
         expect(result).toBe(outputPath);
         expect(fs.existsSync(outputPath)).toBe(true);
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
@@ -1844,7 +1844,7 @@ Second subtitle
         expect(duration).toBeGreaterThan(3.0);
         expect(duration).toBeLessThan(4.0);
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
@@ -1909,9 +1909,8 @@ Second subtitle
 
         expect(preview.filterComplex).toContain("volume=0,");
       });
-    }
+    },
   );
-
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())(
     "error details",
@@ -1948,7 +1947,7 @@ Second subtitle
           expect(typeof error.details.command).toBe("string");
         }
       }, 30000);
-    }
+    },
   );
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("cancellation", () => {
@@ -1998,7 +1997,7 @@ Second subtitle
       ]);
 
       await expect(
-        project.export({ outputPath, signal: controller.signal })
+        project.export({ outputPath, signal: controller.signal }),
       ).rejects.toThrow(/cancelled/i);
     }, 30000);
   });

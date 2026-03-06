@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 const { buildBackgroundMusicMix } = await import(
-  "../../src/ffmpeg/bgm_builder.js"
+  "../../src/ffmpeg/bgm_builder.js",
 );
 
 // Helper to create a mock project
@@ -154,14 +154,14 @@ describe("buildBackgroundMusicMix", () => {
         project,
         [bgm1, bgm2],
         "[outa]",
-        10
+        10,
       );
 
       // 1 anchor + 1 existing + 2 bgm = 4 inputs
       expect(result.filter).toContain("amix=inputs=4");
       // 3 real inputs → each gets weight 1/3
       expect(result.filter).toContain(
-        "weights='0 0.333333 0.333333 0.333333'"
+        "weights='0 0.333333 0.333333 0.333333'",
       );
     });
 

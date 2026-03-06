@@ -90,13 +90,13 @@ describe("Platform Presets", () => {
 
     it("should throw if tempDir does not exist", () => {
       expect(() => new SIMPLEFFMPEG({ tempDir: "/nonexistent/path" })).toThrow(
-        /does not exist/
+        /does not exist/,
       );
     });
 
     it("should throw if tempDir is not a string", () => {
       expect(() => new SIMPLEFFMPEG({ tempDir: 123 })).toThrow(
-        /must be a string/
+        /must be a string/,
       );
     });
 

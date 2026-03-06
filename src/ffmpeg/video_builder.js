@@ -89,7 +89,7 @@ function resolveKenBurnsOptions(kenBurns, width, height, sourceWidth, sourceHeig
     startZoom = DEFAULT_PAN_ZOOM;
     endZoom = DEFAULT_PAN_ZOOM;
 
-    let panAxis = "horizontal";
+    let panAxis;
     const hasSourceDims =
       typeof sourceWidth === "number" &&
       typeof sourceHeight === "number" &&
@@ -269,7 +269,7 @@ function buildVideoFilter(project, videoClips) {
           width,
           height,
           clip.width,
-          clip.height
+          clip.height,
         );
       const zoomExpr = buildZoomExpr(startZoom, endZoom, framesMinusOne, easing);
       const xPosExpr = buildPositionExpr(startX, endX, framesMinusOne, easing);
@@ -287,7 +287,8 @@ function buildVideoFilter(project, videoClips) {
       if (kbFit === "blur-fill") {
         const { cw, ch } = computeContainedSize(clip.width, clip.height, width, height);
         const sigma = typeof clip.blurIntensity === "number" && Number.isFinite(clip.blurIntensity) && clip.blurIntensity > 0
-          ? clip.blurIntensity : 40;
+          ? clip.blurIntensity
+          : 40;
         const overscanCW = computeOverscanWidth(cw, startZoom, endZoom);
         const cs = `${cw}x${ch}`;
         const kbbgLabel = `[kbbg${videoIndex}]`;
@@ -314,7 +315,8 @@ function buildVideoFilter(project, videoClips) {
 
       if (fit === "blur-fill") {
         const sigma = typeof clip.blurIntensity === "number" && Number.isFinite(clip.blurIntensity) && clip.blurIntensity > 0
-          ? clip.blurIntensity : 40;
+          ? clip.blurIntensity
+          : 40;
         const bgLabel = `[bg${videoIndex}]`;
         const fgLabel = `[fg${videoIndex}]`;
         const bgrLabel = `[bgr${videoIndex}]`;

@@ -121,7 +121,7 @@ try {
   generateFixtures();
 } catch {
   console.error(
-    "FFmpeg not found. Please install FFmpeg to generate test fixtures."
+    "FFmpeg not found. Please install FFmpeg to generate test fixtures.",
   );
   console.error("  macOS: brew install ffmpeg");
   console.error("  Ubuntu/Debian: apt-get install ffmpeg");

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 
 const stringsModule = await import("../../src/ffmpeg/strings.js");
 const {
@@ -7,8 +7,6 @@ const {
   hasEmoji,
   stripEmoji,
   parseFontFamily,
-  escapeFilePath,
-  escapeTextFilePath,
 } = stringsModule;
 
 const { parseFFmpegCommand } = await import("../../src/lib/utils.js");
@@ -29,7 +27,7 @@ describe("Strings - FFmpeg escaping utilities", () => {
     });
 
     it("should detect double quotes", () => {
-      expect(hasProblematicChars('say "hi"')).toBe(true);
+      expect(hasProblematicChars("say \"hi\"")).toBe(true);
     });
 
     it("should detect single quotes (apostrophes)", () => {

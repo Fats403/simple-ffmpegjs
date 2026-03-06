@@ -114,7 +114,7 @@ async function probeMedia(filePath) {
   } catch (error) {
     throw new MediaNotFoundError(
       `Failed to probe "${filePath}": ${error.message}`,
-      { path: filePath }
+      { path: filePath },
     );
   }
 
@@ -124,14 +124,14 @@ async function probeMedia(filePath) {
   } catch (parseError) {
     throw new MediaNotFoundError(
       `Invalid JSON response from ffprobe for "${filePath}": ${parseError.message}`,
-      { path: filePath }
+      { path: filePath },
     );
   }
 
   if (!metadata || !Array.isArray(metadata.streams)) {
     throw new MediaNotFoundError(
       `Invalid metadata structure for "${filePath}": missing or invalid 'streams' array`,
-      { path: filePath }
+      { path: filePath },
     );
   }
 
@@ -147,8 +147,8 @@ async function probeMedia(filePath) {
   const duration = Number.isFinite(formatDuration)
     ? formatDuration
     : Number.isFinite(streamDuration)
-    ? streamDuration
-    : null;
+      ? streamDuration
+      : null;
 
   // ── FPS ─────────────────────────────────────────────────────────────────
   // Prefer avg_frame_rate, fall back to r_frame_rate

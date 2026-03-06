@@ -169,8 +169,8 @@ function validateMediaUrlExtension(clip, clipPath, errors) {
         ValidationCodes.INVALID_FORMAT,
         `${clipPath}.url`,
         `URL extension '${ext || "(none)"}' does not match clip type '${clip.type}'. Expected a ${expectedLabel} file extension, not ${oppositeLabel}.`,
-        clip.url
-      )
+        clip.url,
+      ),
     );
   }
 }
@@ -183,8 +183,8 @@ function validateFiniteNumber(value, path, errors, opts = {}) {
         ValidationCodes.INVALID_VALUE,
         path,
         "Must be a finite number",
-        value
-      )
+        value,
+      ),
     );
     return;
   }
@@ -196,8 +196,8 @@ function validateFiniteNumber(value, path, errors, opts = {}) {
           ValidationCodes.INVALID_RANGE,
           path,
           minInclusive ? `Must be >= ${min}` : `Must be > ${min}`,
-          value
-        )
+          value,
+        ),
       );
       return;
     }
@@ -210,8 +210,8 @@ function validateFiniteNumber(value, path, errors, opts = {}) {
           ValidationCodes.INVALID_RANGE,
           path,
           maxInclusive ? `Must be <= ${max}` : `Must be < ${max}`,
-          value
-        )
+          value,
+        ),
       );
     }
   }
@@ -224,8 +224,8 @@ function validateEffectClip(clip, path, errors) {
         ValidationCodes.INVALID_VALUE,
         `${path}.effect`,
         `Invalid effect '${clip.effect}'. Expected: ${EFFECT_TYPES.join(", ")}`,
-        clip.effect
-      )
+        clip.effect,
+      ),
     );
   }
 
@@ -244,8 +244,8 @@ function validateEffectClip(clip, path, errors) {
           ValidationCodes.INVALID_TIMELINE,
           `${path}`,
           `fadeIn + fadeOut (${fadeTotal}) must be <= clip duration (${duration})`,
-          { fadeIn: clip.fadeIn || 0, fadeOut: clip.fadeOut || 0, duration }
-        )
+          { fadeIn: clip.fadeIn || 0, fadeOut: clip.fadeOut || 0, duration },
+        ),
       );
     }
   }
@@ -260,8 +260,8 @@ function validateEffectClip(clip, path, errors) {
         ValidationCodes.MISSING_REQUIRED,
         `${path}.params`,
         "params is required and must be an object for effect clips",
-        clip.params
-      )
+        clip.params,
+      ),
     );
     return;
   }
@@ -294,8 +294,8 @@ function validateEffectClip(clip, path, errors) {
           ValidationCodes.INVALID_VALUE,
           `${path}.params.temporal`,
           "temporal must be a boolean",
-          params.temporal
-        )
+          params.temporal,
+        ),
       );
     }
   } else if (clip.effect === "gaussianBlur") {
@@ -366,8 +366,8 @@ function validateEffectClip(clip, path, errors) {
           ValidationCodes.INVALID_VALUE,
           `${path}.params.color`,
           "color must be a string",
-          params.color
-        )
+          params.color,
+        ),
       );
     }
   }
@@ -402,8 +402,8 @@ function validateClip(clip, index, options = {}) {
         ValidationCodes.MISSING_REQUIRED,
         `${path}.type`,
         "Clip type is required",
-        undefined
-      )
+        undefined,
+      ),
     );
     return { errors, warnings }; // Can't validate further without type
   }
@@ -414,8 +414,8 @@ function validateClip(clip, index, options = {}) {
         ValidationCodes.INVALID_TYPE,
         `${path}.type`,
         `Invalid clip type '${clip.type}'. Expected: ${validTypes.join(", ")}`,
-        clip.type
-      )
+        clip.type,
+      ),
     );
     return { errors, warnings }; // Can't validate further with invalid type
   }
@@ -428,8 +428,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.duration`,
           "Duration must be a number",
-          clip.duration
-        )
+          clip.duration,
+        ),
       );
     } else if (!Number.isFinite(clip.duration)) {
       errors.push(
@@ -437,8 +437,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.duration`,
           "Duration must be a finite number (not NaN or Infinity)",
-          clip.duration
-        )
+          clip.duration,
+        ),
       );
     } else if (clip.duration <= 0) {
       errors.push(
@@ -446,8 +446,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_RANGE,
           `${path}.duration`,
           "Duration must be greater than 0",
-          clip.duration
-        )
+          clip.duration,
+        ),
       );
     }
     // Conflict check: duration + end both set
@@ -457,15 +457,15 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}`,
           "Cannot specify both 'duration' and 'end'. Use one or the other.",
-          { duration: clip.duration, end: clip.end }
-        )
+          { duration: clip.duration, end: clip.end },
+        ),
       );
     }
   }
 
   // Types that require position/end on timeline
   const requiresTimeline = ["video", "audio", "text", "image", "color", "effect"].includes(
-    clip.type
+    clip.type,
   );
 
   if (requiresTimeline) {
@@ -475,8 +475,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.MISSING_REQUIRED,
           `${path}.position`,
           "Position is required for this clip type",
-          clip.position
-        )
+          clip.position,
+        ),
       );
     } else if (!Number.isFinite(clip.position)) {
       errors.push(
@@ -484,8 +484,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.position`,
           "Position must be a finite number (not NaN or Infinity)",
-          clip.position
-        )
+          clip.position,
+        ),
       );
     } else if (clip.position < 0) {
       errors.push(
@@ -493,8 +493,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_RANGE,
           `${path}.position`,
           "Position must be >= 0",
-          clip.position
-        )
+          clip.position,
+        ),
       );
     }
 
@@ -504,8 +504,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.MISSING_REQUIRED,
           `${path}.end`,
           "End time is required for this clip type",
-          clip.end
-        )
+          clip.end,
+        ),
       );
     } else if (!Number.isFinite(clip.end)) {
       errors.push(
@@ -513,8 +513,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.end`,
           "End time must be a finite number (not NaN or Infinity)",
-          clip.end
-        )
+          clip.end,
+        ),
       );
     } else if (Number.isFinite(clip.position) && clip.end <= clip.position) {
       errors.push(
@@ -522,8 +522,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_TIMELINE,
           `${path}.end`,
           `End time (${clip.end}) must be greater than position (${clip.position})`,
-          clip.end
-        )
+          clip.end,
+        ),
       );
     }
   } else {
@@ -535,8 +535,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.position`,
             "Position must be a finite number (not NaN or Infinity)",
-            clip.position
-          )
+            clip.position,
+          ),
         );
       } else if (clip.position < 0) {
         errors.push(
@@ -544,8 +544,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_RANGE,
             `${path}.position`,
             "Position must be >= 0",
-            clip.position
-          )
+            clip.position,
+          ),
         );
       }
     }
@@ -556,8 +556,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.end`,
             "End time must be a finite number (not NaN or Infinity)",
-            clip.end
-          )
+            clip.end,
+          ),
         );
       } else if (
         typeof clip.position === "number" &&
@@ -569,8 +569,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_TIMELINE,
             `${path}.end`,
             `End time (${clip.end}) must be greater than position (${clip.position})`,
-            clip.end
-          )
+            clip.end,
+          ),
         );
       }
     }
@@ -585,8 +585,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.MISSING_REQUIRED,
           `${path}.url`,
           "URL is required for media clips",
-          clip.url
-        )
+          clip.url,
+        ),
       );
     } else if (!skipFileChecks) {
       try {
@@ -596,8 +596,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.FILE_NOT_FOUND,
               `${path}.url`,
               `File not found: '${clip.url}'`,
-              clip.url
-            )
+              clip.url,
+            ),
           );
         }
       } catch (_) {}
@@ -612,8 +612,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.cutFrom`,
             "cutFrom must be a finite number (not NaN or Infinity)",
-            clip.cutFrom
-          )
+            clip.cutFrom,
+          ),
         );
       } else if (clip.cutFrom < 0) {
         errors.push(
@@ -621,8 +621,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_RANGE,
             `${path}.cutFrom`,
             "cutFrom must be >= 0",
-            clip.cutFrom
-          )
+            clip.cutFrom,
+          ),
         );
       }
     }
@@ -637,8 +637,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${path}.volume`,
               "Volume must be a finite number (not NaN or Infinity)",
-              clip.volume
-            )
+              clip.volume,
+            ),
           );
         } else if (clip.volume < 0) {
           errors.push(
@@ -646,8 +646,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_RANGE,
               `${path}.volume`,
               "Volume must be >= 0",
-              clip.volume
-            )
+              clip.volume,
+            ),
           );
         }
       }
@@ -667,8 +667,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.MISSING_REQUIRED,
               `${wordPath}.text`,
               "Word text is required",
-              w.text
-            )
+              w.text,
+            ),
           );
         }
 
@@ -678,8 +678,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.MISSING_REQUIRED,
               `${wordPath}.start`,
               "Word start time is required",
-              w.start
-            )
+              w.start,
+            ),
           );
         } else if (!Number.isFinite(w.start)) {
           errors.push(
@@ -687,8 +687,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${wordPath}.start`,
               "Word start time must be a finite number (not NaN or Infinity)",
-              w.start
-            )
+              w.start,
+            ),
           );
         }
 
@@ -698,8 +698,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.MISSING_REQUIRED,
               `${wordPath}.end`,
               "Word end time is required",
-              w.end
-            )
+              w.end,
+            ),
           );
         } else if (!Number.isFinite(w.end)) {
           errors.push(
@@ -707,8 +707,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${wordPath}.end`,
               "Word end time must be a finite number (not NaN or Infinity)",
-              w.end
-            )
+              w.end,
+            ),
           );
         }
 
@@ -722,8 +722,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_WORD_TIMING,
               `${wordPath}.end`,
               `Word end (${w.end}) must be greater than start (${w.start})`,
-              w.end
-            )
+              w.end,
+            ),
           );
         }
 
@@ -740,8 +740,8 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.OUTSIDE_BOUNDS,
                 wordPath,
                 `Word timing [${w.start}, ${w.end}] outside clip bounds [${clip.position}, ${clip.end}]`,
-                { start: w.start, end: w.end }
-              )
+                { start: w.start, end: w.end },
+              ),
             );
           }
         }
@@ -758,8 +758,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${path}.wordTimestamps[${i}]`,
               "Word timestamps must be numbers",
-              ts[i]
-            )
+              ts[i],
+            ),
           );
           break;
         }
@@ -769,8 +769,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_WORD_TIMING,
               `${path}.wordTimestamps[${i}]`,
               `Timestamps must be non-decreasing (${ts[i - 1]} -> ${ts[i]})`,
-              ts[i]
-            )
+              ts[i],
+            ),
           );
           break;
         }
@@ -786,8 +786,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.FILE_NOT_FOUND,
               `${path}.fontFile`,
               `Font file not found: '${clip.fontFile}'. Will fall back to fontFamily.`,
-              clip.fontFile
-            )
+              clip.fontFile,
+            ),
           );
         }
       } catch (_) {}
@@ -804,8 +804,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.text`,
           "Multiline text is only supported in karaoke mode. Newlines will be replaced with spaces.",
-          clip.text
-        )
+          clip.text,
+        ),
       );
     }
 
@@ -817,8 +817,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.mode`,
           `Invalid mode '${clip.mode}'. Expected: ${validModes.join(", ")}`,
-          clip.mode
-        )
+          clip.mode,
+        ),
       );
     }
 
@@ -833,8 +833,8 @@ function validateClip(clip, index, options = {}) {
             `Invalid highlightStyle '${
               clip.highlightStyle
             }'. Expected: ${validStyles.join(", ")}`,
-            clip.highlightStyle
-          )
+            clip.highlightStyle,
+          ),
         );
       }
     }
@@ -863,8 +863,8 @@ function validateClip(clip, index, options = {}) {
             `Invalid animation type '${
               clip.animation.type
             }'. Expected: ${validAnimations.join(", ")}`,
-            clip.animation.type
-          )
+            clip.animation.type,
+          ),
         );
       }
     }
@@ -885,8 +885,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${path}.${prop}`,
               `Invalid color "${clip[prop]}". Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`,
-              clip[prop]
-            )
+              clip[prop],
+            ),
           );
         }
       }
@@ -901,8 +901,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.MISSING_REQUIRED,
           `${path}.url`,
           "URL is required for subtitle clips",
-          clip.url
-        )
+          clip.url,
+        ),
       );
     } else {
       // Check file extension
@@ -916,8 +916,8 @@ function validateClip(clip, index, options = {}) {
             `Unsupported subtitle format '.${ext}'. Expected: ${validExts
               .map((e) => "." + e)
               .join(", ")}`,
-            clip.url
-          )
+            clip.url,
+          ),
         );
       }
 
@@ -930,8 +930,8 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.FILE_NOT_FOUND,
                 `${path}.url`,
                 `Subtitle file not found: '${clip.url}'`,
-                clip.url
-              )
+                clip.url,
+              ),
             );
           }
         } catch (_) {}
@@ -945,8 +945,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_RANGE,
           `${path}.position`,
           "Subtitle position offset must be >= 0",
-          clip.position
-        )
+          clip.position,
+        ),
       );
     }
 
@@ -960,8 +960,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${path}.${prop}`,
               `Invalid color "${clip[prop]}". Use a named color (e.g. "white", "red"), hex (#RRGGBB), or color@alpha (e.g. "black@0.5").`,
-              clip[prop]
-            )
+              clip[prop],
+            ),
           );
         }
       }
@@ -978,8 +978,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.imageFit`,
             `Invalid imageFit '${clip.imageFit}'. Expected: ${validImageFit.join(", ")}`,
-            clip.imageFit
-          )
+            clip.imageFit,
+          ),
         );
       }
     }
@@ -991,8 +991,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_TYPE,
             `${path}.blurIntensity`,
             `blurIntensity must be a finite number`,
-            clip.blurIntensity
-          )
+            clip.blurIntensity,
+          ),
         );
       } else if (clip.blurIntensity <= 0) {
         errors.push(
@@ -1000,8 +1000,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_RANGE,
             `${path}.blurIntensity`,
             `blurIntensity must be > 0`,
-            clip.blurIntensity
-          )
+            clip.blurIntensity,
+          ),
         );
       }
     }
@@ -1027,10 +1027,10 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.kenBurns`,
             `Invalid kenBurns effect '${kbType}'. Expected: ${validKenBurns.join(
-              ", "
+              ", ",
             )}`,
-            kbType
-          )
+            kbType,
+          ),
         );
       }
 
@@ -1054,10 +1054,10 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.INVALID_VALUE,
                 `${path}.kenBurns.anchor`,
                 `Invalid kenBurns anchor '${anchor}'. Expected: ${validAnchors.join(
-                  ", "
+                  ", ",
                 )}`,
-                anchor
-              )
+                anchor,
+              ),
             );
           }
         }
@@ -1070,10 +1070,10 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.INVALID_VALUE,
                 `${path}.kenBurns.easing`,
                 `Invalid kenBurns easing '${easing}'. Expected: ${validEasing.join(
-                  ", "
+                  ", ",
                 )}`,
-                easing
-              )
+                easing,
+              ),
             );
           }
         }
@@ -1097,8 +1097,8 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.INVALID_TYPE,
                 `${path}.kenBurns.${field}`,
                 `kenBurns.${field} must be a finite number`,
-                value
-              )
+                value,
+              ),
             );
             return;
           }
@@ -1109,8 +1109,8 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.INVALID_RANGE,
                 `${path}.kenBurns.${field}`,
                 `kenBurns.${field} must be > 0`,
-                value
-              )
+                value,
+              ),
             );
           }
 
@@ -1119,15 +1119,15 @@ function validateClip(clip, index, options = {}) {
               field === "startY" ||
               field === "endX" ||
               field === "endY") &&
-            (value < 0 || value > 1)
+              (value < 0 || value > 1)
           ) {
             errors.push(
               createIssue(
                 ValidationCodes.INVALID_RANGE,
                 `${path}.kenBurns.${field}`,
                 `kenBurns.${field} must be between 0 and 1`,
-                value
-              )
+                value,
+              ),
             );
           }
         });
@@ -1149,7 +1149,7 @@ function validateClip(clip, index, options = {}) {
             strictKenBurns
               ? `Image dimensions (${clip.width}x${clip.height}) are smaller than project dimensions (${projectWidth}x${projectHeight}). Ken Burns effects require images at least as large as the output.`
               : `Image (${clip.width}x${clip.height}) will be upscaled to ${projectWidth}x${projectHeight} for Ken Burns effect. Quality may be reduced.`,
-            { width: clip.width, height: clip.height }
+            { width: clip.width, height: clip.height },
           );
 
           if (strictKenBurns) {
@@ -1166,8 +1166,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}`,
             `Ken Burns effect on image - ensure source image is at least ${projectWidth}x${projectHeight}px for best quality (smaller images will be upscaled).`,
-            clip.url
-          )
+            clip.url,
+          ),
         );
       }
     }
@@ -1181,8 +1181,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.MISSING_REQUIRED,
           `${path}.color`,
           "Color is required for color clips",
-          clip.color
-        )
+          clip.color,
+        ),
       );
     } else if (typeof clip.color === "string") {
       if (!isValidFFmpegColor(clip.color)) {
@@ -1191,8 +1191,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.color`,
             `Invalid color "${clip.color}". Use a named color (e.g. "black", "navy"), hex (#RRGGBB, 0xRRGGBB), or "random".`,
-            clip.color
-          )
+            clip.color,
+          ),
         );
       }
     } else if (typeof clip.color === "object" && clip.color !== null) {
@@ -1203,8 +1203,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.color.type`,
             `Invalid gradient type '${clip.color.type}'. Expected: ${validGradientTypes.join(", ")}`,
-            clip.color.type
-          )
+            clip.color.type,
+          ),
         );
       }
       if (!Array.isArray(clip.color.colors) || clip.color.colors.length < 2) {
@@ -1213,8 +1213,8 @@ function validateClip(clip, index, options = {}) {
             ValidationCodes.INVALID_VALUE,
             `${path}.color.colors`,
             "Gradient colors must be an array of at least 2 color strings",
-            clip.color.colors
-          )
+            clip.color.colors,
+          ),
         );
       } else {
         clip.color.colors.forEach((c, ci) => {
@@ -1224,8 +1224,8 @@ function validateClip(clip, index, options = {}) {
                 ValidationCodes.INVALID_VALUE,
                 `${path}.color.colors[${ci}]`,
                 `Invalid gradient color "${c}". Use a named color (e.g. "black", "navy"), hex (#RRGGBB), or "random".`,
-                c
-              )
+                c,
+              ),
             );
           }
         });
@@ -1238,8 +1238,8 @@ function validateClip(clip, index, options = {}) {
               ValidationCodes.INVALID_VALUE,
               `${path}.color.direction`,
               `Invalid gradient direction '${clip.color.direction}'. Expected: "vertical", "horizontal", or a number (angle in degrees)`,
-              clip.color.direction
-            )
+              clip.color.direction,
+            ),
           );
         }
       }
@@ -1249,8 +1249,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.color`,
           "Color must be a string (flat color) or an object (gradient spec)",
-          clip.color
-        )
+          clip.color,
+        ),
       );
     }
   }
@@ -1268,8 +1268,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.transition.duration`,
           "Transition duration must be a number",
-          clip.transition.duration
-        )
+          clip.transition.duration,
+        ),
       );
     } else if (!Number.isFinite(clip.transition.duration)) {
       errors.push(
@@ -1277,8 +1277,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.transition.duration`,
           "Transition duration must be a finite number (not NaN or Infinity)",
-          clip.transition.duration
-        )
+          clip.transition.duration,
+        ),
       );
     } else if (clip.transition.duration <= 0) {
       errors.push(
@@ -1286,8 +1286,8 @@ function validateClip(clip, index, options = {}) {
           ValidationCodes.INVALID_VALUE,
           `${path}.transition.duration`,
           "Transition duration must be a positive number",
-          clip.transition.duration
-        )
+          clip.transition.duration,
+        ),
       );
     }
   }
@@ -1317,7 +1317,7 @@ function validateTimelineGaps(clips) {
     .filter(({ clip }) => clip.type === "video" || clip.type === "image" || clip.type === "color")
     .filter(
       ({ clip }) =>
-        typeof clip.position === "number" && typeof clip.end === "number"
+        typeof clip.position === "number" && typeof clip.end === "number",
     )
     .sort((a, b) => a.clip.position - b.clip.position);
 
@@ -1330,15 +1330,15 @@ function validateTimelineGaps(clips) {
           ValidationCodes.TIMELINE_GAP,
           "timeline",
           `Gap at start of visual timeline [0, ${gap.end.toFixed(
-            3
+            3,
           )}s]. If intentional, fill it with a { type: "color" } clip. Otherwise, start your first clip at position 0.`,
-          { start: gap.start, end: gap.end }
-        )
+          { start: gap.start, end: gap.end },
+        ),
       );
     } else {
       // Find the surrounding clip indices for a helpful message
-      const before = visual.filter(v => v.clip.end <= gap.start + 1e-3);
-      const after = visual.filter(v => v.clip.position >= gap.end - 1e-3);
+      const before = visual.filter((v) => v.clip.end <= gap.start + 1e-3);
+      const after = visual.filter((v) => v.clip.position >= gap.end - 1e-3);
       const prevIdx = before.length > 0 ? before[before.length - 1].index : "?";
       const nextIdx = after.length > 0 ? after[0].index : "?";
 
@@ -1347,10 +1347,10 @@ function validateTimelineGaps(clips) {
           ValidationCodes.TIMELINE_GAP,
           "timeline",
           `Gap in visual timeline [${gap.start.toFixed(3)}s, ${gap.end.toFixed(
-            3
+            3,
           )}s] between clips[${prevIdx}] and clips[${nextIdx}]. If intentional, fill it with a { type: "color" } clip. Otherwise, adjust clip positions to remove the gap.`,
-          { start: gap.start, end: gap.end }
-        )
+          { start: gap.start, end: gap.end },
+        ),
       );
     }
   }
@@ -1377,8 +1377,8 @@ function validateConfig(clips, options = {}) {
         ValidationCodes.INVALID_TYPE,
         "clips",
         "Clips must be an array",
-        typeof clips
-      )
+        typeof clips,
+      ),
     );
     return { valid: false, errors: allErrors, warnings: allWarnings };
   }
@@ -1390,8 +1390,8 @@ function validateConfig(clips, options = {}) {
         ValidationCodes.MISSING_REQUIRED,
         "clips",
         "At least one clip is required",
-        []
-      )
+        [],
+      ),
     );
     return { valid: false, errors: allErrors, warnings: allWarnings };
   }

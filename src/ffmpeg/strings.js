@@ -8,7 +8,7 @@ function escapeFilePath(filePath) {
   if (typeof filePath !== "string") return "";
   // Escape backslashes first, then double quotes
   // This makes the path safe for use inside double-quoted shell strings
-  return filePath.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return filePath.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
 }
 
 /**
@@ -22,7 +22,7 @@ function hasProblematicChars(text) {
   // support \' inside single-quoted strings — ' always ends the quoted value.
   // Non-ASCII characters are also routed to textfile to avoid parser issues
   // with UTF-8 inside filter_complex.
-  return /[,;{}\[\]"']/.test(text) || /[^\x20-\x7E]/.test(text);
+  return /[,;{}[\]"']/.test(text) || /[^\x20-\x7E]/.test(text);
 }
 
 function escapeDrawtextText(text) {
@@ -47,7 +47,7 @@ function escapeDrawtextText(text) {
   // then processed by level 2 as escape sequences: \\ → \ and \: → :
   return text
     .replace(/\\/g, "\\\\") // Escape backslashes (level 2 decodes \\ → \)
-    .replace(/'/g, "'\\\\\\''" ) // End quote, \\' (two-level escape), re-open quote
+    .replace(/'/g, "'\\\\\\''") // End quote, \\' (two-level escape), re-open quote
     .replace(/:/g, "\\:") // Escape colons (level 2 decodes \: → :)
     .replace(/\n/g, " ") // Replace newlines with space (multiline not supported)
     .replace(/\r/g, ""); // Remove carriage returns
@@ -64,7 +64,7 @@ function escapeTextFilePath(filePath) {
   if (typeof filePath !== "string") return "";
   return filePath
     .replace(/\\/g, "/") // Convert backslashes to forward slashes
-    .replace(/'/g, "'\\\\\\''" ) // Two-level apostrophe escape (same as escapeDrawtextText)
+    .replace(/'/g, "'\\\\\\''") // Two-level apostrophe escape (same as escapeDrawtextText)
     .replace(/:/g, "\\:"); // Escape colons (for Windows drive letters)
 }
 
@@ -82,7 +82,6 @@ function hasEmoji(text) {
 }
 
 const fs = require("fs");
-const path = require("path");
 
 const VISUAL_EMOJI_RE = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu;
 

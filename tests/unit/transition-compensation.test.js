@@ -125,7 +125,7 @@ describe("Transition Compensation", () => {
       const userRequestedTime = 15;
       const adjustedTime = project._adjustTimestampForTransitions(
         videoClips,
-        userRequestedTime
+        userRequestedTime,
       );
 
       expect(adjustedTime).toBe(14);
@@ -145,7 +145,7 @@ describe("Transition Compensation", () => {
       // Total transitions: 4 * 0.3 = 1.2s
       const adjustedTime = project._adjustTimestampForTransitions(
         videoClips,
-        22
+        22,
       );
       expect(adjustedTime).toBe(20.8); // 22 - 1.2 = 20.8
     });

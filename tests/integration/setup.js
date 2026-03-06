@@ -17,9 +17,9 @@ beforeAll(() => {
   } catch {
     console.warn(
       "\nFFmpeg not found. Integration tests will be skipped.\n" +
-        "Install FFmpeg to run integration tests:\n" +
-        "  macOS: brew install ffmpeg\n" +
-        "  Ubuntu/Debian: apt-get install ffmpeg\n"
+      "Install FFmpeg to run integration tests:\n" +
+      "  macOS: brew install ffmpeg\n" +
+      "  Ubuntu/Debian: apt-get install ffmpeg\n",
     );
   }
 
@@ -32,7 +32,7 @@ beforeAll(() => {
       "test-watermark.png",
     ];
     const missingFixtures = requiredFixtures.filter(
-      (f) => !fs.existsSync(path.join(FIXTURES_DIR, f))
+      (f) => !fs.existsSync(path.join(FIXTURES_DIR, f)),
     );
 
     if (missingFixtures.length > 0) {

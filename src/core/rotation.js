@@ -51,7 +51,7 @@ function unrotateVideo(inputUrl, options = {}) {
         new FFmpegError(`ffmpeg process error: ${error.message}`, {
           stderr,
           command: `ffmpeg ${args.join(" ")}`,
-        })
+        }),
       );
     });
 
@@ -65,8 +65,8 @@ function unrotateVideo(inputUrl, options = {}) {
             {
               stderr,
               command: `ffmpeg ${args.join(" ")}`,
-            }
-          )
+            },
+          ),
         );
         return;
       }
@@ -81,7 +81,7 @@ function unrotateVideo(inputUrl, options = {}) {
             stderr,
             command: `ffmpeg ${args.join(" ")}`,
             exitCode: code,
-          })
+          }),
         );
         return;
       }

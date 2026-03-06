@@ -313,10 +313,10 @@ describe("buildVideoFilter", () => {
       expect(result.filter).toContain("zoompan=");
       expect(result.filter).toContain("z='1.1+(0.2)*((on/119))'");
       expect(result.filter).toContain(
-        "x='(iw - iw/zoom)*(0.2+(0.5)*((on/119)))'"
+        "x='(iw - iw/zoom)*(0.2+(0.5)*((on/119)))'",
       );
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(0.8+(-0.5)*((on/119)))'"
+        "y='(ih - ih/zoom)*(0.8+(-0.5)*((on/119)))'",
       );
     });
 
@@ -341,7 +341,7 @@ describe("buildVideoFilter", () => {
 
       expect(result.filter).toContain("zoompan=");
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'"
+        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'",
       );
     });
 
@@ -366,7 +366,7 @@ describe("buildVideoFilter", () => {
 
       expect(result.filter).toContain("zoompan=");
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'"
+        "y='(ih - ih/zoom)*(0+(1)*((on/119)))'",
       );
     });
 
@@ -387,7 +387,7 @@ describe("buildVideoFilter", () => {
       // pan-up: constant zoom, y goes from 1 to 0
       expect(result.filter).toContain("z='1.12'");
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(1+(-1)*("
+        "y='(ih - ih/zoom)*(1+(-1)*(",
       );
       // x stays centered at 0.5
       expect(result.filter).toContain("x='(iw - iw/zoom)*(0.5)'");
@@ -410,7 +410,7 @@ describe("buildVideoFilter", () => {
       // pan-down: constant zoom, y goes from 0 to 1
       expect(result.filter).toContain("z='1.12'");
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(0+(1)*("
+        "y='(ih - ih/zoom)*(0+(1)*(",
       );
     });
 
@@ -437,10 +437,10 @@ describe("buildVideoFilter", () => {
       // Should auto-apply DEFAULT_PAN_ZOOM (1.12) since positions differ but no zoom
       expect(result.filter).toContain("z='1.12'");
       expect(result.filter).toContain(
-        "x='(iw - iw/zoom)*(0.2+(0.6)*((on/119)))'"
+        "x='(iw - iw/zoom)*(0.2+(0.6)*((on/119)))'",
       );
       expect(result.filter).toContain(
-        "y='(ih - ih/zoom)*(0.8+(-0.6)*((on/119)))'"
+        "y='(ih - ih/zoom)*(0.8+(-0.6)*((on/119)))'",
       );
     });
 

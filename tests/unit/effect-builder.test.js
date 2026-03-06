@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 const { buildEffectFilters, extractFilterName } = await import(
-  "../../src/ffmpeg/effect_builder.js"
+  "../../src/ffmpeg/effect_builder.js",
 );
 
 // ---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ describe("buildEffectFilters", () => {
   it("skips clips missing position or end", () => {
     const result = buildEffectFilters(
       [{ type: "effect", effect: "vignette", params: {} }],
-      "[basev]"
+      "[basev]",
     );
     expect(result.filter).toBe("");
     expect(result.finalVideoLabel).toBe("[basev]");
@@ -49,7 +49,7 @@ describe("buildEffectFilters", () => {
         fx("colorAdjust", 4, 8, { contrast: 1.2 }),
         fx("gaussianBlur", 0, 3, { sigma: 6 }),
       ],
-      "[basev]"
+      "[basev]",
     );
 
     const blurIdx = result.filter.indexOf("gblur=sigma=6");
@@ -63,7 +63,7 @@ describe("buildEffectFilters", () => {
   it("chains multiple effects through split/overlay pipeline", () => {
     const result = buildEffectFilters(
       [fx("vignette", 0, 5), fx("sepia", 0, 5)],
-      "[basev]"
+      "[basev]",
     );
     // First effect reads from [basev], outputs [fxout0]
     expect(result.filter).toContain("[basev]split=2[fxbase0][fxsrc0]");
@@ -80,7 +80,7 @@ describe("fade envelopes", () => {
   it("applies fadeIn on the alpha channel", () => {
     const result = buildEffectFilters(
       [fx("vignette", 1, 5, { amount: 0.8 }, { fadeIn: 0.5 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("fade=t=in:st=1:d=0.5:alpha=1");
   });
@@ -88,7 +88,7 @@ describe("fade envelopes", () => {
   it("applies fadeOut on the alpha channel", () => {
     const result = buildEffectFilters(
       [fx("vignette", 1, 5, { amount: 0.8 }, { fadeOut: 0.5 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("fade=t=out:st=4.5:d=0.5:alpha=1");
   });
@@ -96,7 +96,7 @@ describe("fade envelopes", () => {
   it("applies both fadeIn and fadeOut", () => {
     const result = buildEffectFilters(
       [fx("sepia", 0, 10, {}, { fadeIn: 1, fadeOut: 2 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("fade=t=in:st=0:d=1:alpha=1");
     expect(result.filter).toContain("fade=t=out:st=8:d=2:alpha=1");
@@ -121,7 +121,7 @@ describe("amount / blend alpha", () => {
   it("uses specified amount for blend alpha", () => {
     const result = buildEffectFilters(
       [fx("sepia", 0, 5, { amount: 0.6 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("colorchannelmixer=aa=0.6");
   });
@@ -129,13 +129,13 @@ describe("amount / blend alpha", () => {
   it("clamps amount to 0-1 range", () => {
     const over = buildEffectFilters(
       [fx("sepia", 0, 5, { amount: 1.5 })],
-      "[v]"
+      "[v]",
     );
     expect(over.filter).toContain("colorchannelmixer=aa=1");
 
     const under = buildEffectFilters(
       [fx("sepia", 0, 5, { amount: -0.5 })],
-      "[v]"
+      "[v]",
     );
     expect(under.filter).toContain("colorchannelmixer=aa=0");
   });
@@ -154,7 +154,7 @@ describe("vignette effect", () => {
   it("uses custom angle", () => {
     const result = buildEffectFilters(
       [fx("vignette", 0, 5, { angle: 1.2 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("vignette=angle=1.2:eval=frame");
   });
@@ -171,7 +171,7 @@ describe("filmGrain effect", () => {
   it("uses custom strength independent of amount", () => {
     const result = buildEffectFilters(
       [fx("filmGrain", 0, 5, { amount: 0.5, strength: 0.8 })],
-      "[v]"
+      "[v]",
     );
     // strength 0.8 => 80
     expect(result.filter).toContain("noise=alls=80");
@@ -182,7 +182,7 @@ describe("filmGrain effect", () => {
   it("respects temporal=false", () => {
     const result = buildEffectFilters(
       [fx("filmGrain", 0, 5, { temporal: false })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("allf=u");
     expect(result.filter).not.toContain("allf=t+u");
@@ -193,7 +193,7 @@ describe("gaussianBlur effect", () => {
   it("generates gblur with custom sigma", () => {
     const result = buildEffectFilters(
       [fx("gaussianBlur", 0, 5, { sigma: 12 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("gblur=sigma=12");
   });
@@ -201,7 +201,7 @@ describe("gaussianBlur effect", () => {
   it("derives sigma from amount when sigma not set", () => {
     const result = buildEffectFilters(
       [fx("gaussianBlur", 0, 5, { amount: 0.5 })],
-      "[v]"
+      "[v]",
     );
     // 0.5 * 20 = 10
     expect(result.filter).toContain("gblur=sigma=10");
@@ -210,7 +210,7 @@ describe("gaussianBlur effect", () => {
   it("uses default sigma when neither sigma nor amount set", () => {
     const result = buildEffectFilters(
       [fx("gaussianBlur", 0, 5, {})],
-      "[v]"
+      "[v]",
     );
     // default amount=0.5 * 20 = 10
     expect(result.filter).toContain("gblur=sigma=10");
@@ -233,7 +233,7 @@ describe("colorAdjust effect", () => {
           gamma: 1.2,
         }),
       ],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("brightness=-0.1");
     expect(result.filter).toContain("contrast=1.5");
@@ -254,7 +254,7 @@ describe("sepia effect", () => {
   it("respects amount for blend alpha", () => {
     const result = buildEffectFilters(
       [fx("sepia", 0, 5, { amount: 0.4 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("colorchannelmixer=aa=0.4");
   });
@@ -274,7 +274,7 @@ describe("blackAndWhite effect", () => {
   it("chains eq=contrast when contrast is specified", () => {
     const result = buildEffectFilters(
       [fx("blackAndWhite", 0, 5, { contrast: 1.3 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("hue=s=0,eq=contrast=1.3");
   });
@@ -289,7 +289,7 @@ describe("sharpen effect", () => {
   it("uses custom strength", () => {
     const result = buildEffectFilters(
       [fx("sharpen", 0, 5, { strength: 2.5 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("unsharp=5:5:2.5");
   });
@@ -299,7 +299,7 @@ describe("chromaticAberration effect", () => {
   it("generates rgbashift filter with default shift", () => {
     const result = buildEffectFilters(
       [fx("chromaticAberration", 0, 5)],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("rgbashift=rh=4:bh=-4");
   });
@@ -307,7 +307,7 @@ describe("chromaticAberration effect", () => {
   it("uses custom shift", () => {
     const result = buildEffectFilters(
       [fx("chromaticAberration", 0, 5, { shift: 10 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("rgbashift=rh=10:bh=-10");
   });
@@ -315,7 +315,7 @@ describe("chromaticAberration effect", () => {
   it("rounds fractional shift to integer", () => {
     const result = buildEffectFilters(
       [fx("chromaticAberration", 0, 5, { shift: 3.7 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("rgbashift=rh=4:bh=-4");
   });
@@ -326,7 +326,7 @@ describe("letterbox effect", () => {
     const result = buildEffectFilters([fx("letterbox", 0, 5)], "[v]");
     expect(result.filter).toContain("drawbox=y=0:w=iw:h='round(ih*0.12)'");
     expect(result.filter).toContain(
-      "drawbox=y='ih-round(ih*0.12)':w=iw:h='round(ih*0.12)'"
+      "drawbox=y='ih-round(ih*0.12)':w=iw:h='round(ih*0.12)'",
     );
     expect(result.filter).toContain("color=black");
   });
@@ -334,7 +334,7 @@ describe("letterbox effect", () => {
   it("uses custom size", () => {
     const result = buildEffectFilters(
       [fx("letterbox", 0, 5, { size: 0.2 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("round(ih*0.2)");
   });
@@ -342,7 +342,7 @@ describe("letterbox effect", () => {
   it("uses custom color", () => {
     const result = buildEffectFilters(
       [fx("letterbox", 0, 5, { color: "white" })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("color=white");
   });
@@ -354,7 +354,7 @@ describe("letterbox effect", () => {
 describe("unknown effect guard", () => {
   it("throws for unrecognized effect names", () => {
     expect(() =>
-      buildEffectFilters([fx("doesNotExist", 0, 5)], "[v]")
+      buildEffectFilters([fx("doesNotExist", 0, 5)], "[v]"),
     ).toThrow("Unknown effect type 'doesNotExist'");
   });
 });
@@ -395,10 +395,10 @@ describe("empty filter name safeguard", () => {
           18.35,
           18.9,
           { amount: 0.18, shift: 0.6 },
-          { fadeIn: 0.05, fadeOut: 0.2 }
+          { fadeIn: 0.05, fadeOut: 0.2 },
         ),
       ],
-      "[vtrans8]"
+      "[vtrans8]",
     );
     // shift 0.6 rounds to 1
     expect(result.filter).toContain("rgbashift=rh=1:bh=-1");
@@ -409,7 +409,7 @@ describe("empty filter name safeguard", () => {
   it("chromaticAberration with shift=0 still produces valid filter", () => {
     const result = buildEffectFilters(
       [fx("chromaticAberration", 0, 5, { shift: 0 })],
-      "[v]"
+      "[v]",
     );
     expect(result.filter).toContain("rgbashift=rh=0:bh=0");
   });
@@ -421,21 +421,21 @@ describe("empty filter name safeguard", () => {
 describe("extractFilterName", () => {
   it("extracts filter name from standard filter segment", () => {
     expect(extractFilterName("[fxsrc0]rgbashift=rh=4:bh=-4[fxraw0];")).toBe(
-      "rgbashift"
+      "rgbashift",
     );
   });
 
   it("extracts filter name from chained filters", () => {
     expect(
-      extractFilterName("[fxsrc0]hue=s=0,eq=contrast=1.3[fxraw0];")
+      extractFilterName("[fxsrc0]hue=s=0,eq=contrast=1.3[fxraw0];"),
     ).toBe("hue");
   });
 
   it("extracts filter name from drawbox (letterbox)", () => {
     expect(
       extractFilterName(
-        "[fxsrc0]drawbox=y=0:w=iw:h='round(ih*0.12)':color=black:t=fill[fxraw0];"
-      )
+        "[fxsrc0]drawbox=y=0:w=iw:h='round(ih*0.12)':color=black:t=fill[fxraw0];",
+      ),
     ).toBe("drawbox");
   });
 
@@ -449,7 +449,7 @@ describe("extractFilterName", () => {
 
   it("extracts filter name without labels", () => {
     expect(extractFilterName("vignette=angle=0.6283:eval=frame")).toBe(
-      "vignette"
+      "vignette",
     );
   });
 });

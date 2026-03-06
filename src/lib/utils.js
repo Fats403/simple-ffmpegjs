@@ -49,7 +49,7 @@ function parseFFmpegProgress(line, totalDuration) {
     if (totalDuration > 0) {
       progress.percent = Math.min(
         100,
-        Math.round((progress.timeProcessed / totalDuration) * 100)
+        Math.round((progress.timeProcessed / totalDuration) * 100),
       );
     }
   }
@@ -146,7 +146,7 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
         new FFmpegError(`FFmpeg process error: ${error.message}`, {
           stderr,
           command,
-        })
+        }),
       );
     });
 
@@ -162,7 +162,7 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
             stderr,
             command,
             exitCode: code,
-          })
+          }),
         );
         return;
       }
@@ -205,7 +205,7 @@ function parseFFmpegCommand(command) {
       } else {
         current += char;
       }
-    } else if (char === '"' || char === "'") {
+    } else if (char === "\"" || char === "'") {
       inQuote = true;
       quoteChar = char;
     } else if (char === " " || char === "\t") {

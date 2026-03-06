@@ -220,11 +220,7 @@ function buildKaraokeASS(clip, canvasWidth, canvasHeight) {
     borderColor = "#000000",
     borderWidth = 2,
     shadowColor,
-    shadowX = 0,
-    shadowY = 0,
-    xPercent,
     yPercent,
-    x,
     y,
     opacity = 1,
   } = clip;
@@ -447,7 +443,7 @@ function parseSRT(srtContent) {
     if (!timestampLine) continue;
 
     const match = timestampLine.match(
-      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/
+      /(\d{2}):(\d{2}):(\d{2})[,.](\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})[,.](\d{3})/,
     );
 
     if (!match) continue;
@@ -513,13 +509,13 @@ function parseVTT(vttContent) {
 
     // VTT format: 00:00:00.000 --> 00:00:00.000
     const match = timestampLine.match(
-      /(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})/
+      /(\d{2}):(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2})\.(\d{3})/,
     );
 
     if (!match) {
       // Try shorter format: 00:00.000
       const shortMatch = timestampLine.match(
-        /(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2})\.(\d{3})/
+        /(\d{2}):(\d{2})\.(\d{3})\s*-->\s*(\d{2}):(\d{2})\.(\d{3})/,
       );
       if (shortMatch) {
         const start =
@@ -588,7 +584,7 @@ function loadSubtitleFile(filePath, options, canvasWidth, canvasHeight) {
     return content;
   }
 
-  let dialogues = [];
+  let dialogues;
 
   if (ext === ".srt") {
     dialogues = parseSRT(content);
@@ -694,7 +690,6 @@ function buildTextClipASS(clip, canvasWidth, canvasHeight, emojiFont) {
     shadowX = 0,
     shadowY = 0,
     backgroundColor,
-    backgroundOpacity,
     xPercent,
     yPercent,
     x,
@@ -709,9 +704,6 @@ function buildTextClipASS(clip, canvasWidth, canvasHeight, emojiFont) {
     shadowColor ? Math.max(Math.abs(shadowX), Math.abs(shadowY), 1) : 0;
   const borderStyle = backgroundColor ? 3 : 1;
   const backColor = backgroundColor || shadowColor || "#000000";
-  const backOpacity = backgroundColor
-    ? (typeof backgroundOpacity === "number" ? backgroundOpacity : 0.5)
-    : 0.5;
 
   let ass = generateASSHeader(canvasWidth, canvasHeight, "Emoji Text");
 
@@ -788,7 +780,7 @@ function buildTextClipASS(clip, canvasWidth, canvasHeight, emojiFont) {
  */
 function buildASSFilter(assFilePath, inputLabel, options) {
   const escapeFn = (p) =>
-    p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\\\\\''" );
+    p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\\\\\''");
 
   const escapedPath = escapeFn(assFilePath);
   let filterParams = `ass='${escapedPath}'`;
@@ -821,7 +813,7 @@ function validateSubtitleClip(clip) {
       const ext = path.extname(clip.url).toLowerCase();
       if (![".srt", ".ass", ".ssa", ".vtt"].includes(ext)) {
         errors.push(
-          `Unsupported subtitle format '${ext}'. Supported: .srt, .ass, .ssa, .vtt`
+          `Unsupported subtitle format '${ext}'. Supported: .srt, .ass, .ssa, .vtt`,
         );
       }
     }

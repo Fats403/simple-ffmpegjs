@@ -97,7 +97,7 @@ function formatSchema(modules, options = {}) {
   lines.push("# SIMPLEFFMPEG — Clip Schema");
   lines.push("");
   lines.push(
-    "Compose a video by defining an array of clips passed to `load(clips)`. Each clip has a `type` that determines its role."
+    "Compose a video by defining an array of clips passed to `load(clips)`. Each clip has a `type` that determines its role.",
   );
   lines.push("");
 
@@ -105,22 +105,22 @@ function formatSchema(modules, options = {}) {
   lines.push("### Timeline");
   lines.push("");
   lines.push(
-    "- All times are in **seconds**. `position` = when the clip starts, `end` = when it ends."
+    "- All times are in **seconds**. `position` = when the clip starts, `end` = when it ends.",
   );
   lines.push(
-    "- **`duration`** can be used instead of `end`: the library computes `end = position + duration`. Cannot use both."
+    "- **`duration`** can be used instead of `end`: the library computes `end = position + duration`. Cannot use both.",
   );
   lines.push(
-    "- **Auto-sequencing:** For video, image, and audio clips, `position` can be omitted. The clip will be placed immediately after the previous clip on its track. The first clip defaults to position 0."
+    "- **Auto-sequencing:** For video, image, and audio clips, `position` can be omitted. The clip will be placed immediately after the previous clip on its track. The first clip defaults to position 0.",
   );
   lines.push(
-    "- Video/image clips form the visual timeline. Audio, text, and music are layered on top."
+    "- Video/image clips form the visual timeline. Audio, text, and music are layered on top.",
   );
   lines.push(
-    "- When video clips overlap with a transition, the overlapping time is shared — a 0.5s fade means the total video is 0.5s shorter."
+    "- When video clips overlap with a transition, the overlapping time is shared — a 0.5s fade means the total video is 0.5s shorter.",
   );
   lines.push(
-    "- Text and subtitle positions represent **visual time** (what the viewer sees). Transition compression is handled automatically."
+    "- Text and subtitle positions represent **visual time** (what the viewer sees). Transition compression is handled automatically.",
   );
   lines.push("");
 
@@ -140,14 +140,14 @@ function formatSchema(modules, options = {}) {
 
   // Clip type summary
   const typeMap = {
-    video: '"video"',
-    audio: '"audio"',
-    image: '"image"',
-    color: '"color"',
-    effect: '"effect"',
-    text: '"text"',
-    subtitle: '"subtitle"',
-    music: '"music" or "backgroundAudio"',
+    video: "\"video\"",
+    audio: "\"audio\"",
+    image: "\"image\"",
+    color: "\"color\"",
+    effect: "\"effect\"",
+    text: "\"text\"",
+    subtitle: "\"subtitle\"",
+    music: "\"music\" or \"backgroundAudio\"",
   };
   const availableTypes = modules
     .filter((m) => typeMap[m.id])

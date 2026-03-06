@@ -11,7 +11,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
   const amount = clamp(
     typeof params.amount === "number" ? params.amount : 1,
     0,
-    1
+    1,
   );
 
   if (effectClip.effect === "vignette") {
@@ -29,14 +29,14 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
     const strength = clamp(
       typeof params.strength === "number" ? params.strength : 0.35,
       0,
-      1
+      1,
     );
     const grainStrength = strength * 100;
     const flags = params.temporal === false ? "u" : "t+u";
     return {
       filter: `${inputLabel}noise=alls=${formatNumber(
         grainStrength,
-        3
+        3,
       )}:allf=${flags}${outputLabel};`,
       amount,
     };
@@ -48,7 +48,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
         ? params.sigma
         : (typeof params.amount === "number" ? params.amount : 0.5) * 20,
       0,
-      100
+      100,
     );
     return {
       filter: `${inputLabel}gblur=sigma=${formatNumber(sigma, 4)}${outputLabel};`,
@@ -108,7 +108,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
     const strength = clamp(
       typeof params.strength === "number" ? params.strength : 1.0,
       0,
-      3
+      3,
     );
     return {
       filter: `${inputLabel}unsharp=5:5:${formatNumber(strength, 4)}${outputLabel};`,
@@ -121,7 +121,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
     const shift = clamp(
       typeof params.shift === "number" ? params.shift : 4,
       0,
-      20
+      20,
     );
     const shiftInt = Math.round(shift);
     return {
@@ -135,7 +135,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
     const size = clamp(
       typeof params.size === "number" ? params.size : 0.12,
       0,
-      0.5
+      0.5,
     );
     const color = typeof params.color === "string" ? params.color : "black";
     const barExpr = `round(ih*${formatNumber(size, 4)})`;
@@ -151,7 +151,7 @@ function buildProcessedEffectFilter(effectClip, inputLabel, outputLabel) {
 
   // Unknown effect — guard against silent fallthrough
   throw new Error(
-    `Unknown effect type '${effectClip.effect}' in buildProcessedEffectFilter`
+    `Unknown effect type '${effectClip.effect}' in buildProcessedEffectFilter`,
   );
 }
 
@@ -201,7 +201,7 @@ function buildEffectFilters(effectClips, inputLabel) {
     const { filter: fxFilter, amount } = buildProcessedEffectFilter(
       clip,
       procSrcLabel,
-      fxLabel
+      fxLabel,
     );
 
     // Safeguard: verify the filter builder produced a non-empty filter name.
@@ -213,7 +213,7 @@ function buildEffectFilters(effectClips, inputLabel) {
       throw new Error(
         `Effect '${clip.effect}' produced an empty filter name. ` +
         `This usually means the effect is not supported by the current FFmpeg version. ` +
-        `Generated filter segment: ${JSON.stringify(fxFilter)}`
+        `Generated filter segment: ${JSON.stringify(fxFilter)}`,
       );
     }
 
@@ -232,7 +232,7 @@ function buildEffectFilters(effectClips, inputLabel) {
     if (fadeOut > 0) {
       alphaChain += `,fade=t=out:st=${formatNumber(
         fadeOutStart,
-        4
+        4,
       )}:d=${formatNumber(fadeOut, 4)}:alpha=1`;
     }
 

@@ -2,7 +2,7 @@ function buildBackgroundMusicMix(
   project,
   backgroundClips,
   existingAudioLabel,
-  visualEnd
+  visualEnd,
 ) {
   if (backgroundClips.length === 0) {
     return {
@@ -18,16 +18,16 @@ function buildBackgroundMusicMix(
     typeof visualEnd === "number" && visualEnd > 0
       ? visualEnd
       : project.videoOrAudioClips.filter(
-          (c) => c.type === "video" || c.type === "image"
-        ).length > 0
+        (c) => c.type === "video" || c.type === "image",
+      ).length > 0
         ? Math.max(
             ...project.videoOrAudioClips
               .filter((c) => c.type === "video" || c.type === "image")
-              .map((c) => c.end)
+              .map((c) => c.end),
           )
         : Math.max(
             0,
-            ...backgroundClips.map((c) => (typeof c.end === "number" ? c.end : 0))
+            ...backgroundClips.map((c) => (typeof c.end === "number" ? c.end : 0)),
           );
 
   let filter = "";

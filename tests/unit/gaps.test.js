@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 
 const { detectVisualGaps, hasVisualGaps, getVisualTimelineEnd } = await import(
-  "../../src/core/gaps.js"
+  "../../src/core/gaps.js",
 );
 
 describe("Gap Detection", () => {

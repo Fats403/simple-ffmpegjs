@@ -24,7 +24,7 @@ module.exports = {
     },
   ],
   notes: [
-    'The type can be either "music" or "backgroundAudio" — both work identically.',
+    "The type can be either \"music\" or \"backgroundAudio\" — both work identically.",
     "Default volume is 0.2 (20%), so background music doesn't overpower speech or main audio.",
     "When loop is true, the track repeats seamlessly to fill the video duration. position/end are not required with loop.",
   ],

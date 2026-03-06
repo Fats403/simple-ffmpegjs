@@ -260,7 +260,7 @@ describe("resolveClips", () => {
 
   describe("duration + end conflict", () => {
     it("should return an error when both duration and end are provided", () => {
-      const { clips, errors } = resolveClips([
+      const { errors } = resolveClips([
         {
           type: "video",
           url: "./a.mp4",

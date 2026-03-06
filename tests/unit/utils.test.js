@@ -52,7 +52,7 @@ describe("Utils", () => {
     it("should parse fps", () => {
       const progress = parseFFmpegProgress(
         "frame=120 fps=45.2 time=00:00:04.00",
-        10
+        10,
       );
       expect(progress.fps).toBeCloseTo(45.2, 1);
     });
@@ -112,7 +112,7 @@ describe("Utils", () => {
 
     it("should handle double-quoted paths", () => {
       const args = parseFFmpegCommand(
-        'ffmpeg -i "path with spaces/input.mp4" output.mp4'
+        "ffmpeg -i \"path with spaces/input.mp4\" output.mp4",
       );
       expect(args).toEqual([
         "ffmpeg",
@@ -124,7 +124,7 @@ describe("Utils", () => {
 
     it("should handle single-quoted paths", () => {
       const args = parseFFmpegCommand(
-        "ffmpeg -i 'path with spaces/input.mp4' output.mp4"
+        "ffmpeg -i 'path with spaces/input.mp4' output.mp4",
       );
       expect(args).toEqual([
         "ffmpeg",
@@ -141,7 +141,7 @@ describe("Utils", () => {
 
     it("should handle complex filter_complex", () => {
       const cmd =
-        'ffmpeg -i input.mp4 -filter_complex "[0:v]scale=1920:1080[outv]" -map "[outv]" output.mp4';
+        "ffmpeg -i input.mp4 -filter_complex \"[0:v]scale=1920:1080[outv]\" -map \"[outv]\" output.mp4";
       const args = parseFFmpegCommand(cmd);
       expect(args).toContain("[0:v]scale=1920:1080[outv]");
       expect(args).toContain("[outv]");
@@ -157,7 +157,7 @@ describe("Utils", () => {
       // \" does NOT unescape — the backslash is literal and the " ends the quote.
       // This works because our filter_complex values never contain literal " characters.
       const args = parseFFmpegCommand(
-        'ffmpeg -filter_complex "text=\\"hello world\\"" output.mp4'
+        "ffmpeg -filter_complex \"text=\\\"hello world\\\"\" output.mp4",
       );
       // The " after \ closes the double-quoted segment (text=\), then hello is unquoted,
       // space splits, world\ continues unquoted, "" is an empty quoted segment, space splits.
@@ -175,7 +175,7 @@ describe("Utils", () => {
       // This is critical: filter_complex uses \\\\ to produce \\ for drawtext,
       // which drawtext decodes as a literal backslash.
       const args = parseFFmpegCommand(
-        'ffmpeg -i "path\\\\to\\\\file.mp4" output.mp4'
+        "ffmpeg -i \"path\\\\to\\\\file.mp4\" output.mp4",
       );
       expect(args).toEqual([
         "ffmpeg",
@@ -189,7 +189,7 @@ describe("Utils", () => {
       // \\, in JS source = \, in command string; backslash must be preserved
       // so FFmpeg sees escaped commas inside expressions.
       const args = parseFFmpegCommand(
-        'ffmpeg -filter_complex "select=eq(n\\,0),setpts=PTS" output.mp4'
+        "ffmpeg -filter_complex \"select=eq(n\\,0),setpts=PTS\" output.mp4",
       );
       expect(args).toEqual([
         "ffmpeg",
@@ -202,7 +202,7 @@ describe("Utils", () => {
     it("should handle single quotes inside double-quoted filter_complex", () => {
       // Single quotes inside double quotes are literal characters
       const args = parseFFmpegCommand(
-        `ffmpeg -filter_complex "drawtext=text='Hello':enable='between(t,0,2)'" output.mp4`
+        `ffmpeg -filter_complex "drawtext=text='Hello':enable='between(t,0,2)'" output.mp4`,
       );
       expect(args).toEqual([
         "ffmpeg",
