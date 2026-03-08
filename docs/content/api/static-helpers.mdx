@@ -30,6 +30,29 @@ Useful for computing text overlay timings or background music end times before c
 
 ---
 
+## `SIMPLEFFMPEG.getTransitionOverlap(clips)`
+
+Returns the total seconds consumed by xfade transition overlaps among visual clips. Handles `duration` shorthand and auto-sequencing. Pure function — no file I/O.
+
+```ts
+const clips = [
+  { type: "video", url: "./a.mp4", duration: 5 },
+  {
+    type: "video",
+    url: "./b.mp4",
+    duration: 10,
+    transition: { type: "fade", duration: 0.5 },
+  },
+];
+
+SIMPLEFFMPEG.getTransitionOverlap(clips); // 0.5
+SIMPLEFFMPEG.getDuration(clips);          // 14.5
+```
+
+Useful for computing how much timeline compression transitions will cause, or for inflating clip durations so the rendered output hits a target length.
+
+---
+
 ## `SIMPLEFFMPEG.probe(filePath)`
 
 Returns ffprobe-derived metadata for video, audio, or image files.

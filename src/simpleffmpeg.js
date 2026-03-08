@@ -9,8 +9,8 @@ const { buildVideoFilter } = require("./ffmpeg/video_builder");
 const { buildAudioForVideoClips } = require("./ffmpeg/audio_builder");
 const { buildBackgroundMusicMix } = require("./ffmpeg/bgm_builder");
 const { buildEffectFilters } = require("./ffmpeg/effect_builder");
+const { buildStandaloneAudioMix } = require("./ffmpeg/standalone_audio_builder");
 const {
-  getClipAudioString,
   hasProblematicChars,
   hasEmoji,
   stripEmoji,
@@ -228,6 +228,41 @@ class SIMPLEFFMPEG {
    */
   _adjustTimestampForTransitions(videoClips, timestamp) {
     return timestamp - this._getTransitionOffsetAt(videoClips, timestamp);
+  }
+
+  /**
+   * Compensate a clip's position, end, words, and wordTimestamps for
+   * transition timeline compression. Returns a new clip object.
+   * @private
+   * @param {Array} videoClips - Array of video clips sorted by position
+   * @param {Object} clip - The clip to compensate
+   * @returns {Object} New clip with adjusted timings
+   */
+  _compensateClipTimings(videoClips, clip) {
+    const adjusted = {
+      ...clip,
+      position: this._adjustTimestampForTransitions(
+        videoClips,
+        clip.position || 0,
+      ),
+      end: this._adjustTimestampForTransitions(videoClips, clip.end || 0),
+    };
+    if (Array.isArray(clip.words)) {
+      adjusted.words = clip.words.map((word) => ({
+        ...word,
+        start: this._adjustTimestampForTransitions(
+          videoClips,
+          word.start || 0,
+        ),
+        end: this._adjustTimestampForTransitions(videoClips, word.end || 0),
+      }));
+    }
+    if (Array.isArray(clip.wordTimestamps)) {
+      adjusted.wordTimestamps = clip.wordTimestamps.map((ts) =>
+        this._adjustTimestampForTransitions(videoClips, ts),
+      );
+    }
+    return adjusted;
   }
 
   /**
@@ -545,33 +580,15 @@ class SIMPLEFFMPEG {
 
     // Standalone audio clips
     if (audioClips.length > 0) {
-      let audioString = "";
-      let audioConcatInputs = [];
-      audioClips.forEach((clip) => {
-        const inputIndex = this._inputIndexMap
-          ? this._inputIndexMap.get(clip)
-          : this.videoOrAudioClips.indexOf(clip);
-        const { audioStringPart, audioConcatInput } = getClipAudioString(
-          clip,
-          inputIndex,
-        );
-        audioString += audioStringPart;
-        audioConcatInputs.push(audioConcatInput);
+      const sares = buildStandaloneAudioMix(this, audioClips, {
+        compensateTransitions: exportOptions.compensateTransitions,
+        videoClips,
+        hasAudio,
+        finalAudioLabel,
       });
-      if (audioConcatInputs.length > 0) {
-        filterComplex += audioString;
-        filterComplex += audioConcatInputs.join("");
-        if (hasAudio) {
-          filterComplex += `${finalAudioLabel}amix=inputs=${
-            audioConcatInputs.length + 1
-          }:duration=longest[finalaudio];`;
-          finalAudioLabel = "[finalaudio]";
-        } else {
-          filterComplex += `amix=inputs=${audioConcatInputs.length}:duration=longest[finalaudio];`;
-          finalAudioLabel = "[finalaudio]";
-          hasAudio = true;
-        }
-      }
+      filterComplex += sares.filter;
+      finalAudioLabel = sares.finalAudioLabel || finalAudioLabel;
+      hasAudio = sares.hasAudio;
     }
 
     // Background music after other audio
@@ -600,45 +617,9 @@ class SIMPLEFFMPEG {
       // Compensate text timings for transition overlap if enabled
       let adjustedTextClips = this.textClips;
       if (exportOptions.compensateTransitions && videoClips.length > 1) {
-        adjustedTextClips = this.textClips.map((clip) => {
-          const adjustedPosition = this._adjustTimestampForTransitions(
-            videoClips,
-            clip.position || 0,
-          );
-          const adjustedEnd = this._adjustTimestampForTransitions(
-            videoClips,
-            clip.end || 0,
-          );
-          // Also adjust word timings if present
-          let adjustedWords = clip.words;
-          if (Array.isArray(clip.words)) {
-            adjustedWords = clip.words.map((word) => ({
-              ...word,
-              start: this._adjustTimestampForTransitions(
-                videoClips,
-                word.start || 0,
-              ),
-              end: this._adjustTimestampForTransitions(
-                videoClips,
-                word.end || 0,
-              ),
-            }));
-          }
-          // Also adjust wordTimestamps if present
-          let adjustedWordTimestamps = clip.wordTimestamps;
-          if (Array.isArray(clip.wordTimestamps)) {
-            adjustedWordTimestamps = clip.wordTimestamps.map((ts) =>
-              this._adjustTimestampForTransitions(videoClips, ts),
-            );
-          }
-          return {
-            ...clip,
-            position: adjustedPosition,
-            end: adjustedEnd,
-            words: adjustedWords,
-            wordTimestamps: adjustedWordTimestamps,
-          };
-        });
+        adjustedTextClips = this.textClips.map((clip) =>
+          this._compensateClipTimings(videoClips, clip),
+        );
       }
 
       // Emoji handling: opt-in via emojiFont, otherwise strip emoji from text.
@@ -808,41 +789,7 @@ class SIMPLEFFMPEG {
           videoClips.length > 1 &&
           subClip.mode === "karaoke"
         ) {
-          const adjustedPosition = this._adjustTimestampForTransitions(
-            videoClips,
-            subClip.position || 0,
-          );
-          const adjustedEnd = this._adjustTimestampForTransitions(
-            videoClips,
-            subClip.end || 0,
-          );
-          let adjustedWords = subClip.words;
-          if (Array.isArray(subClip.words)) {
-            adjustedWords = subClip.words.map((word) => ({
-              ...word,
-              start: this._adjustTimestampForTransitions(
-                videoClips,
-                word.start || 0,
-              ),
-              end: this._adjustTimestampForTransitions(
-                videoClips,
-                word.end || 0,
-              ),
-            }));
-          }
-          let adjustedWordTimestamps = subClip.wordTimestamps;
-          if (Array.isArray(subClip.wordTimestamps)) {
-            adjustedWordTimestamps = subClip.wordTimestamps.map((ts) =>
-              this._adjustTimestampForTransitions(videoClips, ts),
-            );
-          }
-          subClip = {
-            ...subClip,
-            position: adjustedPosition,
-            end: adjustedEnd,
-            words: adjustedWords,
-            wordTimestamps: adjustedWordTimestamps,
-          };
+          subClip = this._compensateClipTimings(videoClips, subClip);
         }
 
         let assContent = "";
@@ -1379,6 +1326,45 @@ class SIMPLEFFMPEG {
     }, 0);
 
     return Math.max(0, baseSum - transitionsOverlap);
+  }
+
+  /**
+   * Calculate the total transition overlap for a clips configuration.
+   * Resolves shorthand (duration, auto-sequencing) before computing.
+   * Returns the total seconds consumed by xfade transition overlaps
+   * among visual clips (video, image, color).
+   *
+   * This is a pure function — same clips always produce the same result.
+   * No file I/O is performed.
+   *
+   * @param {Array} clips - Array of clip objects
+   * @returns {number} Total transition overlap in seconds
+   *
+   * @example
+   * const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+   *   { type: "video", url: "./a.mp4", duration: 5 },
+   *   { type: "video", url: "./b.mp4", duration: 10, transition: { type: "fade", duration: 0.5 } },
+   * ]);
+   * // overlap === 0.5
+   */
+  static getTransitionOverlap(clips) {
+    if (!Array.isArray(clips) || clips.length === 0) return 0;
+
+    const { clips: resolved } = resolveClips(clips);
+
+    const visual = resolved.filter(
+      (c) => c.type === "video" || c.type === "image" || c.type === "color",
+    );
+
+    if (visual.length === 0) return 0;
+
+    return visual.reduce((acc, c) => {
+      const d =
+        c.transition && typeof c.transition.duration === "number"
+          ? c.transition.duration
+          : 0;
+      return acc + d;
+    }, 0);
   }
 
   /**

@@ -145,3 +145,108 @@ describe("SIMPLEFFMPEG.getDuration", () => {
     expect(duration).toBe(expected); // 16 - 1.5 = 14.5
   });
 });
+
+describe("SIMPLEFFMPEG.getTransitionOverlap", () => {
+  it("should return 0 for empty array", () => {
+    expect(SIMPLEFFMPEG.getTransitionOverlap([])).toBe(0);
+  });
+
+  it("should return 0 for non-array input", () => {
+    expect(SIMPLEFFMPEG.getTransitionOverlap(null)).toBe(0);
+    expect(SIMPLEFFMPEG.getTransitionOverlap("not an array")).toBe(0);
+  });
+
+  it("should return 0 when no visual clips are present", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "music", url: "./bg.mp3" },
+      { type: "text", text: "Hello", position: 0, end: 5 },
+    ]);
+    expect(overlap).toBe(0);
+  });
+
+  it("should return 0 when no transitions exist", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "video", url: "./a.mp4", position: 0, end: 5 },
+      { type: "video", url: "./b.mp4", position: 5, end: 10 },
+    ]);
+    expect(overlap).toBe(0);
+  });
+
+  it("should return the single transition duration", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "video", url: "./a.mp4", position: 0, end: 5 },
+      {
+        type: "video",
+        url: "./b.mp4",
+        position: 5,
+        end: 15,
+        transition: { type: "fade", duration: 0.5 },
+      },
+    ]);
+    expect(overlap).toBe(0.5);
+  });
+
+  it("should sum multiple transition durations", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "video", url: "./a.mp4", position: 0, end: 5 },
+      {
+        type: "video",
+        url: "./b.mp4",
+        position: 5,
+        end: 10,
+        transition: { type: "fade", duration: 1 },
+      },
+      {
+        type: "video",
+        url: "./c.mp4",
+        position: 10,
+        end: 15,
+        transition: { type: "wipeleft", duration: 1 },
+      },
+    ]);
+    expect(overlap).toBe(2);
+  });
+
+  it("should work with duration shorthand", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "video", url: "./a.mp4", duration: 5 },
+      {
+        type: "video",
+        url: "./b.mp4",
+        duration: 10,
+        transition: { type: "fade", duration: 0.5 },
+      },
+    ]);
+    expect(overlap).toBe(0.5);
+  });
+
+  it("should ignore non-visual clips", () => {
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+      { type: "video", url: "./a.mp4", duration: 5 },
+      { type: "audio", url: "./sfx.mp3", position: 0, end: 20 },
+      {
+        type: "video",
+        url: "./b.mp4",
+        duration: 5,
+        transition: { type: "fade", duration: 0.5 },
+      },
+    ]);
+    expect(overlap).toBe(0.5);
+  });
+
+  it("should be consistent with getDuration", () => {
+    const clips = [
+      { type: "video", url: "./a.mp4", duration: 5 },
+      {
+        type: "video",
+        url: "./b.mp4",
+        duration: 10,
+        transition: { type: "fade", duration: 0.5 },
+      },
+    ];
+    const duration = SIMPLEFFMPEG.getDuration(clips);
+    const overlap = SIMPLEFFMPEG.getTransitionOverlap(clips);
+    // duration = baseSum - overlap = 15 - 0.5 = 14.5
+    expect(duration + overlap).toBe(15);
+  });
+});

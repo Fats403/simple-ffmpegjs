@@ -38,7 +38,7 @@ Returns the output file path when complete.
 | `onLog` | `function` | — | Raw FFmpeg log callback |
 | `signal` | `AbortSignal` | — | Cancellation signal from `AbortController` |
 | `watermark` | `object` | — | Watermark overlay — see [Watermarks](/guides/watermarks) |
-| `compensateTransitions` | `boolean` | `true` | Auto-adjust text/subtitle timings for transition overlap |
+| `compensateTransitions` | `boolean` | `true` | Auto-adjust text, subtitle, and audio clip timings for transition overlap |
 
 ## Example configurations
 
@@ -95,5 +95,5 @@ await project.export({
 ```
 
 <Callout type="info">
-  `compensateTransitions` is `true` by default. FFmpeg's `xfade` transitions compress the timeline — a 1s fade between two clips reduces total duration by 1s. With compensation enabled, text and subtitle timings are adjusted so they appear at the correct visual moment regardless of how many transitions precede them. Set to `false` only if you have pre-calculated offsets yourself. See [Timeline Behavior](/advanced/timeline-behavior) for details.
+  `compensateTransitions` is `true` by default. FFmpeg's `xfade` transitions compress the timeline — a 1s fade between two clips reduces total duration by 1s. With compensation enabled, text, subtitle, and standalone audio clip timings are adjusted so they appear at the correct visual moment regardless of how many transitions precede them. Set to `false` only if you have pre-calculated offsets yourself. See [Timeline Behavior](/advanced/timeline-behavior) for details.
 </Callout>

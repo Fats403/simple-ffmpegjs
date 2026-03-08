@@ -162,4 +162,52 @@ describe("Transition Compensation", () => {
       expect(adjusted).toBe(15);
     });
   });
+
+  describe("audio clip compensation", () => {
+    it("should adjust audio clip position for transitions", () => {
+      const videoClips = [
+        { position: 0, end: 10 },
+        { position: 10, end: 20, transition: { type: "fade", duration: 1 } },
+      ];
+
+      const adjusted = project._adjustTimestampForTransitions(videoClips, 15);
+      expect(adjusted).toBe(14);
+    });
+
+    it("should adjust audio clip end for transitions", () => {
+      const videoClips = [
+        { position: 0, end: 10 },
+        { position: 10, end: 20, transition: { type: "fade", duration: 1 } },
+      ];
+
+      const adjusted = project._adjustTimestampForTransitions(videoClips, 18);
+      expect(adjusted).toBe(17);
+    });
+
+    it("should not adjust audio position before any transition", () => {
+      const videoClips = [
+        { position: 0, end: 10 },
+        { position: 10, end: 20, transition: { type: "fade", duration: 1 } },
+      ];
+
+      const adjusted = project._adjustTimestampForTransitions(videoClips, 5);
+      expect(adjusted).toBe(5);
+    });
+
+    it("should accumulate offsets across multiple transitions for audio", () => {
+      const videoClips = [
+        { position: 0, end: 10 },
+        { position: 10, end: 20, transition: { type: "fade", duration: 1 } },
+        {
+          position: 20,
+          end: 30,
+          transition: { type: "wipeleft", duration: 0.5 },
+        },
+      ];
+
+      // At timestamp 25: two transitions before it (1s + 0.5s)
+      const adjusted = project._adjustTimestampForTransitions(videoClips, 25);
+      expect(adjusted).toBe(23.5);
+    });
+  });
 });

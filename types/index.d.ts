@@ -980,6 +980,26 @@ declare class SIMPLEFFMPEG {
   static getDuration(clips: SIMPLEFFMPEG.Clip[]): number;
 
   /**
+   * Calculate the total transition overlap for a clips configuration.
+   * Returns the total seconds consumed by xfade transition overlaps
+   * among visual clips (video, image, color).
+   *
+   * Pure function — same clips always produce the same result. No file I/O.
+   *
+   * @param clips - Array of clip objects
+   * @returns Total transition overlap in seconds
+   *
+   * @example
+   * const overlap = SIMPLEFFMPEG.getTransitionOverlap([
+   *   { type: "video", url: "./a.mp4", duration: 5 },
+   *   { type: "video", url: "./b.mp4", duration: 10,
+   *     transition: { type: "fade", duration: 0.5 } },
+   * ]);
+   * // overlap === 0.5
+   */
+  static getTransitionOverlap(clips: SIMPLEFFMPEG.Clip[]): number;
+
+  /**
    * Probe a media file and return comprehensive metadata.
    *
    * Uses ffprobe to extract duration, dimensions, codecs, format,

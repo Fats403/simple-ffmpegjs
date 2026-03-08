@@ -23,7 +23,7 @@ With 1s fade:
 Output:  [  A  ][fade][  B  ]   = 19s total
 ```
 
-By default, `simple-ffmpegjs` automatically adjusts text and subtitle timings to compensate. When you position text at "15s", it appears at the visual 15-second mark regardless of how many transitions preceded it:
+By default, `simple-ffmpegjs` automatically adjusts text, subtitle, and standalone audio clip timings to compensate. When you position text at "15s" or a sound effect at "15s", it appears at the correct visual moment regardless of how many transitions preceded it:
 
 ```ts
 await project.load([

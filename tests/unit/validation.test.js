@@ -413,14 +413,14 @@ describe("Validation", () => {
         expect(result.errors[0].code).toBe(ValidationCodes.INVALID_WORD_TIMING);
       });
 
-      it("should warn when word is outside clip bounds", () => {
+      it("should warn when word is outside both absolute and relative bounds", () => {
         const clips = [
           { type: "video", url: "./test.mp4", position: 0, end: 10 },
           {
             type: "text",
             position: 2,
             end: 4,
-            words: [{ text: "Hello", start: 0, end: 1 }], // before clip position
+            words: [{ text: "Hello", start: 0, end: 5 }], // 5 > 4 (absolute) and 5 > 2 (relative duration)
           },
         ];
         const result = validateConfig(clips);
@@ -428,6 +428,44 @@ describe("Validation", () => {
         expect(
           result.warnings.some((w) => w.code === ValidationCodes.OUTSIDE_BOUNDS),
         ).toBe(true);
+      });
+
+      it("should NOT warn when words use relative timings within clip duration", () => {
+        const clips = [
+          { type: "video", url: "./test.mp4", position: 0, end: 10 },
+          {
+            type: "text",
+            position: 5,
+            end: 10,
+            words: [
+              { text: "Hello", start: 0, end: 2 },
+              { text: "World", start: 2, end: 4.5 },
+            ],
+          },
+        ];
+        const result = validateConfig(clips);
+        expect(
+          result.warnings.some((w) => w.code === ValidationCodes.OUTSIDE_BOUNDS),
+        ).toBe(false);
+      });
+
+      it("should NOT warn when words use absolute timings within clip bounds", () => {
+        const clips = [
+          { type: "video", url: "./test.mp4", position: 0, end: 10 },
+          {
+            type: "text",
+            position: 5,
+            end: 10,
+            words: [
+              { text: "Hello", start: 5, end: 7 },
+              { text: "World", start: 7, end: 10 },
+            ],
+          },
+        ];
+        const result = validateConfig(clips);
+        expect(
+          result.warnings.some((w) => w.code === ValidationCodes.OUTSIDE_BOUNDS),
+        ).toBe(false);
       });
 
       it("should reject invalid text mode", () => {
@@ -1438,6 +1476,107 @@ describe("Validation", () => {
         w.path.includes("borderColor"),
       );
       expect(colorWarnings).toHaveLength(1);
+    });
+  });
+
+  describe("beyond visual duration warnings", () => {
+    it("should warn when text clip is positioned beyond visual duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, end: 10 },
+        { type: "text", text: "Late", position: 12, end: 15 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.path === "clips[1]" &&
+            w.message.includes("visual timeline ends at"),
+        ),
+      ).toBe(true);
+    });
+
+    it("should warn when audio clip is positioned beyond visual duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, end: 10 },
+        { type: "audio", url: "./sfx.mp3", position: 15, end: 20 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.path === "clips[1]",
+        ),
+      ).toBe(true);
+    });
+
+    it("should NOT warn when text clip is within visual duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, end: 10 },
+        { type: "text", text: "OK", position: 5, end: 8 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.message.includes("visual timeline"),
+        ),
+      ).toBe(false);
+    });
+
+    it("should account for transition overlap in visual duration", () => {
+      const clips = [
+        { type: "video", url: "./a.mp4", position: 0, end: 10 },
+        {
+          type: "video",
+          url: "./b.mp4",
+          position: 10,
+          end: 20,
+          transition: { type: "fade", duration: 1 },
+        },
+        // Visual duration: (10 + 10) - 1 = 19s
+        { type: "text", text: "Too late", position: 19, end: 22 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.path === "clips[2]" &&
+            w.message.includes("visual timeline ends at 19s"),
+        ),
+      ).toBe(true);
+    });
+
+    it("should NOT warn when there are no visual clips", () => {
+      const clips = [
+        { type: "audio", url: "./a.mp3", position: 0, end: 10 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.message.includes("visual timeline"),
+        ),
+      ).toBe(false);
+    });
+
+    it("should warn for music clips beyond visual duration", () => {
+      const clips = [
+        { type: "video", url: "./test.mp4", position: 0, end: 10 },
+        { type: "music", url: "./bg.mp3", position: 15, end: 30 },
+      ];
+      const result = validateConfig(clips);
+      expect(
+        result.warnings.some(
+          (w) =>
+            w.code === ValidationCodes.OUTSIDE_BOUNDS &&
+            w.path === "clips[1]",
+        ),
+      ).toBe(true);
     });
   });
 });

@@ -728,18 +728,24 @@ function validateClip(clip, index, options = {}) {
         }
 
         // Check if word is within clip bounds
+        // Words can use absolute timings [clip.position, clip.end]
+        // or relative timings [0, clipDuration]. Accept either.
         if (
           typeof w.start === "number" &&
           typeof w.end === "number" &&
           typeof clip.position === "number" &&
           typeof clip.end === "number"
         ) {
-          if (w.start < clip.position || w.end > clip.end) {
+          const clipDuration = clip.end - clip.position;
+          const inAbsolute =
+            w.start >= clip.position && w.end <= clip.end;
+          const inRelative = w.start >= 0 && w.end <= clipDuration;
+          if (!inAbsolute && !inRelative) {
             warnings.push(
               createIssue(
                 ValidationCodes.OUTSIDE_BOUNDS,
                 wordPath,
-                `Word timing [${w.start}, ${w.end}] outside clip bounds [${clip.position}, ${clip.end}]`,
+                `Word timing [${w.start}, ${w.end}] outside clip bounds [${clip.position}, ${clip.end}] (duration: ${clipDuration}s)`,
                 { start: w.start, end: w.end },
               ),
             );
@@ -1407,6 +1413,47 @@ function validateConfig(clips, options = {}) {
   const gapResult = validateTimelineGaps(clips, options);
   allErrors.push(...gapResult.errors);
   allWarnings.push(...gapResult.warnings);
+
+  // Warn about non-visual clips positioned beyond the visual timeline
+  const visualClips = clips.filter(
+    (c) => c.type === "video" || c.type === "image" || c.type === "color",
+  );
+
+  if (visualClips.length > 0) {
+    const visualBaseSum = visualClips.reduce(
+      (acc, c) => acc + Math.max(0, (c.end || 0) - (c.position || 0)),
+      0,
+    );
+    const visualTransitionOverlap = visualClips.reduce((acc, c) => {
+      const d =
+        c.transition && typeof c.transition.duration === "number"
+          ? c.transition.duration
+          : 0;
+      return acc + d;
+    }, 0);
+    const visualDuration = Math.max(0, visualBaseSum - visualTransitionOverlap);
+
+    if (visualDuration > 0) {
+      const nonVisualTypes = ["text", "audio", "subtitle", "music", "backgroundAudio"];
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        if (
+          nonVisualTypes.includes(clip.type) &&
+          typeof clip.position === "number" &&
+          clip.position >= visualDuration
+        ) {
+          allWarnings.push(
+            createIssue(
+              ValidationCodes.OUTSIDE_BOUNDS,
+              `clips[${i}]`,
+              `${clip.type} clip starts at ${clip.position}s but visual timeline ends at ${visualDuration}s`,
+              { position: clip.position, visualDuration },
+            ),
+          );
+        }
+      }
+    }
+  }
 
   return {
     valid: allErrors.length === 0,

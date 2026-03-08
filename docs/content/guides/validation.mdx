@@ -61,6 +61,10 @@ Available codes:
 | `INVALID_WORD_TIMING` | Word timestamps are invalid or out of order |
 | `OUTSIDE_BOUNDS` | A clip or overlay extends outside the timeline bounds |
 
+<Callout type="info">
+  `OUTSIDE_BOUNDS` is also emitted when a non-visual clip (text, audio, subtitle, music) is positioned at or beyond the end of the visual timeline. For example, a text clip at `position: 20` when the video is only 15s long will trigger this warning.
+</Callout>
+
 ## Recommended pipeline
 
 <Steps>
