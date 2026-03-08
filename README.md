@@ -7,7 +7,7 @@
   <a href="https://github.com/Fats403/simple-ffmpeg/actions/workflows/ci.yml"><img src="https://github.com/Fats403/simple-ffmpeg/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node.js ≥20"></a>
-  <a href="https://codecov.io/gh/Fats403/simple-ffmpeg"><img src="https://codecov.io/gh/Fats403/simple-ffmpeg/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <a href="https://codecov.io/gh/Fats403/simple-ffmpegjs"><img src="https://codecov.io/gh/Fats403/simple-ffmpegjs/branch/main/graph/badge.svg" alt="Coverage"></a>
 </p>
 
 <p align="center">
