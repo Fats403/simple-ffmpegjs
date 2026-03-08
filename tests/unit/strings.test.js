@@ -2,7 +2,9 @@ import { describe, it, expect } from "vitest";
 
 const stringsModule = await import("../../src/ffmpeg/strings.js");
 const {
+  escapeFilePath,
   escapeDrawtextText,
+  escapeTextFilePath,
   hasProblematicChars,
   hasEmoji,
   stripEmoji,
@@ -319,6 +321,70 @@ describe("Strings - FFmpeg escaping utilities", () => {
       // Subsequent args should be correct
       expect(args[3]).toBe("-map");
       expect(args[4]).toBe("[outVideoAndText]");
+    });
+  });
+
+  describe("escapeFilePath", () => {
+    it("should return empty string for non-string input", () => {
+      expect(escapeFilePath(null)).toBe("");
+      expect(escapeFilePath(undefined)).toBe("");
+      expect(escapeFilePath(42)).toBe("");
+    });
+
+    it("should not modify simple paths", () => {
+      expect(escapeFilePath("/tmp/video.mp4")).toBe("/tmp/video.mp4");
+      expect(escapeFilePath("output.mp4")).toBe("output.mp4");
+    });
+
+    it("should escape backslashes", () => {
+      expect(escapeFilePath("C:\\Users\\test\\video.mp4")).toBe(
+        "C:\\\\Users\\\\test\\\\video.mp4",
+      );
+    });
+
+    it("should escape double quotes", () => {
+      expect(escapeFilePath("my \"video\".mp4")).toBe("my \\\"video\\\".mp4");
+    });
+
+    it("should escape both backslashes and double quotes", () => {
+      expect(escapeFilePath("C:\\path\\\"file\".mp4")).toBe(
+        "C:\\\\path\\\\\\\"file\\\".mp4",
+      );
+    });
+  });
+
+  describe("escapeTextFilePath", () => {
+    it("should return empty string for non-string input", () => {
+      expect(escapeTextFilePath(null)).toBe("");
+      expect(escapeTextFilePath(undefined)).toBe("");
+      expect(escapeTextFilePath(42)).toBe("");
+    });
+
+    it("should not modify simple paths", () => {
+      expect(escapeTextFilePath("/tmp/text.txt")).toBe("/tmp/text.txt");
+    });
+
+    it("should convert backslashes to forward slashes", () => {
+      expect(escapeTextFilePath("C:\\Users\\test\\file.txt")).toBe(
+        "C\\:/Users/test/file.txt",
+      );
+    });
+
+    it("should escape colons", () => {
+      expect(escapeTextFilePath("/tmp/file:name.txt")).toBe(
+        "/tmp/file\\:name.txt",
+      );
+    });
+
+    it("should escape single quotes with two-level escape", () => {
+      const result = escapeTextFilePath("/tmp/it's a file.txt");
+      expect(result).toContain("'\\\\\\''");
+    });
+
+    it("should handle Windows drive letters", () => {
+      // C:\path → C\:/path (backslash → /, colon escaped)
+      const result = escapeTextFilePath("C:\\path\\to\\file.ass");
+      expect(result).toBe("C\\:/path/to/file.ass");
     });
   });
 });

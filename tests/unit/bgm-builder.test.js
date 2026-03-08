@@ -252,4 +252,96 @@ describe("buildBackgroundMusicMix", () => {
       expect(result.filter).toContain("anullsrc=cl=stereo");
     });
   });
+
+  describe("default property handling", () => {
+    it("should default position to 0 when undefined", () => {
+      const bgm = mockBgmClip({ position: undefined, end: 10 });
+      const video = mockVideoClip({ end: 10 });
+      const project = mockProject([video, bgm]);
+      const result = buildBackgroundMusicMix(project, [bgm], null, 10);
+
+      expect(result.filter).toContain("adelay=0|0");
+    });
+
+    it("should default cutFrom to 0 when undefined", () => {
+      const bgm = mockBgmClip({ cutFrom: undefined, end: 10 });
+      const video = mockVideoClip({ end: 10 });
+      const project = mockProject([video, bgm]);
+      const result = buildBackgroundMusicMix(project, [bgm], null, 10);
+
+      expect(result.filter).toContain("atrim=start=0");
+    });
+
+    it("should default volume to 0.2 when undefined", () => {
+      const bgm = mockBgmClip({ volume: undefined, end: 10 });
+      const video = mockVideoClip({ end: 10 });
+      const project = mockProject([video, bgm]);
+      const result = buildBackgroundMusicMix(project, [bgm], null, 10);
+
+      expect(result.filter).toContain("volume=0.2");
+    });
+
+    it("should default end to projectDuration when undefined", () => {
+      const bgm = mockBgmClip({ end: undefined });
+      const video = mockVideoClip({ end: 15 });
+      const project = mockProject([video, bgm]);
+      const result = buildBackgroundMusicMix(project, [bgm], null, 15);
+
+      // effectiveEnd = projectDuration (15), trimEnd = 0 + (15 - 0) = 15
+      expect(result.filter).toContain("atrim=start=0:end=15");
+    });
+  });
+
+  describe("projectDuration fallback", () => {
+    it("should compute duration from visual clips when visualEnd is null", () => {
+      const video = mockVideoClip({ end: 12 });
+      const bgm = mockBgmClip({ end: 12 });
+      const project = mockProject([video, bgm]);
+      const result = buildBackgroundMusicMix(project, [bgm], null, null);
+
+      // Falls back to Math.max(video.end) = 12
+      expect(result.filter).toContain("atrim=start=0:end=12");
+    });
+
+    it("should compute duration from bgm clips when no visual clips exist", () => {
+      const bgm = mockBgmClip({ end: 8, volume: 0.3 });
+      // No visual clips in project
+      const project = {
+        videoOrAudioClips: [bgm],
+        _inputIndexMap: new Map([[bgm, 0]]),
+      };
+      const result = buildBackgroundMusicMix(project, [bgm], null, null);
+
+      // No visual clips → falls back to Math.max(bgm.end) = 8
+      expect(result.filter).toContain("atrim=start=0:end=8");
+    });
+
+    it("should use 0 as fallback when bgm clips have no end", () => {
+      const bgm = mockBgmClip({ end: undefined, volume: 0.3 });
+      const project = {
+        videoOrAudioClips: [bgm],
+        _inputIndexMap: new Map([[bgm, 0]]),
+      };
+      const result = buildBackgroundMusicMix(project, [bgm], null, null);
+
+      // No visual, no bgm end → projectDuration = 0
+      // effectiveEnd = projectDuration = 0, trimEnd = 0 + (0 - 0) = 0
+      expect(result.filter).toContain("atrim=start=0:end=0");
+    });
+  });
+
+  describe("input index fallback", () => {
+    it("should fall back to videoOrAudioClips.indexOf when _inputIndexMap is null", () => {
+      const bgm = mockBgmClip({ end: 10, volume: 0.2 });
+      const video = mockVideoClip({ end: 10 });
+      const project = {
+        videoOrAudioClips: [video, bgm],
+        _inputIndexMap: null,
+      };
+      const result = buildBackgroundMusicMix(project, [bgm], null, 10);
+
+      // bgm is at index 1 via indexOf
+      expect(result.filter).toContain("[1:a]");
+    });
+  });
 });
