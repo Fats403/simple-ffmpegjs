@@ -360,15 +360,26 @@ function validateEffectClip(clip, path, errors) {
         max: 0.5,
       });
     }
-    if (params.color != null && typeof params.color !== "string") {
-      errors.push(
-        createIssue(
-          ValidationCodes.INVALID_VALUE,
-          `${path}.params.color`,
-          "color must be a string",
-          params.color,
-        ),
-      );
+    if (params.color != null) {
+      if (typeof params.color !== "string") {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.params.color`,
+            "color must be a string",
+            params.color,
+          ),
+        );
+      } else if (!isValidFFmpegColor(params.color)) {
+        errors.push(
+          createIssue(
+            ValidationCodes.INVALID_VALUE,
+            `${path}.params.color`,
+            `invalid color "${params.color}". Use a named color (e.g. "black"), hex (#RRGGBB), or color@alpha format.`,
+            params.color,
+          ),
+        );
+      }
     }
   }
 }

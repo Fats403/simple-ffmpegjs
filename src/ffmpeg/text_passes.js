@@ -2,18 +2,26 @@ const path = require("path");
 const { spawn } = require("child_process");
 const { buildFiltersForWindows } = require("./text_renderer");
 const { buildTextBatchCommand } = require("./command_builder");
-const { FFmpegError } = require("../core/errors");
+const { FFmpegError, ExportCancelledError } = require("../core/errors");
 const { parseFFmpegCommand } = require("../lib/utils");
 
 /**
  * Run an FFmpeg command using spawn() to avoid command injection.
  * @param {string} cmd - The full FFmpeg command string
- * @param {Function} [onLog] - Optional log callback receiving { level, message }
+ * @param {Object} [options] - Optional settings
+ * @param {Function} [options.onLog] - Log callback receiving { level, message }
+ * @param {AbortSignal} [options.signal] - Abort signal to cancel the process
  * @returns {Promise<void>}
  * @throws {FFmpegError} If ffmpeg fails
+ * @throws {ExportCancelledError} If aborted via signal
  */
-function runCmd(cmd, onLog) {
+function runCmd(cmd, { onLog, signal } = {}) {
   return new Promise((resolve, reject) => {
+    if (signal && signal.aborted) {
+      reject(new ExportCancelledError());
+      return;
+    }
+
     const args = parseFFmpegCommand(cmd);
     const ffmpegPath = args.shift(); // Remove 'ffmpeg' from args
 
@@ -22,6 +30,18 @@ function runCmd(cmd, onLog) {
     });
 
     let stderr = "";
+    let cancelled = false;
+
+    if (signal) {
+      const abortHandler = () => {
+        cancelled = true;
+        proc.kill("SIGTERM");
+      };
+      signal.addEventListener("abort", abortHandler, { once: true });
+      proc.on("close", () => {
+        signal.removeEventListener("abort", abortHandler);
+      });
+    }
 
     proc.stdout.on("data", (data) => {
       const chunk = data.toString();
@@ -48,6 +68,10 @@ function runCmd(cmd, onLog) {
     });
 
     proc.on("close", (code) => {
+      if (cancelled) {
+        reject(new ExportCancelledError());
+        return;
+      }
       if (code !== 0) {
         console.error("FFmpeg text batch stderr:", stderr);
         reject(
@@ -75,6 +99,7 @@ async function runTextPasses({
   batchSize = 75,
   onLog,
   tempDir,
+  signal,
 }) {
   const tempOutputs = [];
   let currentInput = baseOutputPath;
@@ -104,7 +129,7 @@ async function runTextPasses({
       intermediateCrf,
       outputPath: batchOutput,
     });
-    await runCmd(cmd, onLog);
+    await runCmd(cmd, { onLog, signal });
     currentInput = batchOutput;
     passes += 1;
   }

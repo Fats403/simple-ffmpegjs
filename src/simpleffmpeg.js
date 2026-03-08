@@ -154,7 +154,7 @@ class SIMPLEFFMPEG {
         const escapedUrl = escapeFilePath(clip.url);
         // Gradient color clips and image clips are looped images
         if (clip.type === "image" || (clip.type === "color" && !clip._isFlatColor)) {
-          const duration = Math.max(0, clip.end - clip.position || 0);
+          const duration = Math.max(0, (clip.end ?? 0) - (clip.position ?? 0));
           return `-loop 1 -t ${duration} -i "${escapedUrl}"`;
         }
         // Loop background music if specified
@@ -299,6 +299,13 @@ class SIMPLEFFMPEG {
     this._isLoading = true;
 
     try {
+      // Clear previous state for idempotent reload
+      this.videoOrAudioClips = [];
+      this.textClips = [];
+      this.subtitleClips = [];
+      this.effectClips = [];
+      this.filesToClean = [];
+
       // Resolve shorthand: duration → end, auto-sequential positioning
       const resolved = resolveClips(clipObjs);
 
@@ -334,7 +341,7 @@ class SIMPLEFFMPEG {
         resolvedClips.map((clipObj) => {
           if (clipObj.type === "video" || clipObj.type === "audio") {
             clipObj.volume = clipObj.volume != null ? clipObj.volume : 1;
-            clipObj.cutFrom = clipObj.cutFrom || 0;
+            clipObj.cutFrom = clipObj.cutFrom ?? 0;
           }
           // Normalize transitions for all visual clip types
           if (
@@ -343,7 +350,7 @@ class SIMPLEFFMPEG {
           ) {
             clipObj.transition = {
               type: clipObj.transition.type || clipObj.transition,
-              duration: clipObj.transition.duration || 0.5,
+              duration: clipObj.transition.duration ?? 0.5,
             };
           }
           if (clipObj.type === "video") {
@@ -457,7 +464,8 @@ class SIMPLEFFMPEG {
       if (!a.position) return -1;
       if (!b.position) return 1;
       if (a.position < b.position) return -1;
-      return 1;
+      if (a.position > b.position) return 1;
+      return 0;
     });
 
     // Handle rotation
@@ -957,12 +965,16 @@ class SIMPLEFFMPEG {
    * @returns {Promise<{command: string, filterComplex: string, totalDuration: number}>}
    */
   async preview(options = {}) {
-    const result = await this._prepareExport(options);
-    return {
-      command: result.command,
-      filterComplex: result.filterComplex,
-      totalDuration: result.totalDuration,
-    };
+    try {
+      const result = await this._prepareExport(options);
+      return {
+        command: result.command,
+        filterComplex: result.filterComplex,
+        totalDuration: result.totalDuration,
+      };
+    } finally {
+      await this._cleanup();
+    }
   }
 
   /**
@@ -1166,6 +1178,7 @@ class SIMPLEFFMPEG {
           batchSize: exportOptions.textMaxNodesPerPass,
           onLog,
           tempDir: this.options.tempDir,
+          signal,
         });
         passes = textPasses;
         if (finalPath !== exportOptions.outputPath) {
