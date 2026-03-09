@@ -1579,4 +1579,58 @@ describe("Validation", () => {
       ).toBe(true);
     });
   });
+
+  describe("fullDuration validation", () => {
+    it("should pass for effect clips with fullDuration: true and no position/end", () => {
+      const result = validateConfig([
+        { type: "video", url: "./a.mp4", position: 0, end: 10 },
+        { type: "effect", effect: "vignette", fullDuration: true, params: {} },
+      ]);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should pass for text clips with fullDuration: true and no position/end", () => {
+      const result = validateConfig([
+        { type: "video", url: "./a.mp4", position: 0, end: 10 },
+        { type: "text", text: "Hello", fullDuration: true },
+      ]);
+      expect(result.valid).toBe(true);
+    });
+
+    it("should reject fullDuration on unsupported clip types", () => {
+      const result = validateConfig([
+        { type: "video", url: "./a.mp4", position: 0, end: 10, fullDuration: true },
+      ]);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.code === ValidationCodes.INVALID_VALUE &&
+            e.path.includes("fullDuration"),
+        ),
+      ).toBe(true);
+    });
+
+    it("should reject fullDuration with non-true value", () => {
+      const result = validateConfig([
+        { type: "effect", effect: "vignette", fullDuration: "yes", position: 0, end: 5, params: {} },
+      ]);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some(
+          (e) =>
+            e.code === ValidationCodes.INVALID_VALUE &&
+            e.path.includes("fullDuration"),
+        ),
+      ).toBe(true);
+    });
+
+    it("should allow fullDuration with explicit position", () => {
+      const result = validateConfig([
+        { type: "video", url: "./a.mp4", position: 0, end: 10 },
+        { type: "effect", effect: "vignette", fullDuration: true, position: 2, params: {} },
+      ]);
+      expect(result.valid).toBe(true);
+    });
+  });
 });

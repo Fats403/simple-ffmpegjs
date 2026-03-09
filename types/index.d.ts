@@ -4,9 +4,7 @@ declare namespace SIMPLEFFMPEG {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /** Base error class for all simple-ffmpeg errors */
-  class SimpleffmpegError extends Error {
-    name: "SimpleffmpegError";
-  }
+  class SimpleffmpegError extends Error {}
 
   /** Thrown when clip validation fails */
   class ValidationError extends SimpleffmpegError {
@@ -159,8 +157,12 @@ declare namespace SIMPLEFFMPEG {
   interface TextClip {
     type: "text";
     text?: string;
-    position: number;
-    end: number;
+    /** Start time on timeline in seconds. Required unless fullDuration is true. */
+    position?: number;
+    /** End time on timeline in seconds. Mutually exclusive with fullDuration. */
+    end?: number;
+    /** When true, the clip spans the full visual timeline (position 0 to end of last video/image/color clip). Mutually exclusive with end and duration. */
+    fullDuration?: boolean;
     mode?: TextMode;
     words?: TextWordWindow[];
     wordTimestamps?: number[];
@@ -337,12 +339,14 @@ declare namespace SIMPLEFFMPEG {
   interface EffectClip {
     type: "effect";
     effect: EffectName;
-    /** Start time on timeline in seconds. Required for effect clips. */
-    position: number;
-    /** End time on timeline in seconds. Mutually exclusive with duration. */
+    /** Start time on timeline in seconds. Required unless fullDuration is true. */
+    position?: number;
+    /** End time on timeline in seconds. Mutually exclusive with duration and fullDuration. */
     end?: number;
-    /** Duration in seconds (alternative to end). end = position + duration. */
+    /** Duration in seconds (alternative to end). end = position + duration. Mutually exclusive with fullDuration. */
     duration?: number;
+    /** When true, the clip spans the full visual timeline (position 0 to end of last video/image/color clip). Mutually exclusive with end and duration. */
+    fullDuration?: boolean;
     /** Ramp-in duration in seconds */
     fadeIn?: number;
     /** Ramp-out duration in seconds */
@@ -1085,36 +1089,6 @@ declare class SIMPLEFFMPEG {
    * Format validation result as human-readable string
    */
   static formatValidationResult(result: SIMPLEFFMPEG.ValidationResult): string;
-
-  /**
-   * Validation error codes for programmatic handling
-   */
-  static readonly ValidationCodes: typeof SIMPLEFFMPEG.ValidationCodes;
-
-  /**
-   * Base error class for all simple-ffmpeg errors
-   */
-  static readonly SimpleffmpegError: typeof SIMPLEFFMPEG.SimpleffmpegError;
-
-  /**
-   * Thrown when clip validation fails
-   */
-  static readonly ValidationError: typeof SIMPLEFFMPEG.ValidationError;
-
-  /**
-   * Thrown when FFmpeg command execution fails
-   */
-  static readonly FFmpegError: typeof SIMPLEFFMPEG.FFmpegError;
-
-  /**
-   * Thrown when a media file cannot be found or accessed
-   */
-  static readonly MediaNotFoundError: typeof SIMPLEFFMPEG.MediaNotFoundError;
-
-  /**
-   * Thrown when export is cancelled via AbortSignal
-   */
-  static readonly ExportCancelledError: typeof SIMPLEFFMPEG.ExportCancelledError;
 
   /**
    * Get the clip schema as formatted prompt-ready text.

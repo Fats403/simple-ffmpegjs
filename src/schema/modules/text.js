@@ -5,9 +5,10 @@ module.exports = {
     "Render text overlays on the video with multiple display modes, positioning, styling, and animations.",
   schema: `{
   type: "text";                   // Required: clip type identifier
-  position: number;               // Required: start time on timeline (seconds)
-  end?: number;                   // End time on timeline (seconds). Use end OR duration, not both.
-  duration?: number;              // Duration in seconds (alternative to end). end = position + duration.
+  position?: number;              // Start time on timeline (seconds). Required unless fullDuration is true.
+  end?: number;                   // End time on timeline (seconds). Use end OR duration, not both. Mutually exclusive with fullDuration.
+  duration?: number;              // Duration in seconds (alternative to end). end = position + duration. Mutually exclusive with fullDuration.
+  fullDuration?: boolean;         // When true, spans the full visual timeline. Mutually exclusive with end and duration.
 
   // Content
   text?: string;                  // Text content (required for "static" mode)

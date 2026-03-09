@@ -561,6 +561,20 @@ class SIMPLEFFMPEG {
       }
     }
 
+    // Expand fullDuration clips now that finalVisualEnd is known
+    for (const clip of this.effectClips) {
+      if (clip.fullDuration === true) {
+        clip.position = clip.position ?? 0;
+        clip.end = finalVisualEnd;
+      }
+    }
+    for (const clip of this.textClips) {
+      if (clip.fullDuration === true) {
+        clip.position = clip.position ?? 0;
+        clip.end = finalVisualEnd;
+      }
+    }
+
     // Overlay effects (adjustment layer clips) on the composed video output.
     if (this.effectClips.length > 0 && hasVideo && finalVideoLabel) {
       const effectRes = buildEffectFilters(this.effectClips, finalVideoLabel);

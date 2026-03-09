@@ -379,4 +379,73 @@ describe("resolveClips", () => {
       expect(clips[3].position).toBeUndefined();
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // fullDuration resolution
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  describe("fullDuration resolution", () => {
+    it("should default position to 0 and leave end unset for effect clips", () => {
+      const { clips, errors } = resolveClips([
+        { type: "effect", effect: "vignette", fullDuration: true, params: {} },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0].position).toBe(0);
+      expect(clips[0].end).toBeUndefined();
+      expect(clips[0].fullDuration).toBe(true);
+    });
+
+    it("should default position to 0 and leave end unset for text clips", () => {
+      const { clips, errors } = resolveClips([
+        { type: "text", text: "Hello", fullDuration: true },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0].position).toBe(0);
+      expect(clips[0].end).toBeUndefined();
+    });
+
+    it("should preserve explicit position when fullDuration is set", () => {
+      const { clips, errors } = resolveClips([
+        { type: "effect", effect: "vignette", fullDuration: true, position: 5, params: {} },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0].position).toBe(5);
+      expect(clips[0].end).toBeUndefined();
+    });
+
+    it("should error when fullDuration and end are both set", () => {
+      const { errors } = resolveClips([
+        { type: "effect", effect: "vignette", fullDuration: true, end: 10, params: {} },
+      ]);
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("fullDuration");
+      expect(errors[0].message).toContain("end");
+    });
+
+    it("should error when fullDuration and duration are both set", () => {
+      const { errors } = resolveClips([
+        { type: "text", text: "Hello", fullDuration: true, duration: 5 },
+      ]);
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0].message).toContain("fullDuration");
+      expect(errors[0].message).toContain("duration");
+    });
+
+    it("should not affect other clips in the same array", () => {
+      const { clips, errors } = resolveClips([
+        { type: "video", url: "./a.mp4", position: 0, duration: 10 },
+        { type: "effect", effect: "vignette", fullDuration: true, params: {} },
+      ]);
+
+      expect(errors).toHaveLength(0);
+      expect(clips[0].end).toBe(10);
+      expect(clips[1].position).toBe(0);
+      expect(clips[1].end).toBeUndefined();
+    });
+  });
 });

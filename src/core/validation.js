@@ -474,12 +474,37 @@ function validateClip(clip, index, options = {}) {
     }
   }
 
-  // Types that require position/end on timeline
+  // fullDuration validation
+  const fullDurationTypes = ["effect", "text"];
+  if (clip.fullDuration != null) {
+    if (clip.fullDuration !== true) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.fullDuration`,
+          "fullDuration must be true when specified",
+          clip.fullDuration,
+        ),
+      );
+    } else if (!fullDurationTypes.includes(clip.type)) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.fullDuration`,
+          `fullDuration is only supported on ${fullDurationTypes.join(", ")} clips`,
+          clip.type,
+        ),
+      );
+    }
+  }
+
+  // Types that require position/end on timeline (unless fullDuration is set)
+  const hasFullDuration = clip.fullDuration === true && fullDurationTypes.includes(clip.type);
   const requiresTimeline = ["video", "audio", "text", "image", "color", "effect"].includes(
     clip.type,
   );
 
-  if (requiresTimeline) {
+  if (requiresTimeline && !hasFullDuration) {
     if (typeof clip.position !== "number") {
       errors.push(
         createIssue(

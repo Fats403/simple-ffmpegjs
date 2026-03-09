@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] - 2026-03-08
+
+### Added
+
+- `fullDuration` property for effect and text clips — when set to `true`, the clip automatically spans the entire visual timeline (position 0 to end of last video/image/color clip). Removes the need to manually specify `position`, `end`, or `duration`.
+
+### Fixed
+
+- Missing `getTransitionOverlap` static method in ESM type definitions (`index.d.mts`), causing broken IntelliSense for ESM consumers.
+- TypeScript declaration errors in both `.d.ts` and `.d.mts`: base error class `name` literal narrowing prevented subclass type narrowing; redundant `static readonly` re-exports caused modifier conflict diagnostics.
+
 ## [0.5.3] - 2026-03-08
 
 ### Added

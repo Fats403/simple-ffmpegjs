@@ -8,9 +8,10 @@ module.exports = {
   effect: "vignette" | "filmGrain" | "gaussianBlur" | "colorAdjust"
         | "sepia" | "blackAndWhite" | "sharpen" | "chromaticAberration"
         | "letterbox";                      // Required: effect kind
-  position: number;                         // Required: start time on timeline (seconds)
-  end?: number;                             // End time on timeline (seconds). Use end OR duration, not both.
-  duration?: number;                        // Duration in seconds (alternative to end). end = position + duration.
+  position?: number;                        // Start time on timeline (seconds). Required unless fullDuration is true.
+  end?: number;                             // End time on timeline (seconds). Use end OR duration, not both. Mutually exclusive with fullDuration.
+  duration?: number;                        // Duration in seconds (alternative to end). end = position + duration. Mutually exclusive with fullDuration.
+  fullDuration?: boolean;                   // When true, spans the full visual timeline. Mutually exclusive with end and duration.
   fadeIn?: number;                          // Optional: seconds to ramp in from 0 to full intensity
   fadeOut?: number;                         // Optional: seconds to ramp out from full intensity to 0
   params: EffectParams;                     // Required: effect-specific parameters
@@ -116,7 +117,7 @@ module.exports = {
     "Effect clips are adjustment layers: they modify underlying video during their active window.",
     "Effects do not satisfy visual timeline continuity checks and do not fill gaps.",
     "Use duration instead of end to specify length: end = position + duration. Cannot use both.",
-    "position is required for effect clips (no auto-sequencing).",
+    "position is required unless fullDuration: true is set, which spans the entire visual timeline.",
     "fadeIn/fadeOut are optional linear envelope controls that avoid abrupt on/off changes.",
     "params.amount is a normalized blend amount from 0 to 1 (default: 1).",
     "filmGrain: use params.strength (0-1) for noise intensity, params.amount for blend alpha.",

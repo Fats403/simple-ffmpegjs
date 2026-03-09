@@ -8,6 +8,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg" alt="Node.js ≥20"></a>
   <a href="https://codecov.io/gh/Fats403/simple-ffmpegjs"><img src="https://codecov.io/gh/Fats403/simple-ffmpegjs/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <img src="https://img.shields.io/badge/dependencies-0-brightgreen.svg" alt="Zero Dependencies">
 </p>
 
 <p align="center">

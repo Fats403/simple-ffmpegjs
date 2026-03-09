@@ -11,6 +11,10 @@
  *    `position`, it is placed immediately after the previous clip on the
  *    same track (visual or audio). The first clip defaults to position 0.
  *
+ * 3. **fullDuration**: If an effect or text clip has `fullDuration: true`,
+ *    its position defaults to 0 and end is resolved later in _prepareExport()
+ *    once the visual timeline duration is known.
+ *
  * Clips are shallow-cloned — the caller's original objects are not mutated.
  */
 
@@ -47,6 +51,35 @@ function resolveClips(clips) {
   const resolved = clips.map((clip, index) => {
     const c = { ...clip };
     const path = `clips[${index}]`;
+
+    // ── fullDuration shorthand ─────────────────────────────────────────
+    if (c.fullDuration === true) {
+      if (c.end != null) {
+        errors.push({
+          code: "INVALID_VALUE",
+          path: `${path}`,
+          message:
+            "Cannot specify both 'fullDuration' and 'end'. fullDuration spans the entire visual timeline automatically.",
+          received: { fullDuration: true, end: c.end },
+        });
+        return c;
+      }
+      if (c.duration != null) {
+        errors.push({
+          code: "INVALID_VALUE",
+          path: `${path}`,
+          message:
+            "Cannot specify both 'fullDuration' and 'duration'. fullDuration spans the entire visual timeline automatically.",
+          received: { fullDuration: true, duration: c.duration },
+        });
+        return c;
+      }
+      // Default position to 0; end is resolved in _prepareExport()
+      if (c.position == null) {
+        c.position = 0;
+      }
+      return c;
+    }
 
     // ── Conflict check: duration + end ──────────────────────────────────
     if (c.duration != null && c.end != null) {
