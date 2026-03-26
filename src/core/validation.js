@@ -388,7 +388,7 @@ function validateEffectClip(clip, path, errors) {
  * Validate a single clip and return issues
  */
 function validateClip(clip, index, options = {}) {
-  const { skipFileChecks = false } = options;
+  const { skipFileChecks = false, skipExtensionsCheck = false } = options;
   const errors = [];
   const warnings = [];
   const path = `clips[${index}]`;
@@ -639,7 +639,9 @@ function validateClip(clip, index, options = {}) {
       } catch (_) {}
     }
 
-    validateMediaUrlExtension(clip, path, errors);
+    if (!skipExtensionsCheck) {
+      validateMediaUrlExtension(clip, path, errors);
+    }
 
     if (typeof clip.cutFrom === "number") {
       if (!Number.isFinite(clip.cutFrom)) {
@@ -1406,6 +1408,7 @@ function validateTimelineGaps(clips) {
  * @param {Array} clips - Array of clip objects to validate
  * @param {Object} options - Validation options
  * @param {boolean} options.skipFileChecks - Skip file existence checks (useful for AI validation)
+ * @param {boolean} options.skipExtensionsCheck - Skip media extension/type checks (video/image)
  * @returns {Object} Validation result { valid, errors, warnings }
  */
 function validateConfig(clips, options = {}) {

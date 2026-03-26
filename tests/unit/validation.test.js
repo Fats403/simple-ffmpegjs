@@ -303,6 +303,19 @@ describe("Validation", () => {
 
         expect(result.valid).toBe(true);
       });
+
+      it("should skip extension validation when skipExtensionsCheck is true", () => {
+        const clips = [
+          { type: "video", url: "./still.png", position: 0, end: 5 },
+          { type: "image", url: "./clip.mp4", position: 0, end: 5 },
+        ];
+        const result = validateConfig(clips, { skipExtensionsCheck: true });
+
+        expect(result.valid).toBe(true);
+        expect(
+          result.errors.some((e) => e.code === ValidationCodes.INVALID_FORMAT),
+        ).toBe(false);
+      });
     });
 
     describe("file checks", () => {

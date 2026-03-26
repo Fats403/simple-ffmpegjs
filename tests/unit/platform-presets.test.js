@@ -72,6 +72,12 @@ describe("Platform Presets", () => {
       expect(ff.options.height).toBe(1080);
       expect(ff.options.fps).toBe(30);
       expect(ff.options.preset).toBe(null);
+      expect(ff.options.skipExtensionsCheck).toBe(false);
+    });
+
+    it("should allow configuring skipExtensionsCheck in constructor", () => {
+      const ff = new SIMPLEFFMPEG({ skipExtensionsCheck: true });
+      expect(ff.options.skipExtensionsCheck).toBe(true);
     });
 
     it("should warn but not fail on unknown preset", () => {

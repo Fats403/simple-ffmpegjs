@@ -434,6 +434,8 @@ declare namespace SIMPLEFFMPEG {
   interface ValidateOptions {
     /** Skip file existence checks (useful for AI generating configs before files exist) */
     skipFileChecks?: boolean;
+    /** Skip media URL extension/type checks for video/image clips */
+    skipExtensionsCheck?: boolean;
     /** Project width - used to validate Ken Burns images are large enough */
     width?: number;
     /** Project height - used to validate Ken Burns images are large enough */
@@ -453,6 +455,8 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
+    /** Skip media URL extension/type checks for video/image clips during load() validation */
+    skipExtensionsCheck?: boolean;
     /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
     fontFile?: string;
     /** Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline). */
@@ -868,6 +872,12 @@ declare namespace SIMPLEFFMPEG {
     totalDuration: number;
   }
 
+  /** Options for load() */
+  interface LoadOptions {
+    /** Override extension/type validation for media URLs (video/image) */
+    skipExtensionsCheck?: boolean;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Media Info (probe)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -911,8 +921,12 @@ declare class SIMPLEFFMPEG {
   /**
    * Load clips into the project
    * @param clips Array of clip descriptors (video, audio, text, image, music)
+   * @param options Load options
    */
-  load(clips: SIMPLEFFMPEG.Clip[]): Promise<void[]>;
+  load(
+    clips: SIMPLEFFMPEG.Clip[],
+    options?: SIMPLEFFMPEG.LoadOptions
+  ): Promise<void[]>;
 
   /**
    * Get a preview of the FFmpeg command without executing it (dry-run)
