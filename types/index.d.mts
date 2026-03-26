@@ -455,6 +455,8 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Validation mode: 'warn' logs warnings, 'strict' throws on warnings (default: 'warn') */
     validationMode?: "warn" | "strict";
+    /** Skip file existence checks during load() validation */
+    skipFileChecks?: boolean;
     /** Skip media URL extension/type checks for video/image clips during load() validation */
     skipExtensionsCheck?: boolean;
     /** Default font file path (.ttf, .otf) applied to all text clips. Individual clips can override this with their own fontFile. */
@@ -874,6 +876,8 @@ declare namespace SIMPLEFFMPEG {
 
   /** Options for load() */
   interface LoadOptions {
+    /** Override file existence checks for media URLs */
+    skipFileChecks?: boolean;
     /** Override extension/type validation for media URLs (video/image) */
     skipExtensionsCheck?: boolean;
   }

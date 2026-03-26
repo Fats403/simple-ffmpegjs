@@ -63,7 +63,8 @@ class SIMPLEFFMPEG {
    * @param {number} options.fps - Frames per second (default: 30)
    * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
-   * @param {boolean} options.skipExtensionsCheck - Skip media URL extension/type checks (video/image) during load() validation
+ * @param {boolean} options.skipFileChecks - Skip file existence checks during load() validation
+ * @param {boolean} options.skipExtensionsCheck - Skip media URL extension/type checks (video/image) during load() validation
    * @param {string} options.fontFile - Default font file path (.ttf, .otf) applied to all text clips unless overridden per-clip
    * @param {string} options.emojiFont - Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline).
    * @param {string} options.tempDir - Custom directory for temporary files (gradient images, unrotated videos, intermediate renders). Defaults to os.tmpdir(). Useful for fast SSDs, ramdisks, or environments with constrained /tmp.
@@ -98,6 +99,7 @@ class SIMPLEFFMPEG {
       width: options.width || presetConfig.width || C.DEFAULT_WIDTH,
       height: options.height || presetConfig.height || C.DEFAULT_HEIGHT,
       validationMode: options.validationMode || C.DEFAULT_VALIDATION_MODE,
+      skipFileChecks: options.skipFileChecks === true,
       skipExtensionsCheck: options.skipExtensionsCheck === true,
       preset: options.preset || null,
       fontFile: options.fontFile || null,
@@ -282,6 +284,7 @@ class SIMPLEFFMPEG {
    * @param {string} clipObjs[].mode - Text mode: 'static', 'word-replace', 'word-sequential', 'karaoke'
    * @param {string} clipObjs[].kenBurns - Ken Burns effect for images: 'zoom-in', 'zoom-out', 'pan-left', etc.
    * @param {Object} options - Load options
+   * @param {boolean} options.skipFileChecks - Override file existence checks for media URLs
    * @param {boolean} options.skipExtensionsCheck - Override extension/type validation for media URLs
    * @returns {Promise<void>} Resolves when all clips are loaded
    * @throws {ValidationError} If clip configuration is invalid
@@ -316,11 +319,16 @@ class SIMPLEFFMPEG {
         typeof options.skipExtensionsCheck === "boolean"
           ? options.skipExtensionsCheck
           : this.options.skipExtensionsCheck;
+      const skipFileChecks =
+        typeof options.skipFileChecks === "boolean"
+          ? options.skipFileChecks
+          : this.options.skipFileChecks;
 
       // Merge resolution errors into validation
       const result = validateConfig(resolved.clips, {
         width: this.options.width,
         height: this.options.height,
+        skipFileChecks,
         skipExtensionsCheck,
       });
 
