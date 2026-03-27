@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.5] - 2026-03-27
+
+### Added
+
+- `skipExtensionsCheck` option for constructor, `load()`, and `validate()` — skips media URL extension/type validation, useful for S3 or CDN URLs without file extensions. (PR #1 by @mat250)
+
 ## [0.5.4] - 2026-03-09
 
 ### Added
