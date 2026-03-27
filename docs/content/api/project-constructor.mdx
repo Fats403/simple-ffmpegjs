@@ -12,6 +12,8 @@ new SIMPLEFFMPEG(options?: {
   height?: number;
   fps?: number;
   validationMode?: "warn" | "strict";
+  skipFileChecks?: boolean;
+  skipExtensionsCheck?: boolean;
   preset?: string;
   fontFile?: string;
   emojiFont?: string;
@@ -27,6 +29,8 @@ new SIMPLEFFMPEG(options?: {
 | `height` | `number` | `1080` | Output height in pixels |
 | `fps` | `number` | `30` | Output frame rate |
 | `validationMode` | `'warn' \| 'strict'` | `'warn'` | Whether validation issues throw or warn |
+| `skipFileChecks` | `boolean` | `false` | Skip file existence checks during validation |
+| `skipExtensionsCheck` | `boolean` | `false` | Skip media URL extension/type checks (useful for S3 URLs without file extensions) |
 | `preset` | `string` | — | Platform preset name (e.g. `'tiktok'`, `'youtube'`) |
 | `fontFile` | `string` | — | Default font file path for all text clips |
 | `emojiFont` | `string` | — | Emoji font `.ttf` path for opt-in emoji rendering |

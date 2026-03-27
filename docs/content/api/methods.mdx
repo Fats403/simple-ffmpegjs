@@ -4,13 +4,22 @@ title: Methods
 
 # Methods
 
-## `project.load(clips)`
+## `project.load(clips, options?)`
 
 ```ts
-await project.load(clips: Clip[]): Promise<void[]>
+await project.load(clips: Clip[], options?: LoadOptions): Promise<void[]>
 ```
 
 Load clip descriptors into the project. Validates the timeline and reads media metadata.
+
+### Load options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `skipFileChecks` | `boolean` | inherited from constructor | Override file existence checks for this load call |
+| `skipExtensionsCheck` | `boolean` | inherited from constructor | Override extension/type validation for this load call |
+
+Per-call options take precedence over the constructor-level setting.
 
 ## `SIMPLEFFMPEG.getDuration(clips)`
 
@@ -188,6 +197,7 @@ Validate timeline descriptors before creating a project instance.
 ```ts
 const result = SIMPLEFFMPEG.validate(clips, {
   skipFileChecks: true,
+  skipExtensionsCheck: true,
   width: 1920,
   height: 1080,
   strictKenBurns: false,

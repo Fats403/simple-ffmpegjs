@@ -17,10 +17,11 @@ const clips = [
 ];
 
 const result = SIMPLEFFMPEG.validate(clips, {
-  skipFileChecks: true,  // Skip file existence checks (useful when files aren't on disk yet)
-  width: 1920,           // Project dimensions (used for Ken Burns size validation)
+  skipFileChecks: true,           // Skip file existence checks (useful when files aren't on disk yet)
+  skipExtensionsCheck: true,      // Skip extension/type checks (useful for S3 URLs without extensions)
+  width: 1920,                    // Project dimensions (used for Ken Burns size validation)
   height: 1080,
-  strictKenBurns: false, // If true, undersized Ken Burns images error instead of warn
+  strictKenBurns: false,          // If true, undersized Ken Burns images error instead of warn
 });
 
 if (!result.valid) {

@@ -63,8 +63,8 @@ class SIMPLEFFMPEG {
    * @param {number} options.fps - Frames per second (default: 30)
    * @param {string} options.preset - Platform preset ('tiktok', 'youtube', 'instagram-post', etc.)
    * @param {string} options.validationMode - Validation behavior: 'warn' or 'strict' (default: 'warn')
- * @param {boolean} options.skipFileChecks - Skip file existence checks during load() validation
- * @param {boolean} options.skipExtensionsCheck - Skip media URL extension/type checks (video/image) during load() validation
+   * @param {boolean} options.skipFileChecks - Skip file existence checks during load() validation
+   * @param {boolean} options.skipExtensionsCheck - Skip media URL extension/type checks (video/image) during load() validation
    * @param {string} options.fontFile - Default font file path (.ttf, .otf) applied to all text clips unless overridden per-clip
    * @param {string} options.emojiFont - Path to a .ttf/.otf emoji font for rendering emoji in text overlays (opt-in). Without this, emoji are silently stripped from text. Recommended: Noto Emoji (B&W outline).
    * @param {string} options.tempDir - Custom directory for temporary files (gradient images, unrotated videos, intermediate renders). Defaults to os.tmpdir(). Useful for fast SSDs, ramdisks, or environments with constrained /tmp.
