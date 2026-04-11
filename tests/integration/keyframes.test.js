@@ -332,6 +332,116 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
           expect(p).toMatch(/\.jpg$/);
         });
       });
+
+      // Regression test for the 0.5.5 "stale frames" bug: repeat calls against the
+      // same outputDir used to silently return leftover frames from previous calls
+      // because the implementation globbed the entire directory post-hoc.
+      it("should isolate sequential calls that share the same outputDir", async () => {
+        const outDir = path.join(OUTPUT_DIR, "sequential-isolation");
+
+        const first = await SIMPLEFFMPEG.extractKeyframes(
+          path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+          {
+            mode: "interval",
+            intervalSeconds: 1,
+            maxFrames: 5,
+            outputDir: outDir,
+            format: "jpeg",
+          },
+        );
+
+        const second = await SIMPLEFFMPEG.extractKeyframes(
+          path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+          {
+            mode: "interval",
+            intervalSeconds: 3,
+            maxFrames: 2,
+            outputDir: outDir,
+            format: "jpeg",
+          },
+        );
+
+        // Second call must not see leftover frames from the first call.
+        expect(second.length).toBeLessThanOrEqual(2);
+        expect(second.length).toBeGreaterThan(0);
+
+        // The two calls must return completely disjoint paths.
+        const firstSet = new Set(first);
+        second.forEach((p) => expect(firstSet.has(p)).toBe(false));
+
+        // Each call gets its own subdirectory; the parent dir that the caller
+        // passed in still exists.
+        expect(fs.existsSync(outDir)).toBe(true);
+        const firstDir = path.dirname(first[0]);
+        const secondDir = path.dirname(second[0]);
+        expect(firstDir).not.toBe(secondDir);
+        expect(path.dirname(firstDir)).toBe(outDir);
+        expect(path.dirname(secondDir)).toBe(outDir);
+
+        // Both subdirectories should still exist — we only auto-clean up in the
+        // no-outputDir (Buffer) path and on ffmpeg failure.
+        expect(fs.existsSync(firstDir)).toBe(true);
+        expect(fs.existsSync(secondDir)).toBe(true);
+      });
+
+      it("should isolate concurrent calls against the same outputDir", async () => {
+        const outDir = path.join(OUTPUT_DIR, "concurrent-isolation");
+
+        const [a, b] = await Promise.all([
+          SIMPLEFFMPEG.extractKeyframes(
+            path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+            {
+              mode: "interval",
+              intervalSeconds: 1,
+              maxFrames: 4,
+              outputDir: outDir,
+              format: "jpeg",
+            },
+          ),
+          SIMPLEFFMPEG.extractKeyframes(
+            path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+            {
+              mode: "interval",
+              intervalSeconds: 1,
+              maxFrames: 4,
+              outputDir: outDir,
+              format: "jpeg",
+            },
+          ),
+        ]);
+
+        expect(a.length).toBeGreaterThan(0);
+        expect(b.length).toBeGreaterThan(0);
+
+        // No overlap between the two calls' returned paths.
+        const aSet = new Set(a);
+        b.forEach((p) => expect(aSet.has(p)).toBe(false));
+
+        // Each call landed in its own subdirectory under outDir.
+        expect(path.dirname(a[0])).not.toBe(path.dirname(b[0]));
+        expect(path.dirname(path.dirname(a[0]))).toBe(outDir);
+        expect(path.dirname(path.dirname(b[0]))).toBe(outDir);
+      });
+
+      it("should not leave an empty subdirectory behind when ffmpeg fails", async () => {
+        const outDir = path.join(OUTPUT_DIR, "error-cleanup");
+        fs.mkdirSync(outDir, { recursive: true });
+
+        await expect(
+          SIMPLEFFMPEG.extractKeyframes("/nonexistent/video.mp4", {
+            mode: "interval",
+            intervalSeconds: 1,
+            outputDir: outDir,
+            format: "jpeg",
+          }),
+        ).rejects.toThrow();
+
+        // No orphaned simpleffmpeg-keyframes-XXXXXX subdirs should be left behind.
+        const leftovers = fs
+          .readdirSync(outDir)
+          .filter((f) => f.startsWith("simpleffmpeg-keyframes-"));
+        expect(leftovers).toHaveLength(0);
+      });
     },
   );
 

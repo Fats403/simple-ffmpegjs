@@ -1525,6 +1525,11 @@ class SIMPLEFFMPEG {
    * array of file paths. Without `outputDir`, frames are returned as in-memory Buffer
    * objects (no temp files left behind).
    *
+   * Each call creates a unique `simpleffmpeg-keyframes-XXXXXX` subdirectory inside
+   * `outputDir` and writes its frames there, so repeat or concurrent calls against the
+   * same `outputDir` are fully isolated. Always use the returned paths — do not assume
+   * frames live directly at `${outputDir}/frame-0001.jpg`.
+   *
    * @param {string} filePath - Path to the source video file
    * @param {Object} [options] - Extraction options
    * @param {string} [options.mode='scene-change'] - 'scene-change' for intelligent detection, 'interval' for fixed time spacing
@@ -1535,7 +1540,7 @@ class SIMPLEFFMPEG {
    * @param {number} [options.quality] - JPEG quality 1-31, lower is better (JPEG only)
    * @param {number} [options.width] - Output width in pixels (maintains aspect ratio if height omitted)
    * @param {number} [options.height] - Output height in pixels (maintains aspect ratio if width omitted)
-   * @param {string} [options.outputDir] - Directory to write frames to. If omitted, returns Buffer[] instead of string[].
+   * @param {string} [options.outputDir] - Directory to write frames to. Each call creates a unique subdirectory inside it. If omitted, returns Buffer[] instead of string[].
    * @param {string} [options.tempDir] - Custom directory for temporary files (default: os.tmpdir()). Only used when outputDir is not set.
    * @returns {Promise<Buffer[]|string[]>} Buffer[] when no outputDir, string[] of file paths when outputDir is set
    * @throws {SimpleffmpegError} If arguments are invalid
@@ -1626,10 +1631,16 @@ class SIMPLEFFMPEG {
     const ext = format === "png" ? ".png" : ".jpg";
     const useTemp = !outputDir;
 
+    // Always write into a fresh `simpleffmpeg-keyframes-XXXXXX` subdirectory so that
+    // repeat or concurrent calls against the same outputDir can't see each other's
+    // files. Without this, `readdir(targetDir)` would pick up stale frames left
+    // behind by a previous call and return them as if they belonged to this one.
     let targetDir;
     if (outputDir) {
       await fsPromises.mkdir(outputDir, { recursive: true });
-      targetDir = outputDir;
+      targetDir = await fsPromises.mkdtemp(
+        path.join(outputDir, "simpleffmpeg-keyframes-"),
+      );
     } else {
       const tmpBase = tempDir || os.tmpdir();
       targetDir = await fsPromises.mkdtemp(
@@ -1654,11 +1665,12 @@ class SIMPLEFFMPEG {
     try {
       await runFFmpeg({ command });
     } catch (err) {
-      if (useTemp) {
-        await fsPromises
-          .rm(targetDir, { recursive: true, force: true })
-          .catch(() => {});
-      }
+      // Clean up our mkdtemp'd subdirectory in both paths. The user's outputDir
+      // itself is left alone — we only created (and therefore only remove) the
+      // unique subdirectory.
+      await fsPromises
+        .rm(targetDir, { recursive: true, force: true })
+        .catch(() => {});
       throw err;
     }
 

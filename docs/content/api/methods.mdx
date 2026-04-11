@@ -104,8 +104,13 @@ Extract representative frames using either:
 - `scene-change` mode (default; FFmpeg scene detection)
 - `interval` mode (fixed time spacing)
 
-If `outputDir` is set, returns `string[]` paths.  
+If `outputDir` is set, returns `string[]` paths.
 If `outputDir` is omitted, returns in-memory `Buffer[]`.
+
+Each call with `outputDir` creates a unique `simpleffmpeg-keyframes-XXXXXX` subdirectory
+inside it, so repeat and concurrent calls against the same `outputDir` are fully
+isolated. Always use the returned paths — do not assume frames live directly at
+`${outputDir}/frame-0001.jpg`.
 
 ```ts
 const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
@@ -135,7 +140,7 @@ const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
 | `quality` | `number` | - | JPEG quality 1-31, lower is better |
 | `width` | `number` | - | Output width |
 | `height` | `number` | - | Output height |
-| `outputDir` | `string` | - | Write files to disk, return `string[]` |
+| `outputDir` | `string` | - | Write files to disk (in a unique subdirectory per call) and return `string[]` |
 | `tempDir` | `string` | `os.tmpdir()` | Temp directory for buffer mode |
 
 Throws `FFmpegError` if extraction fails.

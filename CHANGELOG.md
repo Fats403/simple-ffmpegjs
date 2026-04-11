@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.6] - 2026-04-11
+
+### Fixed
+
+- `SIMPLEFFMPEG.extractKeyframes()` with `outputDir` no longer returns stale frames from previous calls. Previously, the method wrote `frame-NNNN.{jpg,png}` directly into `outputDir` and then globbed the directory to build its return value, so repeat or concurrent calls against the same `outputDir` would silently include files left behind by earlier calls — producing cross-contaminated frame sets with no error. Each call now writes into a unique `simpleffmpeg-keyframes-XXXXXX` subdirectory inside `outputDir`, matching the isolation the Buffer path already had. On ffmpeg failure the subdirectory is cleaned up in both the disk and Buffer paths.
+
+### Changed
+
+- **Potentially breaking:** when `outputDir` is set, `extractKeyframes()` now writes frames into a `simpleffmpeg-keyframes-XXXXXX` subdirectory of `outputDir` rather than directly into it. Callers that consume the returned `string[]` are unaffected. Callers that hardcoded paths like `${outputDir}/frame-0001.jpg` will need to use the returned paths instead.
+
 ## [0.5.5] - 2026-03-27
 
 ### Added

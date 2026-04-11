@@ -547,7 +547,7 @@ declare namespace SIMPLEFFMPEG {
 
   /** Options with outputDir — writes to disk, returns string[] */
   interface ExtractKeyframesToDiskOptions extends ExtractKeyframesBaseOptions {
-    /** Directory to write frame files to */
+    /** Directory to write frame files to. Each call creates a unique `simpleffmpeg-keyframes-XXXXXX` subdirectory inside it, so repeat and concurrent calls are isolated. Always use the returned paths rather than assuming frames live directly at `${outputDir}/frame-0001.jpg`. */
     outputDir: string;
   }
 
@@ -1070,6 +1070,9 @@ declare class SIMPLEFFMPEG {
    * Interval mode extracts frames at fixed time intervals.
    *
    * When outputDir is provided, frames are written to disk and the method returns file paths.
+   * Each call creates a unique `simpleffmpeg-keyframes-XXXXXX` subdirectory inside outputDir,
+   * so repeat and concurrent calls against the same outputDir are fully isolated. Always use
+   * the returned paths — do not assume frames live directly at `${outputDir}/frame-0001.jpg`.
    * Without outputDir, frames are returned as in-memory Buffer objects.
    *
    * @param filePath - Path to the source video file
