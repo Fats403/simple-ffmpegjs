@@ -34,6 +34,94 @@ function validatePath(p, label) {
 }
 
 /**
+ * Validate caller-supplied option values. Rejects nonsense that would either
+ * pass through to ffmpeg as NONZERO_EXIT (confusing) or produce surprising
+ * wrapper behavior (e.g. negative timeoutMs fires setTimeout immediately).
+ * Throws SimpleffmpegError for programmer-error cases — distinct from the
+ * TranscodeError codes used for runtime/ffmpeg failures.
+ */
+function validateOptions(options) {
+  const posNumber = (v) =>
+    typeof v === "number" && Number.isFinite(v) && v > 0;
+  const posInt = (v) => Number.isInteger(v) && v > 0;
+
+  if (options.timeoutMs != null && !posNumber(options.timeoutMs)) {
+    throw new SimpleffmpegError(
+      "transcode() options.timeoutMs must be a positive finite number",
+    );
+  }
+  if (options.maxOutputBytes != null && !posNumber(options.maxOutputBytes)) {
+    throw new SimpleffmpegError(
+      "transcode() options.maxOutputBytes must be a positive finite number",
+    );
+  }
+  if (options.threads != null && !posInt(options.threads)) {
+    throw new SimpleffmpegError(
+      "transcode() options.threads must be a positive integer",
+    );
+  }
+  if (
+    options.crf != null &&
+    (!Number.isInteger(options.crf) || options.crf < 0 || options.crf > 51)
+  ) {
+    throw new SimpleffmpegError(
+      "transcode() options.crf must be an integer in [0, 51]",
+    );
+  }
+  if (options.scale != null) {
+    if (typeof options.scale !== "object" || Array.isArray(options.scale)) {
+      throw new SimpleffmpegError(
+        "transcode() options.scale must be a { width?, height? } object",
+      );
+    }
+    for (const dim of ["width", "height"]) {
+      const v = options.scale[dim];
+      if (v != null && !posInt(v)) {
+        throw new SimpleffmpegError(
+          `transcode() options.scale.${dim} must be a positive integer`,
+        );
+      }
+    }
+  }
+  if (
+    options.audioBitrate != null &&
+    (typeof options.audioBitrate !== "string" || options.audioBitrate.length === 0)
+  ) {
+    throw new SimpleffmpegError(
+      "transcode() options.audioBitrate must be a non-empty string (e.g. \"192k\")",
+    );
+  }
+  if (
+    options.videoBitrate != null &&
+    (typeof options.videoBitrate !== "string" || options.videoBitrate.length === 0)
+  ) {
+    throw new SimpleffmpegError(
+      "transcode() options.videoBitrate must be a non-empty string (e.g. \"2M\")",
+    );
+  }
+}
+
+/**
+ * Verify that the last element of customArgs resolves to the same absolute
+ * path as options.outputPath. The hardening wrapper unlinks resolvedOutput on
+ * failure; if customArgs writes elsewhere the cleanup targets the wrong file.
+ * ffmpeg's convention is output-path-last, so this is the common case.
+ */
+function validateCustomArgsOutput(customArgs, resolvedOutput) {
+  if (customArgs.length === 0) {
+    throw new SimpleffmpegError(
+      "transcode() options.customArgs must not be empty",
+    );
+  }
+  const last = customArgs[customArgs.length - 1];
+  if (typeof last !== "string" || path.resolve(last) !== resolvedOutput) {
+    throw new SimpleffmpegError(
+      "transcode() options.customArgs: the last element must be the output path and resolve to the same absolute path as options.outputPath (so partial-output cleanup targets the right file on failure)",
+    );
+  }
+}
+
+/**
  * Build the scale filter fragment for a user-supplied {width?, height?}.
  * Missing dimension uses -2 so ffmpeg preserves aspect ratio while keeping
  * the computed side even (required by libx264's yuv420p encoder).
@@ -367,8 +455,14 @@ async function transcode(inputPath, options = {}) {
     );
   }
 
+  validateOptions(options);
+
   const resolvedInput = validatePath(inputPath, "inputPath");
   const resolvedOutput = validatePath(options.outputPath, "options.outputPath");
+
+  if (hasCustomArgs) {
+    validateCustomArgsOutput(options.customArgs, resolvedOutput);
+  }
 
   try {
     await fsPromises.stat(resolvedInput);
@@ -436,6 +530,8 @@ module.exports = {
   buildWebMp4Args,
   buildScaleFilter,
   validatePath,
+  validateOptions,
+  validateCustomArgsOutput,
   parseProgressBlock,
   SUPPORTED_PRESETS,
   DEFAULT_TIMEOUT_MS,

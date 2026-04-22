@@ -5,6 +5,8 @@ const {
   buildWebMp4Args,
   buildScaleFilter,
   validatePath,
+  validateOptions,
+  validateCustomArgsOutput,
   parseProgressBlock,
   isWebSafeMp4,
   DEFAULT_MAX_OUTPUT_BYTES,
@@ -212,6 +214,136 @@ describe("transcode — parseProgressBlock", () => {
 
   it("returns 0 early in the transcode", () => {
     expect(parseProgressBlock("out_time_us=100000\n", 60)).toBe(0);
+  });
+});
+
+describe("transcode — validateOptions", () => {
+  function expectSimpleffmpegError(fn, fragment) {
+    let caught;
+    try {
+      fn();
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught, "expected function to throw").toBeDefined();
+    expect(caught.name).toBe("SimpleffmpegError");
+    if (fragment) expect(caught.message).toContain(fragment);
+  }
+
+  it("accepts an empty options object (all fields optional)", () => {
+    expect(() => validateOptions({})).not.toThrow();
+  });
+
+  it("accepts sensible values across every field", () => {
+    expect(() =>
+      validateOptions({
+        timeoutMs: 60000,
+        maxOutputBytes: 1024 * 1024,
+        threads: 4,
+        crf: 20,
+        scale: { width: 1280, height: 720 },
+        audioBitrate: "192k",
+        videoBitrate: "2M",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects non-positive timeoutMs (would fire setTimeout immediately)", () => {
+    expectSimpleffmpegError(() => validateOptions({ timeoutMs: 0 }), "timeoutMs");
+    expectSimpleffmpegError(() => validateOptions({ timeoutMs: -100 }), "timeoutMs");
+    expectSimpleffmpegError(() => validateOptions({ timeoutMs: NaN }), "timeoutMs");
+    expectSimpleffmpegError(() => validateOptions({ timeoutMs: "60" }), "timeoutMs");
+  });
+
+  it("rejects non-positive maxOutputBytes", () => {
+    expectSimpleffmpegError(() => validateOptions({ maxOutputBytes: 0 }), "maxOutputBytes");
+    expectSimpleffmpegError(() => validateOptions({ maxOutputBytes: -1 }), "maxOutputBytes");
+  });
+
+  it("rejects non-positive-integer threads", () => {
+    expectSimpleffmpegError(() => validateOptions({ threads: 0 }), "threads");
+    expectSimpleffmpegError(() => validateOptions({ threads: 2.5 }), "threads");
+    expectSimpleffmpegError(() => validateOptions({ threads: -1 }), "threads");
+  });
+
+  it("rejects crf outside [0, 51] or non-integer", () => {
+    expectSimpleffmpegError(() => validateOptions({ crf: -1 }), "crf");
+    expectSimpleffmpegError(() => validateOptions({ crf: 52 }), "crf");
+    expectSimpleffmpegError(() => validateOptions({ crf: 23.5 }), "crf");
+  });
+
+  it("accepts crf at the boundaries", () => {
+    expect(() => validateOptions({ crf: 0 })).not.toThrow();
+    expect(() => validateOptions({ crf: 51 })).not.toThrow();
+  });
+
+  it("rejects non-object or array scale", () => {
+    expectSimpleffmpegError(() => validateOptions({ scale: "1280x720" }), "scale");
+    expectSimpleffmpegError(() => validateOptions({ scale: [1280, 720] }), "scale");
+  });
+
+  it("rejects non-positive-integer scale dimensions", () => {
+    expectSimpleffmpegError(() => validateOptions({ scale: { width: 0 } }), "width");
+    expectSimpleffmpegError(() => validateOptions({ scale: { height: -1 } }), "height");
+    expectSimpleffmpegError(() => validateOptions({ scale: { width: 1280.5 } }), "width");
+  });
+
+  it("accepts a partial scale (one dim only)", () => {
+    expect(() => validateOptions({ scale: { width: 1280 } })).not.toThrow();
+    expect(() => validateOptions({ scale: { height: 720 } })).not.toThrow();
+    expect(() => validateOptions({ scale: {} })).not.toThrow();
+  });
+
+  it("rejects non-string or empty bitrate strings", () => {
+    expectSimpleffmpegError(() => validateOptions({ audioBitrate: "" }), "audioBitrate");
+    expectSimpleffmpegError(() => validateOptions({ audioBitrate: 128 }), "audioBitrate");
+    expectSimpleffmpegError(() => validateOptions({ videoBitrate: "" }), "videoBitrate");
+    expectSimpleffmpegError(() => validateOptions({ videoBitrate: 2_000_000 }), "videoBitrate");
+  });
+});
+
+describe("transcode — validateCustomArgsOutput", () => {
+  function expectSimpleffmpegError(fn, fragment) {
+    let caught;
+    try {
+      fn();
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught, "expected function to throw").toBeDefined();
+    expect(caught.name).toBe("SimpleffmpegError");
+    if (fragment) expect(caught.message).toContain(fragment);
+  }
+
+  it("accepts when last arg matches the resolved output exactly", () => {
+    expect(() =>
+      validateCustomArgsOutput(["-i", "/a/in.mp4", "/a/out.mp4"], "/a/out.mp4"),
+    ).not.toThrow();
+  });
+
+  it("accepts a relative last arg that resolves to the same absolute path", () => {
+    const abs = path.resolve("./out.mp4");
+    expect(() =>
+      validateCustomArgsOutput(["-i", "/a/in.mp4", "./out.mp4"], abs),
+    ).not.toThrow();
+  });
+
+  it("rejects when last arg resolves to a different path", () => {
+    expectSimpleffmpegError(
+      () => validateCustomArgsOutput(["-i", "/a/in.mp4", "/a/other.mp4"], "/a/out.mp4"),
+      "last element",
+    );
+  });
+
+  it("rejects an empty argv", () => {
+    expectSimpleffmpegError(() => validateCustomArgsOutput([], "/a/out.mp4"), "must not be empty");
+  });
+
+  it("rejects when last arg is a non-string (e.g. accidental number)", () => {
+    expectSimpleffmpegError(
+      () => validateCustomArgsOutput(["-i", "/a/in.mp4", 42], "/a/out.mp4"),
+      "last element",
+    );
   });
 });
 
