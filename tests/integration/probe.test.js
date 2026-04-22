@@ -103,22 +103,25 @@ describe("SIMPLEFFMPEG.probe", () => {
         });
       });
 
-      it("should return exactly 14 keys in the result", async () => {
+      it("should return exactly 17 keys in the result", async () => {
         const info = await SIMPLEFFMPEG.probe(
           path.join(FIXTURES_DIR, "test-video-2s.mp4"),
         );
         const keys = Object.keys(info);
-        expect(keys).toHaveLength(14);
+        expect(keys).toHaveLength(17);
         expect(keys.sort()).toEqual([
           "audioCodec",
           "bitrate",
           "channels",
+          "colorSpace",
+          "colorTransfer",
           "duration",
           "format",
           "fps",
           "hasAudio",
           "hasVideo",
           "height",
+          "pixelFormat",
           "rotation",
           "sampleRate",
           "size",

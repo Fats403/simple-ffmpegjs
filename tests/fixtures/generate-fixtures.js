@@ -52,6 +52,29 @@ const fixtures = [
     // 6 second video with 3 distinct scenes (red→blue→green, 2s each) for keyframe extraction tests
     cmd: `ffmpeg -y -f lavfi -i "color=c=red:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "color=c=blue:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "color=c=green:s=320x240:d=2:r=25,format=yuv420p" -f lavfi -i "anullsrc=r=44100:cl=stereo" -filter_complex "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]" -map "[v]" -map 3:a -t 6 -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 64k -shortest`,
   },
+  {
+    name: "test-video-odd-dims-1s.mp4",
+    // 1s video at 1081x721 (odd dimensions) — exercises the even-dim trunc
+    // filter in the web-mp4 preset. Encoded with mpeg4 since libx264 yuv420p
+    // can't encode odd dimensions; the test transcodes this into a
+    // libx264/yuv420p output and asserts the output is 1080x720.
+    cmd: `ffmpeg -y -f lavfi -i "color=c=red:s=1081x721:d=1" -t 1 -c:v mpeg4 -q:v 5`,
+  },
+  {
+    name: "test-video-noaudio-1s.mp4",
+    // 1s video with no audio track — exercises the optional 0:a:0? map
+    // (transcode should succeed and produce a video-only mp4).
+    cmd: `ffmpeg -y -f lavfi -i "color=c=red:s=320x240:d=1,format=yuv420p" -t 1 -c:v libx264 -preset ultrafast -crf 28`,
+  },
+  {
+    name: "test-video-busy-5s.mp4",
+    // 5s 1280x720 testsrc pattern (constantly-changing, not compressible)
+    // with audio. Used by transcode integration tests where we need:
+    //   - output big enough to reliably trip a 1024-byte -fs cap
+    //   - re-encode slow enough to reliably trip a 50ms timeout
+    // testsrc + medium preset at 720p meets both conditions.
+    cmd: `ffmpeg -y -f lavfi -i "testsrc=size=1280x720:duration=5:rate=30" -f lavfi -i "anullsrc=r=44100:cl=stereo" -t 5 -c:v libx264 -preset ultrafast -crf 18 -c:a aac -b:a 64k`,
+  },
 ];
 
 // Text-based fixtures (subtitles)

@@ -68,7 +68,7 @@ await project.export({ outputPath: "./output.mp4" });
 - **Platform presets** — TikTok, YouTube, Instagram, and more
 - **Pre-validation** — structured error codes before rendering; integrates cleanly into data pipelines and AI workflows
 - **Schema export** — machine-readable clip specification for docs, code generation, and LLM context
-- **Static helpers** — `probe()`, `snapshot()`, `extractKeyframes()`
+- **Static helpers** — `probe()`, `snapshot()`, `extractKeyframes()`, `transcode()` (hardened one-shot ingestion — H.264/MP4 in one line)
 - **TypeScript** — full type definitions included
 - **Zero runtime dependencies** — only requires FFmpeg on your system
 

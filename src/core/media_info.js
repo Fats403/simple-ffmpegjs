@@ -95,7 +95,10 @@ function parseFraction(fraction) {
  *   size: number|null,
  *   bitrate: number|null,
  *   sampleRate: number|null,
- *   channels: number|null
+ *   channels: number|null,
+ *   pixelFormat: string|null,
+ *   colorSpace: string|null,
+ *   colorTransfer: string|null
  * }>}
  * @throws {MediaNotFoundError} If the file cannot be probed
  */
@@ -188,6 +191,9 @@ async function probeMedia(filePath) {
     bitrate: Number.isFinite(bitrate) ? bitrate : null,
     sampleRate: Number.isFinite(sampleRate) ? sampleRate : null,
     channels,
+    pixelFormat: videoStream?.pix_fmt ?? null,
+    colorSpace: videoStream?.color_space ?? null,
+    colorTransfer: videoStream?.color_transfer ?? null,
   };
 }
 

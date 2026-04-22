@@ -69,10 +69,48 @@ class ExportCancelledError extends SimpleffmpegError {
   }
 }
 
+/**
+ * Thrown when SIMPLEFFMPEG.transcode() fails.
+ *
+ * The `code` field discriminates the cause so callers can branch
+ * (retry on transient, reject on content).
+ *
+ * @property {"INVALID_PATH"|"INPUT_MISSING"|"FFMPEG_NOT_FOUND"|"TIMEOUT"|"NONZERO_EXIT"|"SIGNAL"|"ABORTED"} code
+ * @property {string} stderr - Tail of ffmpeg stderr, capped at 16 KB
+ * @property {number|null} exitCode
+ * @property {string|null} signal
+ */
+class TranscodeError extends SimpleffmpegError {
+  constructor(
+    message,
+    { code, stderr = "", exitCode = null, signal = null } = {},
+  ) {
+    super(message);
+    this.name = "TranscodeError";
+    this.code = code;
+    this.stderr = stderr;
+    this.exitCode = exitCode;
+    this.signal = signal;
+  }
+
+  /**
+   * Structured error details for easy bug reporting.
+   */
+  get details() {
+    return {
+      code: this.code,
+      stderr: this.stderr,
+      exitCode: this.exitCode,
+      signal: this.signal,
+    };
+  }
+}
+
 module.exports = {
   SimpleffmpegError,
   ValidationError,
   FFmpegError,
   MediaNotFoundError,
   ExportCancelledError,
+  TranscodeError,
 };

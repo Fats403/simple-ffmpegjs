@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-04-21
+
+### Added
+
+- `SIMPLEFFMPEG.transcode(filePath, options)` — new static helper for hardened one-shot transcoding, targeting ingestion pipelines that today shell out to ffmpeg directly and reimplement the same spawn hardening. Ships the `web-mp4` preset (H.264 + AAC in MP4, yuv420p, faststart, even dimensions via the trunc-scale filter, `profile high` / `level 4.1`, broadly-playable on iOS Safari / smart TVs), plus a `customArgs` escape hatch that still applies the hardening wrapper. Every transcode runs under `spawn` with no shell, stdin ignored, a SIGKILL-backed timeout, 16 KB stderr tail, `-fs` output cap, path validation (rejects basenames starting with `-`), partial-output cleanup on any failure path, and `AbortSignal` support.
+- `SIMPLEFFMPEG.isWebSafeMp4(mediaInfo)` — predicate pairing with `probe()` so callers can skip transcoding when the input is already h264/mp4/yuv420p.
+- `SIMPLEFFMPEG.TranscodeError` — exposed via static getter. Carries `code` (`INVALID_PATH` | `INPUT_MISSING` | `FFMPEG_NOT_FOUND` | `TIMEOUT` | `NONZERO_EXIT` | `SIGNAL` | `ABORTED`), `stderr` (tail, ≤16 KB), `exitCode`, and `signal` so callers can branch on cause. The `FFMPEG_NOT_FOUND` code is surfaced when either `ffmpeg` or `ffprobe` is missing from `PATH`, with an actionable install message — separate from `NONZERO_EXIT` so callers don't mistake a missing binary for an ffmpeg failure.
+- `probe()` now surfaces `pixelFormat`, `colorSpace`, and `colorTransfer`. Lets callers detect HDR sources (`colorTransfer === "smpte2084"` for HDR10 PQ, `"arib-std-b67"` for HLG, or `pixelFormat === "yuv420p10le"` for 10-bit) and route them through `customArgs` with a tone-map chain — see the [Static Helpers docs](https://www.simple-ffmpegjs.com/api/static-helpers#known-limitations) for the warning and the example zscale+tonemap argv.
+
 ## [0.5.6] - 2026-04-11
 
 ### Fixed

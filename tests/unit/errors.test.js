@@ -6,6 +6,7 @@ const {
   FFmpegError,
   MediaNotFoundError,
   ExportCancelledError,
+  TranscodeError,
 } = await import("../../src/core/errors.js");
 
 describe("Custom Error Classes", () => {
@@ -130,6 +131,51 @@ describe("Custom Error Classes", () => {
 
       expect(error.name).toBe("MediaNotFoundError");
       expect(error.path).toBe("/path/to/file.mp4");
+    });
+  });
+
+  describe("TranscodeError", () => {
+    it("should be an instance of SimpleffmpegError", () => {
+      const error = new TranscodeError("transcode failed", { code: "TIMEOUT" });
+      expect(error).toBeInstanceOf(SimpleffmpegError);
+      expect(error).toBeInstanceOf(TranscodeError);
+    });
+
+    it("should store code, stderr, exitCode, and signal", () => {
+      const error = new TranscodeError("transcode failed", {
+        code: "NONZERO_EXIT",
+        stderr: "some ffmpeg error",
+        exitCode: 1,
+        signal: null,
+      });
+
+      expect(error.name).toBe("TranscodeError");
+      expect(error.code).toBe("NONZERO_EXIT");
+      expect(error.stderr).toBe("some ffmpeg error");
+      expect(error.exitCode).toBe(1);
+      expect(error.signal).toBeNull();
+    });
+
+    it("should default to empty values", () => {
+      const error = new TranscodeError("failed", { code: "TIMEOUT" });
+      expect(error.stderr).toBe("");
+      expect(error.exitCode).toBeNull();
+      expect(error.signal).toBeNull();
+    });
+
+    it("should return structured details via getter", () => {
+      const error = new TranscodeError("killed", {
+        code: "TIMEOUT",
+        stderr: "partial output",
+        exitCode: null,
+        signal: "SIGKILL",
+      });
+      expect(error.details).toEqual({
+        code: "TIMEOUT",
+        stderr: "partial output",
+        exitCode: null,
+        signal: "SIGKILL",
+      });
     });
   });
 

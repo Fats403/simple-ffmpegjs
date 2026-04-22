@@ -28,6 +28,7 @@ const {
   FFmpegError,
   MediaNotFoundError,
   ExportCancelledError,
+  TranscodeError,
 } = require("./core/errors");
 const C = require("./core/constants");
 const {
@@ -52,6 +53,10 @@ const {
 const { getSchema, getSchemaModules } = require("./schema");
 const { resolveClips } = require("./core/resolve");
 const { probeMedia } = require("./core/media_info");
+const {
+  transcode: transcodeMedia,
+  isWebSafeMp4: isWebSafeMp4Fn,
+} = require("./core/transcode");
 
 class SIMPLEFFMPEG {
   /**
@@ -1692,6 +1697,77 @@ class SIMPLEFFMPEG {
   }
 
   /**
+   * Transcode a media file with hardened defaults suitable for ingestion pipelines.
+   *
+   * Spawns ffmpeg with no shell, explicit argv, bounded stderr capture, a
+   * SIGKILL-backed timeout, path validation, output size cap, and partial
+   * output cleanup on failure. The hardening wrapper applies regardless of
+   * whether you use the preset or customArgs path.
+   *
+   * The `web-mp4` preset produces H.264 + AAC in an MP4 container with
+   * yuv420p, faststart, even dimensions, profile high / level 4.1 — the
+   * durable safe default for browser and downstream renderer pipelines.
+   *
+   * When `customArgs` is provided, the caller owns the full flag set
+   * (including `-i`, `-y`, output path) but still benefits from the hardening
+   * wrapper. preset and customArgs are mutually exclusive.
+   *
+   * @param {string} inputPath - Path to the source media file
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path
+   * @param {"web-mp4"} [options.preset] - Codec-safety preset. Mutually exclusive with customArgs.
+   * @param {number} [options.crf=23] - libx264 CRF (web-mp4 only)
+   * @param {string} [options.videoBitrate] - e.g. "2M" (web-mp4 only)
+   * @param {string} [options.audioBitrate="128k"] - e.g. "192k" (web-mp4 only)
+   * @param {{width?:number,height?:number}} [options.scale] - Optional scale; preserves aspect when one dim omitted
+   * @param {number} [options.timeoutMs=300000] - Hard timeout (default 5 min); SIGKILL-backed
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs (default 500 MB)
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads; safe for worker pools and in-request transcoding
+   * @param {string[]} [options.customArgs] - Full ffmpeg argv (caller owns all flags). Mutually exclusive with preset.
+   * @param {(percent:number)=>void} [options.onProgress] - Called with 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel the transcode; triggers SIGKILL and rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path on success
+   * @throws {SimpleffmpegError} If arguments are invalid (missing outputPath, both preset+customArgs, etc.)
+   * @throws {TranscodeError} With `code`: INVALID_PATH | INPUT_MISSING | FFMPEG_NOT_FOUND | TIMEOUT | NONZERO_EXIT | SIGNAL | ABORTED
+   *
+   * @example
+   * // One-liner ingestion
+   * await SIMPLEFFMPEG.transcode("./upload.mov", {
+   *   outputPath: "./normalized.mp4",
+   *   preset: "web-mp4",
+   * });
+   *
+   * @example
+   * // Custom flags — still hardened
+   * await SIMPLEFFMPEG.transcode("./in.mp4", {
+   *   outputPath: "./out.mp4",
+   *   customArgs: ["-i", "./in.mp4", "-c:v", "libx265", "-crf", "28", "./out.mp4"],
+   *   timeoutMs: 60_000,
+   * });
+   */
+  static async transcode(inputPath, options = {}) {
+    return transcodeMedia(inputPath, options);
+  }
+
+  /**
+   * Predicate — given a probe() result, return true when the file is already
+   * web-safe (h264 in an mp4-family container with yuv420p). Lets callers
+   * pair with probe() to skip transcoding when the input needs no work.
+   *
+   * @param {Object} mediaInfo - Result from SIMPLEFFMPEG.probe()
+   * @returns {boolean}
+   *
+   * @example
+   * const info = await SIMPLEFFMPEG.probe(path);
+   * if (!SIMPLEFFMPEG.isWebSafeMp4(info)) {
+   *   await SIMPLEFFMPEG.transcode(path, { outputPath: ..., preset: "web-mp4" });
+   * }
+   */
+  static isWebSafeMp4(mediaInfo) {
+    return isWebSafeMp4Fn(mediaInfo);
+  }
+
+  /**
    * Format validation result as human-readable string
    * @param {Object} result - Validation result from validate()
    * @returns {string} Formatted validation result
@@ -1740,6 +1816,15 @@ class SIMPLEFFMPEG {
    */
   static get ExportCancelledError() {
     return ExportCancelledError;
+  }
+
+  /**
+   * Thrown when SIMPLEFFMPEG.transcode() fails. The `code` field
+   * discriminates: INVALID_PATH | INPUT_MISSING | FFMPEG_NOT_FOUND |
+   * TIMEOUT | NONZERO_EXIT | SIGNAL | ABORTED.
+   */
+  static get TranscodeError() {
+    return TranscodeError;
   }
 
   /**

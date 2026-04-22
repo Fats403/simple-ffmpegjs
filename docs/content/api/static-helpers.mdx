@@ -2,6 +2,8 @@
 title: Static Helpers
 ---
 
+import { Callout } from 'nextra/components'
+
 # Static Helpers
 
 These are static methods on the `SIMPLEFFMPEG` class — no project instance required.
@@ -60,20 +62,23 @@ Returns ffprobe-derived metadata for video, audio, or image files.
 ```ts
 const info = await SIMPLEFFMPEG.probe("./video.mp4");
 // {
-//   duration: 30.5,         // seconds
+//   duration: 30.5,             // seconds
 //   width: 1920,
 //   height: 1080,
 //   hasVideo: true,
 //   hasAudio: true,
-//   rotation: 0,            // mobile rotation metadata
+//   rotation: 0,                // mobile rotation metadata
 //   videoCodec: "h264",
 //   audioCodec: "aac",
 //   format: "mov,mp4,m4a,3gp,3g2,mj2",
 //   fps: 30,
-//   size: 15728640,         // bytes
-//   bitrate: 4125000,       // bits/sec
-//   sampleRate: 48000,      // Hz
-//   channels: 2
+//   size: 15728640,             // bytes
+//   bitrate: 4125000,           // bits/sec
+//   sampleRate: 48000,          // Hz
+//   channels: 2,
+//   pixelFormat: "yuv420p",     // pix_fmt — yuv420p10le indicates 10-bit / likely HDR
+//   colorSpace: "bt709",        // bt2020nc indicates BT.2020 (HDR-adjacent)
+//   colorTransfer: "bt709"      // smpte2084 = HDR10 PQ; arib-std-b67 = HLG
 // }
 ```
 
@@ -158,6 +163,156 @@ const paths = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
 | `tempDir` | `string` | `os.tmpdir()` | Temp directory for buffer-mode extraction |
 
 Throws `FFmpegError` if extraction fails.
+
+---
+
+## `SIMPLEFFMPEG.transcode(filePath, options)`
+
+Transcodes a media file with hardened defaults — the missing primitive for ingestion pipelines that need to normalize user-uploaded video into something downstream renderers will accept.
+
+The hardening wrapper applies to **every** transcode (including `customArgs`):
+
+- `spawn` with explicit argv, never a shell, stdin ignored
+- Path validation (rejects basenames starting with `-` to defang ffmpeg-flag spoofing)
+- SIGKILL-backed timeout (ffmpeg ignores SIGTERM mid-encode)
+- Stderr captured into a 16 KB tail buffer
+- Output size cap via `-fs` (best-effort; see HDR/limits notes)
+- Partial output cleanup on any failure path
+- `AbortSignal` support
+
+```ts
+// One-liner — covers ~95% of ingestion use cases
+await SIMPLEFFMPEG.transcode("./upload.mov", {
+  outputPath: "./normalized.mp4",
+  preset: "web-mp4",
+});
+
+// Preset + overrides + progress
+await SIMPLEFFMPEG.transcode("./upload.mov", {
+  outputPath: "./normalized.mp4",
+  preset: "web-mp4",
+  crf: 20,
+  scale: { width: 1280 },                 // height auto-derived, even
+  maxOutputBytes: 1_000_000_000,
+  onProgress: (pct) => console.log(`${pct}%`),
+});
+
+// Custom flags — caller owns ffmpeg argv, hardening still applies
+await SIMPLEFFMPEG.transcode("./in.mp4", {
+  outputPath: "./out.mp4",
+  customArgs: ["-i", "./in.mp4", "-c:v", "libx265", "-crf", "28", "./out.mp4"],
+  timeoutMs: 120_000,
+});
+```
+
+### `web-mp4` preset
+
+Produces H.264 + AAC in MP4 with the durable safe defaults for browsers and downstream renderers:
+
+- libx264, `preset medium`, `crf 23`, `pix_fmt yuv420p`
+- `profile high` / `level 4.1` (broadly playable on iOS Safari, smart TVs)
+- `-vf scale='trunc(iw/2)*2':'trunc(ih/2)*2'` — fixes odd input dimensions automatically
+- AAC stereo at 128 kbps
+- `-movflags +faststart` (moov atom at front, streamable)
+- `-map 0:v:0 -map 0:a:0?` — first video stream + optional first audio (ignores extra audio tracks, subtitle streams, data tracks common in MOV files)
+- `-fflags +discardcorrupt -err_detect ignore_err` — recover from partial/malformed containers
+
+### Options
+
+| Option | Type | Default | Notes |
+|---|---|---|---|
+| `outputPath` | `string` | — | **Required.** Resolved to absolute internally. |
+| `preset` | `"web-mp4"` | — | Mutually exclusive with `customArgs`. |
+| `customArgs` | `string[]` | — | Full ffmpeg argv. Mutually exclusive with `preset`. |
+| `crf` | `number` | `23` | libx264 CRF (web-mp4 only) |
+| `videoBitrate` | `string` | — | e.g. `"2M"` (web-mp4 only) |
+| `audioBitrate` | `string` | `"128k"` | (web-mp4 only) |
+| `scale` | `{ width?, height? }` | — | Preserves aspect when one dim omitted (web-mp4 only) |
+| `timeoutMs` | `number` | `300000` (5 min) | SIGKILL-backed |
+| `maxOutputBytes` | `number` | `524288000` (500 MB) | Maps to `-fs`. Best-effort — see limits below. |
+| `threads` | `number` | `2` | Conservative for worker pools and in-request transcoding. CLI/batch users may want `os.cpus().length`. |
+| `onProgress` | `(pct) => void` | — | Receives 0–99 during encode, 100 on success |
+| `signal` | `AbortSignal` | — | Triggers SIGKILL, rejects with `code: "ABORTED"` |
+
+### Errors
+
+Throws `TranscodeError` with a `code` discriminator so callers can branch on cause:
+
+| `code` | Meaning |
+|---|---|
+| `INVALID_PATH` | Path basename starts with `-` or is empty/non-string |
+| `INPUT_MISSING` | Input file does not exist or cannot be probed |
+| `FFMPEG_NOT_FOUND` | `ffmpeg` (or `ffprobe`) binary is not on `PATH` |
+| `TIMEOUT` | Transcode exceeded `timeoutMs` and was SIGKILLed |
+| `NONZERO_EXIT` | ffmpeg exited with a non-zero code |
+| `SIGNAL` | ffmpeg killed by an external signal |
+| `ABORTED` | `AbortSignal` triggered |
+
+The error also carries `stderr` (tail, ≤16 KB), `exitCode`, and `signal`.
+
+### Skipping the transcode when input is already web-safe
+
+Pair with `probe()` and the `isWebSafeMp4()` predicate to avoid unnecessary work:
+
+```ts
+const info = await SIMPLEFFMPEG.probe(uploadPath);
+if (SIMPLEFFMPEG.isWebSafeMp4(info)) {
+  // h264 / mp4-family / yuv420p — already good for the pipeline
+  return uploadPath;
+}
+return SIMPLEFFMPEG.transcode(uploadPath, {
+  outputPath: normalizedPath,
+  preset: "web-mp4",
+});
+```
+
+### Known limitations
+
+<Callout type="warning">
+  **HDR sources will look washed out.** Modern phone video (HDR10, HLG, BT.2020) transcoded through `web-mp4` to libx264 yuv420p **without tone-mapping** produces flat, desaturated SDR output. The `web-mp4` preset does not auto-tone-map because the proper fix (`zscale → tonemap → zscale`) requires libzimg compiled into your ffmpeg build, which is not universal — adding it as a default would silently break on stripped builds.
+
+  **How to detect:** check `info.colorTransfer === "smpte2084"` (HDR10 PQ) or `"arib-std-b67"` (HLG), or `info.pixelFormat === "yuv420p10le"` (10-bit, almost always HDR).
+
+  **How to handle:** route HDR sources through `customArgs` with an explicit tone-map filter chain. Example (requires libzimg):
+
+  ```ts
+  customArgs: [
+    "-nostdin", "-y", "-i", input,
+    "-vf",
+    "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p",
+    "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+    "-profile:v", "high", "-level", "4.1",
+    "-c:a", "aac", "-b:a", "128k",
+    "-movflags", "+faststart", "-f", "mp4",
+    output,
+  ]
+  ```
+</Callout>
+
+<Callout type="info">
+  **`maxOutputBytes` is best-effort.** It maps to ffmpeg's `-fs` flag, which is checked per muxed packet. ffmpeg 7.x does not strictly enforce `-fs` for MP4 output in all cases — small-to-moderate over-caps may complete and exit zero. Treat it as a safety net, not a hard contract. The reliable hard cap is `timeoutMs`.
+</Callout>
+
+<Callout type="info">
+  **No GPU encoders by default.** The `web-mp4` preset uses libx264, which works on every ffmpeg build. Hardware encoders (`h264_nvenc`, `h264_videotoolbox`, `h264_qsv`) are platform-dependent and produce subtly different output; reach for them via `customArgs` if you need them.
+</Callout>
+
+<Callout type="info">
+  **No URL inputs.** Keep it file-path in, file-path out. URL fetching has its own security surface (SSRF, redirects, range-request games) and belongs upstream of this primitive.
+</Callout>
+
+---
+
+## `SIMPLEFFMPEG.isWebSafeMp4(mediaInfo)`
+
+Predicate — returns `true` when a `probe()` result is already h264 in an mp4-family container with yuv420p. Useful for the skip-transcoding-when-unnecessary pattern shown above.
+
+```ts
+const info = await SIMPLEFFMPEG.probe("./input.mp4");
+SIMPLEFFMPEG.isWebSafeMp4(info); // true / false
+```
+
+The check is a fast heuristic — it does not look at color space, bit depth profile, or container-specific quirks beyond what `probe()` surfaces. For strict checks (e.g. ensuring `level <= 4.1`), inspect `probe()` fields directly.
 
 ---
 

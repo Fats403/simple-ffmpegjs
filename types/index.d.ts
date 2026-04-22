@@ -38,6 +38,33 @@ declare namespace SIMPLEFFMPEG {
     name: "ExportCancelledError";
   }
 
+  /** Discriminator for SIMPLEFFMPEG.transcode() failure modes */
+  type TranscodeErrorCode =
+    | "INVALID_PATH"
+    | "INPUT_MISSING"
+    | "FFMPEG_NOT_FOUND"
+    | "TIMEOUT"
+    | "NONZERO_EXIT"
+    | "SIGNAL"
+    | "ABORTED";
+
+  /** Thrown when SIMPLEFFMPEG.transcode() fails */
+  class TranscodeError extends SimpleffmpegError {
+    name: "TranscodeError";
+    code: TranscodeErrorCode;
+    /** Tail of ffmpeg stderr, capped at 16 KB */
+    stderr: string;
+    exitCode: number | null;
+    signal: string | null;
+    /** Structured error details for bug reporting */
+    readonly details: {
+      code: TranscodeErrorCode;
+      stderr: string;
+      exitCode: number | null;
+      signal: string | null;
+    };
+  }
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Clip Types
   // ─────────────────────────────────────────────────────────────────────────────
@@ -916,7 +943,64 @@ declare namespace SIMPLEFFMPEG {
     sampleRate: number | null;
     /** Number of audio channels (1=mono, 2=stereo) (null if no audio) */
     channels: number | null;
+    /** Pixel format, e.g. "yuv420p", "yuv420p10le", "yuvj420p" (null if no video) */
+    pixelFormat: string | null;
+    /** Color space, e.g. "bt709", "bt2020nc" (null if unknown) */
+    colorSpace: string | null;
+    /** Color transfer characteristics, e.g. "bt709", "smpte2084" (HDR10 PQ), "arib-std-b67" (HLG) */
+    colorTransfer: string | null;
   }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Transcode
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Codec-safety preset for SIMPLEFFMPEG.transcode() */
+  type TranscodePreset = "web-mp4";
+
+  /** Options shared by both preset and customArgs paths */
+  interface TranscodeBaseOptions {
+    /** Output file path (resolved to absolute internally) */
+    outputPath: string;
+    /** Hard timeout in milliseconds, SIGKILL-backed (default: 300000 = 5 min) */
+    timeoutMs?: number;
+    /** Maps to ffmpeg -fs (default: 524288000 = 500 MB). Best-effort; not strictly enforced for MP4 in all ffmpeg versions. */
+    maxOutputBytes?: number;
+    /** Maps to ffmpeg -threads (default: 2). Conservative for worker pools / in-request transcoding. */
+    threads?: number;
+    /** Called with 0..99 during encode, 100 on success */
+    onProgress?: (percent: number) => void;
+    /** Cancel the transcode; triggers SIGKILL and rejects with code "ABORTED" */
+    signal?: AbortSignal;
+  }
+
+  /** Options when using a built-in preset. customArgs is forbidden. */
+  interface TranscodePresetOptions extends TranscodeBaseOptions {
+    preset: TranscodePreset;
+    /** libx264 CRF (default: 23) */
+    crf?: number;
+    /** Video bitrate string, e.g. "2M" */
+    videoBitrate?: string;
+    /** Audio bitrate string (default: "128k") */
+    audioBitrate?: string;
+    /** Optional scale; preserves aspect when one dim omitted */
+    scale?: { width?: number; height?: number };
+    customArgs?: never;
+  }
+
+  /** Options when supplying full ffmpeg argv. preset/crf/etc. are forbidden. */
+  interface TranscodeCustomArgsOptions extends TranscodeBaseOptions {
+    /** Full ffmpeg argv (caller owns -i, -y, output path, etc.) */
+    customArgs: string[];
+    preset?: never;
+    crf?: never;
+    videoBitrate?: never;
+    audioBitrate?: never;
+    scale?: never;
+  }
+
+  /** Discriminated union — pick preset XOR customArgs, never both */
+  type TranscodeOptions = TranscodePresetOptions | TranscodeCustomArgsOptions;
 }
 
 declare class SIMPLEFFMPEG {
@@ -1105,6 +1189,59 @@ declare class SIMPLEFFMPEG {
     filePath: string,
     options?: SIMPLEFFMPEG.ExtractKeyframesToBufferOptions
   ): Promise<Buffer[]>;
+
+  /**
+   * Transcode a media file with hardened defaults suitable for ingestion pipelines.
+   *
+   * Spawns ffmpeg with no shell, explicit argv, bounded stderr capture, a
+   * SIGKILL-backed timeout, path validation, output size cap, and partial
+   * output cleanup on failure. The hardening wrapper applies regardless of
+   * whether you use the preset or customArgs path.
+   *
+   * The `web-mp4` preset produces H.264 + AAC in an MP4 container with
+   * yuv420p, faststart, even dimensions, profile high / level 4.1 — the
+   * durable safe default for browser and downstream renderer pipelines.
+   *
+   * @param inputPath - Path to the source media file
+   * @param options - Preset or customArgs (mutually exclusive)
+   * @returns Resolved absolute output path on success
+   * @throws {SIMPLEFFMPEG.SimpleffmpegError} If options are missing or both preset+customArgs are provided
+   * @throws {SIMPLEFFMPEG.TranscodeError} With `code` discriminator on failure
+   *
+   * @example
+   * // One-liner ingestion
+   * await SIMPLEFFMPEG.transcode("./upload.mov", {
+   *   outputPath: "./normalized.mp4",
+   *   preset: "web-mp4",
+   * });
+   *
+   * @example
+   * // With overrides + progress
+   * await SIMPLEFFMPEG.transcode("./in.mov", {
+   *   outputPath: "./out.mp4",
+   *   preset: "web-mp4",
+   *   crf: 20,
+   *   scale: { width: 1280 },
+   *   onProgress: (pct) => console.log(`${pct}%`),
+   * });
+   */
+  static transcode(
+    inputPath: string,
+    options: SIMPLEFFMPEG.TranscodeOptions
+  ): Promise<string>;
+
+  /**
+   * Predicate — given a probe() result, return true when the file is already
+   * web-safe (h264 in an mp4-family container with yuv420p). Lets callers
+   * pair with probe() to skip transcoding when the input needs no work.
+   *
+   * @example
+   * const info = await SIMPLEFFMPEG.probe(path);
+   * if (!SIMPLEFFMPEG.isWebSafeMp4(info)) {
+   *   await SIMPLEFFMPEG.transcode(path, { outputPath, preset: "web-mp4" });
+   * }
+   */
+  static isWebSafeMp4(info: SIMPLEFFMPEG.MediaInfo): boolean;
 
   /**
    * Format validation result as human-readable string
