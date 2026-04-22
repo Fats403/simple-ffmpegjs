@@ -181,11 +181,19 @@ function buildWebMp4Args({
     "4.1",
   ];
 
-  // Compose vf: user scale (if any), then even-dim trunc last so odd inputs
-  // become libx264-safe regardless of what the user requested.
+  // Compose vf: setparams first so HDR sources (bt2020/HLG/PQ) get retagged
+  // as SDR bt709 in the libx264 VUI — output-level -colorspace/-color_primaries
+  // flags get overridden by source side-data, but setparams reaches the
+  // bitstream. Then user scale (if any), then even-dim trunc last so odd
+  // inputs become libx264-safe regardless of what the user requested.
+  const colorTag =
+    "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709";
   const evenTrunc = "scale='trunc(iw/2)*2':'trunc(ih/2)*2'";
   const userScale = buildScaleFilter(scale);
-  args.push("-vf", userScale ? `${userScale},${evenTrunc}` : evenTrunc);
+  const vfChain = userScale
+    ? `${colorTag},${userScale},${evenTrunc}`
+    : `${colorTag},${evenTrunc}`;
+  args.push("-vf", vfChain);
 
   if (videoBitrate) args.push("-b:v", String(videoBitrate));
 

@@ -46,7 +46,7 @@ describe("transcode — buildWebMp4Args", () => {
         "-map 0:v:0 -map 0:a:0?",
         "-c:v libx264 -preset medium -crf 23 -pix_fmt yuv420p",
         "-profile:v high -level 4.1",
-        "-vf scale='trunc(iw/2)*2':'trunc(ih/2)*2'",
+        "-vf setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale='trunc(iw/2)*2':'trunc(ih/2)*2'",
         "-c:a aac -b:a 128k -ac 2",
         "-movflags +faststart -f mp4",
         `-fs ${DEFAULT_MAX_OUTPUT_BYTES}`,
@@ -108,7 +108,7 @@ describe("transcode — buildWebMp4Args", () => {
     expect(args.indexOf("-b:v")).toBe(-1);
   });
 
-  it("composes user scale before even-dim trunc", () => {
+  it("composes setparams, user scale, then even-dim trunc in order", () => {
     const args = buildWebMp4Args({
       inputPath: IN,
       outputPath: OUT,
@@ -116,14 +116,16 @@ describe("transcode — buildWebMp4Args", () => {
     });
     const i = args.indexOf("-vf");
     expect(args[i + 1]).toBe(
-      "scale=1280:-2,scale='trunc(iw/2)*2':'trunc(ih/2)*2'",
+      "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale=1280:-2,scale='trunc(iw/2)*2':'trunc(ih/2)*2'",
     );
   });
 
-  it("uses only even-dim trunc when no scale provided", () => {
+  it("uses setparams + even-dim trunc when no scale provided", () => {
     const args = buildWebMp4Args({ inputPath: IN, outputPath: OUT });
     const i = args.indexOf("-vf");
-    expect(args[i + 1]).toBe("scale='trunc(iw/2)*2':'trunc(ih/2)*2'");
+    expect(args[i + 1]).toBe(
+      "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709,scale='trunc(iw/2)*2':'trunc(ih/2)*2'",
+    );
   });
 });
 
