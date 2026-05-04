@@ -521,6 +521,80 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
     });
   });
 
+  // ── Limited-range YUV regression ──────────────────────────────────────────
+  //
+  // Phone/HEVC recordings (e.g. Snapchat exports) commonly carry limited-range
+  // YUV (`yuv420p(tv, ...)`). The MJPEG encoder used for `format: "jpeg"`
+  // refuses non-full-range YUV and exits 234 with "Error while opening encoder
+  // — maybe incorrect parameters such as bit_rate, rate, width or height".
+  //
+  // The bug surfaces specifically when `select='gt(scene,N)'` produces zero
+  // frames (a continuous single-shot clip at threshold 0.3 — exactly what
+  // Snapchat clips look like): ffmpeg then initializes the encoder from the
+  // raw input format with no auto-inserted scaler, and MJPEG refuses it.
+  // When frames DO flow, ffmpeg auto-inserts a range-converting scaler that
+  // happens to mask the issue. The fix (appending `format=yuvj420p` to the
+  // filter chain) hardens both paths so limited-range inputs always work.
+
+  describe.skipIf(!ffmpegAvailable)("limited-range YUV input", () => {
+    const limitedRangeFixture = path.join(
+      OUTPUT_DIR,
+      "limited-range-yuv-2s.mp4",
+    );
+
+    beforeAll(() => {
+      fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+      // Two distinct color segments tagged limited-range. Pre-fix, calling
+      // extractKeyframes against this fixture with scene-change + a threshold
+      // that produces zero frames throws FFmpegError exit 234.
+      execSync(
+        [
+          "ffmpeg -y",
+          '-f lavfi -i "color=c=red:s=320x240:d=1:r=10"',
+          '-f lavfi -i "color=c=blue:s=320x240:d=1:r=10"',
+          '-filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]"',
+          '-map "[v]" -t 2',
+          "-c:v libx264 -preset ultrafast -pix_fmt yuv420p",
+          "-color_range tv -color_primaries bt470bg",
+          "-color_trc smpte170m -colorspace bt470bg",
+          `"${limitedRangeFixture}"`,
+        ].join(" "),
+        { stdio: "pipe" },
+      );
+    });
+
+    it("should not throw when scene-change finds no frames in limited-range YUV", async () => {
+      // sceneThreshold 0.99 guarantees zero frames pass — same shape as a
+      // continuous Snapchat clip at the default 0.3 threshold.
+      const frames = await SIMPLEFFMPEG.extractKeyframes(limitedRangeFixture, {
+        mode: "scene-change",
+        sceneThreshold: 0.99,
+        format: "jpeg",
+        maxFrames: 2,
+      });
+
+      expect(Array.isArray(frames)).toBe(true);
+      expect(frames.length).toBe(0);
+    });
+
+    it("should still return jpeg frames when scene-change finds them", async () => {
+      const frames = await SIMPLEFFMPEG.extractKeyframes(limitedRangeFixture, {
+        mode: "scene-change",
+        sceneThreshold: 0.3,
+        format: "jpeg",
+        maxFrames: 2,
+      });
+
+      expect(frames.length).toBeGreaterThan(0);
+      frames.forEach((frame) => {
+        expect(Buffer.isBuffer(frame)).toBe(true);
+        // JPEG magic bytes — proves the MJPEG encoder actually opened.
+        expect(frame[0]).toBe(0xff);
+        expect(frame[1]).toBe(0xd8);
+      });
+    });
+  });
+
   // ── Defaults ──────────────────────────────────────────────────────────────
 
   describe.skipIf(!ffmpegAvailable || !fixturesExist())("defaults", () => {

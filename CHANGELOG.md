@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-05-04
+
+### Fixed
+
+- `SIMPLEFFMPEG.extractKeyframes()` with `format: "jpeg"` (the default) no longer fails on inputs with limited-range YUV. The MJPEG encoder requires full-range YUV (`yuvj420p`) and refused to open on common phone/HEVC sources tagged `yuv420p(tv, ...)` (Snapchat exports, etc.), exiting with code 234 and `Error while opening encoder — maybe incorrect parameters such as bit_rate, rate, width or height`. The bug surfaced specifically in scene-change mode when the threshold produced zero matching frames — ffmpeg then initialized the MJPEG encoder from the raw input format with no auto-inserted scaler. The filter chain now appends `format=yuvj420p` for jpeg output so limited-range inputs are normalized before the encoder sees them. PNG output is unaffected (uses an RGB encoder).
+
 ## [0.6.0] - 2026-04-21
 
 ### Added

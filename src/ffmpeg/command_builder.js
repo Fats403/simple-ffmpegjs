@@ -327,6 +327,7 @@ function buildKeyframeCommand({
   width,
   height,
   quality,
+  format,
 }) {
   let cmd = `ffmpeg -y -i "${escapeFilePath(inputPath)}"`;
 
@@ -342,6 +343,16 @@ function buildKeyframeCommand({
     const w = width || -1;
     const h = height || -1;
     filters.push(`scale=${w}:${h}`);
+  }
+
+  // MJPEG only accepts full-range YUV. Limited-range inputs (common in
+  // phone/HEVC recordings tagged yuv420p(tv, ...)) otherwise fail to open
+  // the encoder when scene-change select produces zero frames — ffmpeg
+  // skips its auto-inserted scaler in that case and inits MJPEG from the
+  // raw input format. Forcing yuvj420p on the filter output hardens both
+  // the frames-flow and no-frames-flow paths.
+  if (format === "jpeg") {
+    filters.push("format=yuvj420p");
   }
 
   cmd += ` -vf "${filters.join(",")}"`;

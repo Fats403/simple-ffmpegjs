@@ -1665,6 +1665,7 @@ class SIMPLEFFMPEG {
       width,
       height,
       quality,
+      format,
     });
 
     try {

@@ -564,4 +564,47 @@ describe("buildKeyframeCommand", () => {
     expect(cmd).toContain("-i");
     expect(cmd).toContain("my video");
   });
+
+  // Regression: limited-range YUV inputs (common in phone/HEVC recordings)
+  // failed because the MJPEG encoder rejects non-full-range YUV. Filter must
+  // normalize to yuvj420p for jpeg output.
+  it("should append format=yuvj420p for jpeg output", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      format: "jpeg",
+    });
+
+    expect(cmd).toContain("format=yuvj420p");
+    expect(cmd).toMatch(/select='gt\(scene,0\.3\)',format=yuvj420p/);
+  });
+
+  it("should chain format=yuvj420p after scale for jpeg output", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.jpg",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      width: 512,
+      format: "jpeg",
+    });
+
+    expect(cmd).toMatch(
+      /select='gt\(scene,0\.3\)',scale=512:-1,format=yuvj420p/,
+    );
+  });
+
+  it("should not append format=yuvj420p for png output", () => {
+    const cmd = buildKeyframeCommand({
+      inputPath: "./video.mp4",
+      outputPattern: "/tmp/frame-%04d.png",
+      mode: "scene-change",
+      sceneThreshold: 0.3,
+      format: "png",
+    });
+
+    expect(cmd).not.toContain("format=yuvj420p");
+  });
 });
