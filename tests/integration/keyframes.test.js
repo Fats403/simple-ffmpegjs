@@ -20,9 +20,7 @@ function isFFmpegAvailable() {
 }
 
 function fixturesExist() {
-  return fs.existsSync(
-    path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
-  );
+  return fs.existsSync(path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"));
 }
 
 describe("SIMPLEFFMPEG.extractKeyframes", () => {
@@ -218,38 +216,35 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
 
   // ── Interval mode ─────────────────────────────────────────────────────────
 
-  describe.skipIf(!ffmpegAvailable || !fixturesExist())(
-    "interval mode",
-    () => {
-      it("should extract frames at fixed intervals", async () => {
-        const frames = await SIMPLEFFMPEG.extractKeyframes(
-          path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
-          {
-            mode: "interval",
-            intervalSeconds: 2,
-          },
-        );
+  describe.skipIf(!ffmpegAvailable || !fixturesExist())("interval mode", () => {
+    it("should extract frames at fixed intervals", async () => {
+      const frames = await SIMPLEFFMPEG.extractKeyframes(
+        path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+        {
+          mode: "interval",
+          intervalSeconds: 2,
+        },
+      );
 
-        expect(Array.isArray(frames)).toBe(true);
-        // 6s video at 2s intervals → approximately 3 frames
-        expect(frames.length).toBeGreaterThanOrEqual(2);
-        expect(frames.length).toBeLessThanOrEqual(5);
-      });
+      expect(Array.isArray(frames)).toBe(true);
+      // 6s video at 2s intervals → approximately 3 frames
+      expect(frames.length).toBeGreaterThanOrEqual(2);
+      expect(frames.length).toBeLessThanOrEqual(5);
+    });
 
-      it("should respect maxFrames in interval mode", async () => {
-        const frames = await SIMPLEFFMPEG.extractKeyframes(
-          path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
-          {
-            mode: "interval",
-            intervalSeconds: 1,
-            maxFrames: 2,
-          },
-        );
+    it("should respect maxFrames in interval mode", async () => {
+      const frames = await SIMPLEFFMPEG.extractKeyframes(
+        path.join(FIXTURES_DIR, "test-video-multiscene-6s.mp4"),
+        {
+          mode: "interval",
+          intervalSeconds: 1,
+          maxFrames: 2,
+        },
+      );
 
-        expect(frames.length).toBeLessThanOrEqual(2);
-      });
-    },
-  );
+      expect(frames.length).toBeLessThanOrEqual(2);
+    });
+  });
 
   // ── outputDir mode ────────────────────────────────────────────────────────
 
@@ -488,9 +483,9 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       expect(frames.length).toBeGreaterThan(0);
       expect(Buffer.isBuffer(frames[0])).toBe(true);
       // Temp dir should be cleaned up (no leftover subdirectories)
-      const remaining = fs.readdirSync(customTmp).filter((f) =>
-        f.startsWith("simpleffmpeg-keyframes-"),
-      );
+      const remaining = fs
+        .readdirSync(customTmp)
+        .filter((f) => f.startsWith("simpleffmpeg-keyframes-"));
       expect(remaining).toHaveLength(0);
     });
 
@@ -514,9 +509,9 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       // Files should be in outputDir, not tempDir
       paths.forEach((p) => expect(p).toContain(outDir));
       // tempDir should have no keyframe files in it
-      const tmpFiles = fs.readdirSync(customTmp).filter((f) =>
-        f.startsWith("frame-"),
-      );
+      const tmpFiles = fs
+        .readdirSync(customTmp)
+        .filter((f) => f.startsWith("frame-"));
       expect(tmpFiles).toHaveLength(0);
     });
   });
@@ -550,10 +545,10 @@ describe("SIMPLEFFMPEG.extractKeyframes", () => {
       execSync(
         [
           "ffmpeg -y",
-          '-f lavfi -i "color=c=red:s=320x240:d=1:r=10"',
-          '-f lavfi -i "color=c=blue:s=320x240:d=1:r=10"',
-          '-filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]"',
-          '-map "[v]" -t 2',
+          `-f lavfi -i "color=c=red:s=320x240:d=1:r=10"`,
+          `-f lavfi -i "color=c=blue:s=320x240:d=1:r=10"`,
+          `-filter_complex "[0:v][1:v]concat=n=2:v=1:a=0[v]"`,
+          `-map "[v]" -t 2`,
           "-c:v libx264 -preset ultrafast -pix_fmt yuv420p",
           "-color_range tv -color_primaries bt470bg",
           "-color_trc smpte170m -colorspace bt470bg",
