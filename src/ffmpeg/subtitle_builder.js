@@ -5,53 +5,46 @@
 
 const fs = require("fs");
 const path = require("path");
+const { parseColor } = require("../lib/gradient");
+const { escapeTextFilePath } = require("./strings");
 
 /**
- * Convert hex color (#RRGGBB or #RRGGBBAA) to ASS color format (&HAABBGGRR)
- * ASS uses BGR order with alpha, not RGB
+ * Convert any FFmpeg-accepted color (147 named colors, #RGB, #RRGGBB[AA],
+ * 0xRRGGBB[AA], name@alpha) to ASS color format (&HAABBGGRR).
+ * ASS uses BGR order with alpha; 00 = opaque, FF = transparent.
+ * An @alpha suffix or AA hex byte multiplies with the opacity argument.
+ * Unparsable colors fall back to black rather than emitting garbage bytes.
  */
-function hexToASSColor(hex, opacity = 1) {
-  // Remove # if present
-  let color = hex.startsWith("#") ? hex.slice(1) : hex;
-
-  // Handle named colors
-  const namedColors = {
-    white: "FFFFFF",
-    black: "000000",
-    red: "FF0000",
-    green: "00FF00",
-    blue: "0000FF",
-    yellow: "FFFF00",
-    cyan: "00FFFF",
-    magenta: "FF00FF",
-    orange: "FFA500",
-    pink: "FFC0CB",
-    purple: "800080",
-    gold: "FFD700",
-  };
-
-  if (namedColors[color.toLowerCase()]) {
-    color = namedColors[color.toLowerCase()];
+function hexToASSColor(colorStr, opacity = 1) {
+  let input = typeof colorStr === "string" ? colorStr : "";
+  // Bare 3/6-digit hex (no # or 0x) was accepted historically — keep it.
+  if (/^[0-9a-fA-F]{3}$/.test(input) || /^[0-9a-fA-F]{6}$/.test(input)) {
+    input = `#${input}`;
   }
 
-  // Ensure 6 characters (RGB)
-  if (color.length === 3) {
-    color = color[0] + color[0] + color[1] + color[1] + color[2] + color[2];
+  let effectiveOpacity = opacity;
+  const atIdx = input.indexOf("@");
+  if (atIdx > 0) {
+    const a = parseFloat(input.slice(atIdx + 1));
+    if (Number.isFinite(a)) {
+      effectiveOpacity *= Math.max(0, Math.min(1, a));
+    }
+  }
+  const alphaByte = input.match(/^(?:#|0x)[0-9a-fA-F]{6}([0-9a-fA-F]{2})$/);
+  if (alphaByte) {
+    effectiveOpacity *= parseInt(alphaByte[1], 16) / 255;
   }
 
-  // Extract RGB
-  const r = color.slice(0, 2);
-  const g = color.slice(2, 4);
-  const b = color.slice(4, 6);
-
-  // Calculate alpha (00 = fully opaque in ASS, FF = fully transparent)
-  const alpha = Math.round((1 - opacity) * 255)
-    .toString(16)
-    .padStart(2, "0")
-    .toUpperCase();
+  const [r, g, b] = parseColor(input);
+  const byte = (n) =>
+    Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, "0")
+      .toUpperCase();
+  const alpha = byte((1 - effectiveOpacity) * 255);
 
   // ASS format: &HAABBGGRR (alpha, blue, green, red)
-  return `&H${alpha}${b}${g}${r}`.toUpperCase();
+  return `&H${alpha}${byte(b)}${byte(g)}${byte(r)}`;
 }
 
 /**
@@ -59,10 +52,13 @@ function hexToASSColor(hex, opacity = 1) {
  * ASS uses centiseconds (1/100th of a second)
  */
 function secondsToASSTime(seconds) {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  const cs = Math.round((seconds % 1) * 100);
+  // Work in whole centiseconds so rounding carries into the seconds field
+  // (1.999s must become 0:00:02.00, never 0:00:01.100).
+  const totalCs = Math.max(0, Math.round(seconds * 100));
+  const h = Math.floor(totalCs / 360000);
+  const m = Math.floor((totalCs % 360000) / 6000);
+  const s = Math.floor((totalCs % 6000) / 100);
+  const cs = totalCs % 100;
 
   return `${h}:${m.toString().padStart(2, "0")}:${s
     .toString()
@@ -460,9 +456,12 @@ function parseSRT(srtContent) {
       parseInt(match[7]) +
       parseInt(match[8]) / 1000;
 
+    // Join with a real newline; escapeASSText converts it to ASS's \N.
+    // Joining with a literal "\N" here would get its backslash doubled by
+    // escapeASSText and render as visible "\N" text.
     const text = lines
       .slice(textStartIndex)
-      .join("\\N")
+      .join("\n")
       .replace(/<[^>]+>/g, ""); // Strip HTML tags
 
     if (text.trim()) {
@@ -528,10 +527,15 @@ function parseVTT(vttContent) {
           parseInt(shortMatch[6]) / 1000;
         const text = lines
           .slice(textStartIndex)
-          .join("\\N")
+          .join("\n")
           .replace(/<[^>]+>/g, "");
         if (text.trim()) {
-          dialogues.push({ start, end, style: "Default", text });
+          dialogues.push({
+            start,
+            end,
+            style: "Default",
+            text: escapeASSText(text),
+          });
         }
       }
       continue;
@@ -551,7 +555,7 @@ function parseVTT(vttContent) {
 
     const text = lines
       .slice(textStartIndex)
-      .join("\\N")
+      .join("\n")
       .replace(/<[^>]+>/g, "");
 
     if (text.trim()) {
@@ -779,14 +783,11 @@ function buildTextClipASS(clip, canvasWidth, canvasHeight, emojiFont) {
  * @returns {{ filter: string, finalLabel: string }}
  */
 function buildASSFilter(assFilePath, inputLabel, options) {
-  const escapeFn = (p) =>
-    p.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "'\\\\\\''");
-
-  const escapedPath = escapeFn(assFilePath);
+  const escapedPath = escapeTextFilePath(assFilePath);
   let filterParams = `ass='${escapedPath}'`;
 
   if (options && options.fontsDir) {
-    filterParams += `:fontsdir='${escapeFn(options.fontsDir)}'`;
+    filterParams += `:fontsdir='${escapeTextFilePath(options.fontsDir)}'`;
   }
 
   const outputLabel = "[outass]";

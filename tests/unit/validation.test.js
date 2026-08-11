@@ -775,7 +775,10 @@ describe("Validation", () => {
         expect(result.warnings.length).toBe(0);
       });
 
-      it("should warn when kenBurns used without known image dimensions", () => {
+      it("does NOT warn when kenBurns is used without known image dimensions", () => {
+        // The old unconditional warning fired for every Ken Burns image
+        // regardless of size — pure noise, since load() probes real
+        // dimensions right after validation anyway.
         const clips = [
           {
             type: "image",
@@ -793,10 +796,9 @@ describe("Validation", () => {
         });
 
         expect(result.valid).toBe(true);
-        expect(result.warnings.length).toBeGreaterThan(0);
         expect(
           result.warnings.some((w) => w.message.includes("Ken Burns")),
-        ).toBe(true);
+        ).toBe(false);
       });
 
       it("should warn with upscale message using default project dimensions", () => {

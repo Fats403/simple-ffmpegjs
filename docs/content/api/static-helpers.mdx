@@ -76,6 +76,7 @@ const info = await SIMPLEFFMPEG.probe("./video.mp4");
 //   bitrate: 4125000,           // bits/sec
 //   sampleRate: 48000,          // Hz
 //   channels: 2,
+//   attachedPic: false,         // true when the only "video" is embedded cover art (MP3 album art)
 //   pixelFormat: "yuv420p",     // pix_fmt — yuv420p10le indicates 10-bit / likely HDR
 //   colorSpace: "bt709",        // bt2020nc indicates BT.2020 (HDR-adjacent)
 //   colorTransfer: "bt709"      // smpte2084 = HDR10 PQ; arib-std-b67 = HLG
@@ -217,12 +218,30 @@ Produces H.264 + AAC in MP4 with the durable safe defaults for browsers and down
 - `-map 0:v:0 -map 0:a:0?` — first video stream + optional first audio (ignores extra audio tracks, subtitle streams, data tracks common in MOV files)
 - `-fflags +discardcorrupt -err_detect ignore_err` — recover from partial/malformed containers
 
+Requires a playable video stream: audio-only input, or an MP3 whose only "video" stream is embedded cover art, rejects with `code: "NO_VIDEO_STREAM"` — use `web-audio` for those.
+
+### `web-audio` preset
+
+The audio-side equivalent for uploads that are podcasts, voiceovers, or music. Produces AAC in an MP4-family container — `outputPath` must end in `.m4a` or `.mp4`:
+
+```ts
+await SIMPLEFFMPEG.transcode("./upload.mp3", {
+  outputPath: "./normalized.m4a",
+  preset: "web-audio",
+});
+```
+
+- First audio stream only (`-vn -map 0:a:0`), cover art dropped
+- AAC at 128 kbps (override with `audioBitrate`), source channel count preserved — a mono voiceover stays mono
+- `-movflags +faststart`
+- Video-only options (`crf`, `videoBitrate`, `scale`) are rejected; input without audio rejects with `code: "NO_AUDIO_STREAM"`
+
 ### Options
 
 | Option | Type | Default | Notes |
 |---|---|---|---|
 | `outputPath` | `string` | — | **Required.** Resolved to absolute internally. |
-| `preset` | `"web-mp4"` | — | Mutually exclusive with `customArgs`. |
+| `preset` | `"web-mp4" \| "web-audio"` | — | Mutually exclusive with `customArgs`. |
 | `customArgs` | `string[]` | — | Full ffmpeg argv. Mutually exclusive with `preset`. |
 | `crf` | `number` | `23` | libx264 CRF (web-mp4 only) |
 | `videoBitrate` | `string` | — | e.g. `"2M"` (web-mp4 only) |
@@ -243,6 +262,8 @@ Throws `TranscodeError` with a `code` discriminator so callers can branch on cau
 | `INVALID_PATH` | Path basename starts with `-` or is empty/non-string |
 | `INPUT_MISSING` | Input file does not exist or cannot be probed |
 | `FFMPEG_NOT_FOUND` | `ffmpeg` (or `ffprobe`) binary is not on `PATH` |
+| `NO_VIDEO_STREAM` | `web-mp4` input has no playable video (audio-only, or cover-art-only "video") |
+| `NO_AUDIO_STREAM` | `web-audio` input has no audio stream |
 | `TIMEOUT` | Transcode exceeded `timeoutMs` and was SIGKILLed |
 | `NONZERO_EXIT` | ffmpeg exited with a non-zero code |
 | `SIGNAL` | ffmpeg killed by an external signal |

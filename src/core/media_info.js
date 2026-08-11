@@ -13,17 +13,23 @@ const DEFAULT_FFPROBE_TIMEOUT_MS = 30000;
 function runFFprobe(args, timeoutMs = DEFAULT_FFPROBE_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffprobe", args, {
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
     let stderr = "";
-    let timedOut = false;
+    let settled = false;
 
-    // Set up timeout
+    // SIGKILL and reject immediately: a probe that ignores SIGTERM would
+    // otherwise leave the promise pending forever (rejection only happened
+    // in the close handler, which never fires for an unkillable process).
     const timeoutId = setTimeout(() => {
-      timedOut = true;
-      proc.kill("SIGTERM");
+      if (settled) return;
+      settled = true;
+      try {
+        proc.kill("SIGKILL");
+      } catch (_) {}
+      reject(new Error(`ffprobe timed out after ${timeoutMs}ms`));
     }, timeoutMs);
 
     proc.stdout.on("data", (data) => {
@@ -32,20 +38,24 @@ function runFFprobe(args, timeoutMs = DEFAULT_FFPROBE_TIMEOUT_MS) {
 
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
+      if (stderr.length > 64 * 1024) stderr = stderr.slice(-32 * 1024);
     });
 
     proc.on("error", (error) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeoutId);
-      reject(new Error(`ffprobe process error: ${error.message}`));
+      const err = new Error(`ffprobe process error: ${error.message}`);
+      // Structured discrimination for "not installed" so callers stop
+      // string-sniffing the message for "ENOENT".
+      if (error && error.code === "ENOENT") err.code = "FFMPEG_NOT_FOUND";
+      reject(err);
     });
 
     proc.on("close", (code) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timeoutId);
-
-      if (timedOut) {
-        reject(new Error(`ffprobe timed out after ${timeoutMs}ms`));
-        return;
-      }
 
       if (code !== 0) {
         reject(new Error(`ffprobe exited with code ${code}: ${stderr}`));
@@ -87,6 +97,7 @@ function parseFraction(fraction) {
  *   height: number|null,
  *   hasVideo: boolean,
  *   hasAudio: boolean,
+ *   attachedPic: boolean,
  *   rotation: number,
  *   videoCodec: string|null,
  *   audioCodec: string|null,
@@ -115,10 +126,13 @@ async function probeMedia(filePath) {
       filePath,
     ]);
   } catch (error) {
-    throw new MediaNotFoundError(
+    const err = new MediaNotFoundError(
       `Failed to probe "${filePath}": ${error.message}`,
       { path: filePath },
     );
+    // Preserve the structured "ffprobe not installed" discriminator
+    if (error && error.code === "FFMPEG_NOT_FOUND") err.code = error.code;
+    throw err;
   }
 
   let metadata;
@@ -138,20 +152,34 @@ async function probeMedia(filePath) {
     );
   }
 
-  const videoStream = metadata.streams.find((s) => s.codec_type === "video");
+  // Prefer a real video stream over embedded cover art (attached_pic) so an
+  // MP3 with album art doesn't report the artwork's codec as its "video".
+  const videoStreams = metadata.streams.filter((s) => s.codec_type === "video");
+  const videoStream =
+    videoStreams.find((s) => s.disposition?.attached_pic !== 1) ??
+    videoStreams[0] ??
+    null;
+  const attachedPic = !!videoStream && videoStream.disposition?.attached_pic === 1;
   const audioStream = metadata.streams.find((s) => s.codec_type === "audio");
   const format = metadata.format || {};
 
   // ── Duration ────────────────────────────────────────────────────────────
   const formatDuration = format.duration ? parseFloat(format.duration) : null;
+  // Fall back through video then audio stream durations — audio-only files
+  // in containers that omit format.duration otherwise probe as duration:null.
   const streamDuration = videoStream?.duration
     ? parseFloat(videoStream.duration)
+    : null;
+  const audioDuration = audioStream?.duration
+    ? parseFloat(audioStream.duration)
     : null;
   const duration = Number.isFinite(formatDuration)
     ? formatDuration
     : Number.isFinite(streamDuration)
       ? streamDuration
-      : null;
+      : Number.isFinite(audioDuration)
+        ? audioDuration
+        : null;
 
   // ── FPS ─────────────────────────────────────────────────────────────────
   // Prefer avg_frame_rate, fall back to r_frame_rate
@@ -182,6 +210,7 @@ async function probeMedia(filePath) {
     height: videoStream?.height ?? null,
     hasVideo: !!videoStream,
     hasAudio: !!audioStream,
+    attachedPic,
     rotation,
     videoCodec: videoStream?.codec_name ?? null,
     audioCodec: audioStream?.codec_name ?? null,

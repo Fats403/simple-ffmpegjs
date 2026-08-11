@@ -1,14 +1,28 @@
 /**
- * Escape a file path for use in FFmpeg command line arguments.
- * Prevents command injection by escaping quotes and backslashes.
- * @param {string} filePath - The file path to escape
- * @returns {string} Escaped file path safe for use in double-quoted command strings
+ * Validate a file path for use inside a double-quoted segment of the internal
+ * command string.
+ *
+ * The command string is split by parseFFmpegCommand, which treats every
+ * character inside quotes literally (no backslash processing — the
+ * filter_complex value depends on that). Two consequences:
+ *   - backslashes must NOT be doubled here (Windows paths pass through as-is)
+ *   - a path containing a double quote cannot be represented at all: the
+ *     quote would close the segment early and everything after it would
+ *     become extra ffmpeg argv entries (argument injection). Such paths are
+ *     rejected outright.
+ *
+ * @param {string} filePath - The file path to validate
+ * @returns {string} The path, unchanged, safe for double-quoted segments
  */
 function escapeFilePath(filePath) {
   if (typeof filePath !== "string") return "";
-  // Escape backslashes first, then double quotes
-  // This makes the path safe for use inside double-quoted shell strings
-  return filePath.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+  if (filePath.includes("\"")) {
+    const { SimpleffmpegError } = require("../core/errors");
+    throw new SimpleffmpegError(
+      `File path contains a double quote, which cannot be passed to ffmpeg safely: ${filePath}`,
+    );
+  }
+  return filePath;
 }
 
 /**

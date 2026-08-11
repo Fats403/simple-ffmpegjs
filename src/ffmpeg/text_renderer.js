@@ -152,12 +152,21 @@ function buildDrawtextParams(
       ? `font=${baseClip.fontFamily}`
       : `font=Sans`;
 
-  // Use textfile approach if a temp file path is provided (for problematic characters)
-  // Only use textfile if the text matches the original clip text (not for typewriter frames, etc.)
+  // Use the textfile approach when a temp file exists for this exact text:
+  // _textFilePaths maps per-window text (typewriter prefixes, word windows)
+  // to files; _textFilePath covers the full clip text. Text flagged as
+  // having problematic characters must never fall through to inline
+  // drawtext — that's precisely the case the files exist for.
   let params;
   const clipText = (baseClip.text || "").replace(/\r?\n/g, " ");
-  if (baseClip._textFilePath && text === clipText) {
-    const escapedPath = Strings.escapeTextFilePath(baseClip._textFilePath);
+  const windowFile =
+    baseClip._textFilePaths && baseClip._textFilePaths[text]
+      ? baseClip._textFilePaths[text]
+      : baseClip._textFilePath && text === clipText
+        ? baseClip._textFilePath
+        : null;
+  if (windowFile) {
+    const escapedPath = Strings.escapeTextFilePath(windowFile);
     params = `drawtext=textfile='${escapedPath}':${fontSpec}`;
   } else {
     const escaped = Strings.escapeDrawtextText(text);

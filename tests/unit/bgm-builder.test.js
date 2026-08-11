@@ -108,7 +108,7 @@ describe("buildBackgroundMusicMix", () => {
       const project = mockProject([video, bgm]);
       const result = buildBackgroundMusicMix(project, [bgm], "[outa]", 10);
 
-      expect(result.filter).toContain("anullsrc=cl=stereo");
+      expect(result.filter).toContain("anullsrc=r=44100:cl=stereo");
       expect(result.filter).toContain("[_bgmpad]");
       expect(result.hasAudio).toBe(true);
       expect(result.finalAudioLabel).toBe("[finalaudio]");
@@ -142,7 +142,7 @@ describe("buildBackgroundMusicMix", () => {
 
       expect(result.filter).toContain("normalize=0");
       // Anchor weight = 0, existing weight = 0.5, bgm weight = 0.5
-      expect(result.filter).toContain("weights='0 0.500000 0.500000'");
+      expect(result.filter).toContain("weights='0 1 1'");
     });
 
     it("should handle multiple bgm tracks with existing audio", () => {
@@ -161,7 +161,7 @@ describe("buildBackgroundMusicMix", () => {
       expect(result.filter).toContain("amix=inputs=4");
       // 3 real inputs → each gets weight 1/3
       expect(result.filter).toContain(
-        "weights='0 0.333333 0.333333 0.333333'",
+        "weights='0 1 1 1'",
       );
     });
 
@@ -171,8 +171,8 @@ describe("buildBackgroundMusicMix", () => {
       const project = mockProject([video, bgm]);
       const result = buildBackgroundMusicMix(project, [bgm], "[outa]", 10);
 
-      // The amix input should be: [_bgmpad][outa][bg0]
-      expect(result.filter).toContain("[_bgmpad][outa][bg0]amix=inputs=3");
+      // The amix input should be: [_bgmpad][outa][bgm0]
+      expect(result.filter).toContain("[_bgmpad][outa][bgm0]amix=inputs=3");
     });
 
     it("should set anchor duration to max of projectDuration and visualEnd", () => {
@@ -202,7 +202,7 @@ describe("buildBackgroundMusicMix", () => {
       // BGM effectiveEnd should be 18 (from visualEnd), not 20 (from clip.end)
       expect(result.filter).toContain("atrim=start=0:end=18");
       // Silence anchor should also use 18
-      expect(result.filter).toContain("anullsrc=cl=stereo,atrim=end=18");
+      expect(result.filter).toContain("anullsrc=r=44100:cl=stereo,atrim=end=18");
     });
 
     it("should fall back to clip end values when visualEnd is 0", () => {
@@ -228,7 +228,7 @@ describe("buildBackgroundMusicMix", () => {
       expect(result.filter).toContain("adelay=0|0");
 
       // Must include silence anchor so amix doesn't block on delayed [outa]
-      expect(result.filter).toContain("anullsrc=cl=stereo");
+      expect(result.filter).toContain("anullsrc=r=44100:cl=stereo");
       expect(result.filter).toContain("[_bgmpad]");
 
       // The anchor ensures amix starts from time 0
@@ -249,7 +249,7 @@ describe("buildBackgroundMusicMix", () => {
       expect(result.filter).toContain("atrim=end=30");
 
       // Silence anchor present
-      expect(result.filter).toContain("anullsrc=cl=stereo");
+      expect(result.filter).toContain("anullsrc=r=44100:cl=stereo");
     });
   });
 

@@ -841,3 +841,52 @@ Short format`;
     });
   });
 });
+
+describe("subtitle builder — v0.7.0 fixes", () => {
+  describe("hexToASSColor extended color forms", () => {
+    it("resolves any FFmpeg named color, not just the legacy 12", () => {
+      // navy = rgb(0,0,128) → BGR 800000
+      expect(hexToASSColor("navy")).toBe("&H00800000");
+      // slategray = rgb(112,128,144) → BGR 908070
+      expect(hexToASSColor("slategray")).toBe("&H00908070");
+    });
+
+    it("honors an @alpha suffix by multiplying into the opacity", () => {
+      expect(hexToASSColor("white@0.5")).toBe("&H80FFFFFF");
+    });
+
+    it("accepts 0xRRGGBB and #RRGGBBAA forms", () => {
+      expect(hexToASSColor("0xFF0000")).toBe("&H000000FF");
+      expect(hexToASSColor("#FF000080")).toBe("&H7F0000FF");
+    });
+
+    it("falls back to opaque black for unparsable colors instead of garbage", () => {
+      expect(hexToASSColor("notacolor")).toBe("&H00000000");
+    });
+  });
+
+  describe("secondsToASSTime centisecond rollover", () => {
+    it("carries centisecond rounding into seconds and minutes", () => {
+      expect(secondsToASSTime(1.999)).toBe("0:00:02.00");
+      expect(secondsToASSTime(59.999)).toBe("0:01:00.00");
+      expect(secondsToASSTime(3599.999)).toBe("1:00:00.00");
+    });
+  });
+
+  describe("multi-line cue line breaks", () => {
+    it("SRT multi-line cues produce a single \\N, not a doubled backslash", () => {
+      const cues = parseSRT("1\n00:00:00,500 --> 00:00:01,500\nline one\nline two\n");
+      expect(cues[0].text).toBe("line one\\Nline two");
+    });
+
+    it("VTT multi-line cues produce a single \\N and are escaped", () => {
+      const cues = parseVTT("WEBVTT\n\n00:00.500 --> 00:01.500\nvtt {one}\nvtt two\n");
+      expect(cues[0].text).toBe("vtt \\{one\\}\\Nvtt two");
+    });
+
+    it("VTT short-timestamp cues are escaped like long-timestamp cues", () => {
+      const cues = parseVTT("WEBVTT\n\n00:00.500 --> 00:01.500\ncurly {brace}\n");
+      expect(cues[0].text).toBe("curly \\{brace\\}");
+    });
+  });
+});

@@ -11,9 +11,10 @@ title: Error Handling
 | Class | When thrown | Key properties |
 |---|---|---|
 | `ValidationError` | Invalid clip configuration | `errors[]`, `warnings[]` — each with `code`, `path`, `message` |
-| `FFmpegError` | FFmpeg command fails | `stderr`, `command`, `exitCode`, `details` |
+| `FFmpegError` | FFmpeg command fails (or times out via `timeoutMs`) | `stderr`, `command`, `exitCode`, `details` |
 | `MediaNotFoundError` | File not found or unreadable | `path` |
-| `ExportCancelledError` | Export aborted via `AbortController` | — |
+| `ExportCancelledError` | Export, snapshot, or keyframe extraction aborted via `AbortController` | — |
+| `TranscodeError` | `transcode()` or an [audio operation](/api/audio-operations) fails | `code` (`INVALID_PATH` \| `INPUT_MISSING` \| `FFMPEG_NOT_FOUND` \| `NO_VIDEO_STREAM` \| `NO_AUDIO_STREAM` \| `ANALYSIS_FAILED` \| `TIMEOUT` \| `NONZERO_EXIT` \| `SIGNAL` \| `ABORTED`), `stderr`, `exitCode`, `details` |
 
 ## Full example
 

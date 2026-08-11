@@ -145,9 +145,6 @@ function buildTextWatermark(
   const endTime =
     typeof config.endTime === "number" ? config.endTime : totalDuration;
 
-  // Escape text for drawtext
-  const escapedText = Strings.escapeDrawtextText(text);
-
   const fontSpec = config.fontFile
     ? `fontfile='${Strings.escapeTextFilePath(config.fontFile)}'`
     : `font=${fontFamily}`;
@@ -155,8 +152,15 @@ function buildTextWatermark(
   // Calculate position (for text)
   const pos = calculatePosition(config, canvasWidth, canvasHeight, true);
 
-  // Build drawtext filter
-  let params = `drawtext=text='${escapedText}':${fontSpec}`;
+  // Build drawtext filter. Text with characters that can't be escaped
+  // reliably in filter_complex arrives via a temp textfile (written in
+  // _prepareExport); everything else is escaped inline.
+  let params;
+  if (config._textFilePath) {
+    params = `drawtext=textfile='${Strings.escapeTextFilePath(config._textFilePath)}':${fontSpec}`;
+  } else {
+    params = `drawtext=text='${Strings.escapeDrawtextText(text)}':${fontSpec}`;
+  }
   params += `:fontsize=${fontSize}`;
 
   // Apply opacity to font color if needed

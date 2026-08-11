@@ -108,8 +108,9 @@ describe("SIMPLEFFMPEG.probe", () => {
           path.join(FIXTURES_DIR, "test-video-2s.mp4"),
         );
         const keys = Object.keys(info);
-        expect(keys).toHaveLength(17);
+        expect(keys).toHaveLength(18);
         expect(keys.sort()).toEqual([
+          "attachedPic",
           "audioCodec",
           "bitrate",
           "channels",

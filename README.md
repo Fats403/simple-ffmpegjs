@@ -56,6 +56,64 @@ await project.load([
 await project.export({ outputPath: "./output.mp4" });
 ```
 
+## One-liners
+
+The static helpers work without a project instance. Everything runs through a hardened spawn wrapper: no shell, kill-safe timeouts, `AbortSignal` support, and partial-output cleanup on failure.
+
+```js
+// Ingest any upload to browser-safe H.264/MP4 (or AAC/M4A for audio files)
+await SIMPLEFFMPEG.transcode("./upload.mov", { outputPath: "./safe.mp4", preset: "web-mp4" });
+await SIMPLEFFMPEG.transcode("./podcast.mp3", { outputPath: "./safe.m4a", preset: "web-audio" });
+
+// Skip the transcode when the file is already web-safe
+const info = await SIMPLEFFMPEG.probe("./upload.mp4");
+if (!SIMPLEFFMPEG.isWebSafeMp4(info)) { /* transcode it */ }
+
+// Grab a frame, or the most representative frames
+await SIMPLEFFMPEG.snapshot("./video.mp4", { outputPath: "./frame.jpg", time: 5 });
+const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", { maxFrames: 8 });
+```
+
+Clean up a narration take in four calls, each one safe by construction: tempo changes keep pitch, cuts land inside silence with micro-fades, loudness is a proper two-pass R128 normalize.
+
+```js
+await SIMPLEFFMPEG.audioTempo("./take.mp3", { outputPath: "./t1.wav", tempo: 1.05 });
+await SIMPLEFFMPEG.capSilences("./t1.wav", { outputPath: "./t2.wav", maxSilenceSec: 1.2 });
+await SIMPLEFFMPEG.trimSilence("./t2.wav", { outputPath: "./t3.wav" });
+await SIMPLEFFMPEG.normalizeLoudness("./t3.wav", { outputPath: "./final.mp3", targetLufs: -16 });
+```
+
+## Shortcuts worth knowing
+
+```js
+// Auto-sequencing: omit position and clips chain themselves; duration replaces end
+await project.load([
+  { type: "video", url: "./a.mp4", duration: 5 },
+  { type: "video", url: "./b.mp4", duration: 5, transition: "fade" }, // string shorthand, 0.5s
+  { type: "image", url: "./c.jpg", duration: 4, kenBurns: "zoom-in" },
+]);
+
+// A color card is a first-class clip; gradients too
+await project.load([
+  { type: "color", color: { type: "linear-gradient", colors: ["navy", "black"], direction: 45 }, duration: 3 },
+  { type: "text", text: "Chapter One", position: 0.5, end: 2.5, fontSize: 72 },
+]);
+
+// Karaoke captions from word timestamps (e.g. from a transcription API)
+await project.load([
+  { type: "video", url: "./talk.mp4", duration: 30 },
+  { type: "text", mode: "karaoke", words: wordTimings, position: 0, end: 30 },
+]);
+
+// Watch progress, allow cancellation
+const controller = new AbortController();
+await project.export({
+  outputPath: "./out.mp4",
+  signal: controller.signal,
+  onProgress: ({ percent }) => console.log(`${percent}%`),
+});
+```
+
 ## Features
 
 - **Declarative timeline** — `video`, `image`, `color`, `effect`, `text`, `subtitle`, `audio`, `music` clip types
@@ -68,7 +126,8 @@ await project.export({ outputPath: "./output.mp4" });
 - **Platform presets** — TikTok, YouTube, Instagram, and more
 - **Pre-validation** — structured error codes before rendering; integrates cleanly into data pipelines and AI workflows
 - **Schema export** — machine-readable clip specification for docs, code generation, and LLM context
-- **Static helpers** — `probe()`, `snapshot()`, `extractKeyframes()`, `transcode()` (hardened one-shot ingestion — H.264/MP4 in one line)
+- **Static helpers** — `probe()`, `snapshot()`, `extractKeyframes()`, `transcode()` (hardened one-shot ingestion — H.264/MP4 or AAC/M4A in one line)
+- **Audio tools** — `audioTempo()` (speed change that keeps pitch), `detectSilence()`, `spliceAudio()` (click-free cuts with micro-fades), `trimSilence()`, `capSilences()`, `normalizeLoudness()` (two-pass EBU R128)
 - **TypeScript** — full type definitions included
 - **Zero runtime dependencies** — only requires FFmpeg on your system
 

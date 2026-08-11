@@ -38,7 +38,7 @@ declare namespace SIMPLEFFMPEG {
     name: "ExportCancelledError";
   }
 
-  /** Discriminator for SIMPLEFFMPEG.transcode() failure modes */
+  /** Discriminator for SIMPLEFFMPEG.transcode() and audio-operation failure modes */
   type TranscodeErrorCode =
     | "INVALID_PATH"
     | "INPUT_MISSING"
@@ -46,7 +46,10 @@ declare namespace SIMPLEFFMPEG {
     | "TIMEOUT"
     | "NONZERO_EXIT"
     | "SIGNAL"
-    | "ABORTED";
+    | "ABORTED"
+    | "NO_VIDEO_STREAM"
+    | "NO_AUDIO_STREAM"
+    | "ANALYSIS_FAILED";
 
   /** Thrown when SIMPLEFFMPEG.transcode() fails */
   class TranscodeError extends SimpleffmpegError {
@@ -148,6 +151,8 @@ declare namespace SIMPLEFFMPEG {
     url: string;
     width?: number;
     height?: number;
+    /** Crossfade transition INTO this clip from the previous one. A bare type string uses the default 0.5s duration. */
+    transition?: { type: string; duration?: number } | string;
     kenBurns?: KenBurnsEffect | KenBurnsSpec;
     /** How the image is fitted when its aspect ratio differs from the output.
      *  - "blur-fill": scale to fit, fill bars with a blurred version of the image (default without Ken Burns)
@@ -188,6 +193,8 @@ declare namespace SIMPLEFFMPEG {
     position?: number;
     /** End time on timeline in seconds. Mutually exclusive with fullDuration. */
     end?: number;
+    /** Duration in seconds (alternative to end). Requires a numeric position. Mutually exclusive with end. */
+    duration?: number;
     /** When true, the clip spans the full visual timeline (position 0 to end of last video/image/color clip). Mutually exclusive with end and duration. */
     fullDuration?: boolean;
     mode?: TextMode;
@@ -253,6 +260,8 @@ declare namespace SIMPLEFFMPEG {
     position?: number;
     /** Optional end time to cut off subtitles */
     end?: number;
+    /** Duration in seconds (alternative to end). Requires a numeric position. Mutually exclusive with end. */
+    duration?: number;
 
     // Styling (for SRT/VTT import - ASS files use their own styles)
     fontFamily?: string;
@@ -570,6 +579,10 @@ declare namespace SIMPLEFFMPEG {
     height?: number;
     /** Custom directory for temporary files (default: os.tmpdir()). Only used when outputDir is not set. Useful for fast SSDs, ramdisks, or environments with constrained /tmp. */
     tempDir?: string;
+    /** Hard timeout in milliseconds, SIGKILL-backed (default: 300000 = 5 min) */
+    timeoutMs?: number;
+    /** Cancel the extraction; rejects with ExportCancelledError */
+    signal?: AbortSignal;
   }
 
   /** Options with outputDir — writes to disk, returns string[] */
@@ -598,8 +611,12 @@ declare namespace SIMPLEFFMPEG {
     width?: number;
     /** Output height in pixels (maintains aspect ratio if width omitted) */
     height?: number;
-    /** JPEG quality 1-31, lower is better (default: 2, only applies to JPEG output) */
+    /** JPEG quality 1-31, lower is better (only applies to JPEG output; ffmpeg's default when omitted) */
     quality?: number;
+    /** Hard timeout in milliseconds, SIGKILL-backed (default: 300000 = 5 min) */
+    timeoutMs?: number;
+    /** Cancel the snapshot; rejects with ExportCancelledError */
+    signal?: AbortSignal;
   }
 
   /** Hardware acceleration options */
@@ -830,6 +847,8 @@ declare namespace SIMPLEFFMPEG {
     onLog?: (entry: LogEntry) => void;
     /** AbortSignal for cancelling the export */
     signal?: AbortSignal;
+    /** Hard timeout in milliseconds for each ffmpeg run, SIGKILL-backed. No timeout when omitted (renders can legitimately take a long time). */
+    timeoutMs?: number;
 
     // ─────────────────────────────────────────────────────────────────────────
     // Text Batching (Advanced)
@@ -925,6 +944,8 @@ declare namespace SIMPLEFFMPEG {
     hasVideo: boolean;
     /** Whether the file contains an audio stream */
     hasAudio: boolean;
+    /** True when the only video stream is embedded cover art (attached_pic) */
+    attachedPic: boolean;
     /** iPhone/mobile rotation value in degrees (0 if none) */
     rotation: number;
     /** Video codec name, e.g. "h264", "hevc", "vp9" (null if no video) */
@@ -956,7 +977,7 @@ declare namespace SIMPLEFFMPEG {
   // ─────────────────────────────────────────────────────────────────────────────
 
   /** Codec-safety preset for SIMPLEFFMPEG.transcode() */
-  type TranscodePreset = "web-mp4";
+  type TranscodePreset = "web-mp4" | "web-audio";
 
   /** Options shared by both preset and customArgs paths */
   interface TranscodeBaseOptions {
@@ -1001,6 +1022,109 @@ declare namespace SIMPLEFFMPEG {
 
   /** Discriminated union — pick preset XOR customArgs, never both */
   type TranscodeOptions = TranscodePresetOptions | TranscodeCustomArgsOptions;
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Audio operations
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Options shared by all audio operations */
+  interface AudioBaseOptions {
+    /** Hard timeout in milliseconds, SIGKILL-backed (default: 300000 = 5 min) */
+    timeoutMs?: number;
+    /** Cancel the operation; rejects with code "ABORTED" */
+    signal?: AbortSignal;
+  }
+
+  /** Options shared by audio operations that write an output file */
+  interface AudioOutputOptions extends AudioBaseOptions {
+    /** Output file path; the extension picks the codec (.mp3/.m4a/.aac/.wav/.flac/.ogg/.opus) */
+    outputPath: string;
+    /** Maps to ffmpeg -threads (default: 2) */
+    threads?: number;
+    /** Called with 0..99 during encode, 100 on success */
+    onProgress?: (percent: number) => void;
+  }
+
+  /** Options for SIMPLEFFMPEG.audioTempo() */
+  interface AudioTempoOptions extends AudioOutputOptions {
+    /** Speed factor in [0.25, 4]; 1.1 = 10% faster. Pitch is preserved. */
+    tempo: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.detectSilence() */
+  interface DetectSilenceOptions extends AudioBaseOptions {
+    /** Silence threshold in dBFS, negative (default: -35) */
+    noiseDb?: number;
+    /** Minimum silence length to report, in seconds (default: 0.3) */
+    minDurationSec?: number;
+  }
+
+  /** A detected silence interval, in seconds from the start of the file */
+  interface SilenceInterval {
+    start: number;
+    end: number;
+    duration: number;
+  }
+
+  /** A source range to keep, in seconds */
+  interface SpliceSourceSegment {
+    start: number;
+    end: number;
+    silence?: never;
+  }
+
+  /** Generated silence to insert, in seconds */
+  interface SpliceSilenceSegment {
+    silence: number;
+    start?: never;
+    end?: never;
+  }
+
+  type SpliceSegment = SpliceSourceSegment | SpliceSilenceSegment;
+
+  /** Options for SIMPLEFFMPEG.spliceAudio() */
+  interface SpliceAudioOptions extends AudioOutputOptions {
+    /** Output timeline, in order; at least one {start,end} source segment */
+    segments: SpliceSegment[];
+    /** Micro-fade at each cut, in milliseconds (default: 5). 0 disables. */
+    fadeMs?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.trimSilence() */
+  interface TrimSilenceOptions extends AudioOutputOptions {
+    /** Which edges to trim (default: "both") */
+    edges?: "both" | "start" | "end";
+    /** Room tone kept at each trimmed edge, in seconds (default: 0.15) */
+    keepSec?: number;
+    /** Silence threshold in dBFS (default: -35) */
+    noiseDb?: number;
+    /** Minimum silence length to count, in seconds (default: 0.3) */
+    minDurationSec?: number;
+    /** Micro-fade at each cut, in milliseconds (default: 5) */
+    fadeMs?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.capSilences() */
+  interface CapSilencesOptions extends AudioOutputOptions {
+    /** Longest interior gap allowed to survive, in seconds (default: 1.0) */
+    maxSilenceSec?: number;
+    /** Silence threshold in dBFS (default: -35) */
+    noiseDb?: number;
+    /** Minimum silence length to count, in seconds (default: 0.3) */
+    minDurationSec?: number;
+    /** Micro-fade at each cut, in milliseconds (default: 5) */
+    fadeMs?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.normalizeLoudness() */
+  interface NormalizeLoudnessOptions extends AudioOutputOptions {
+    /** Integrated loudness target in LUFS, within [-70, -5] (default: -16) */
+    targetLufs?: number;
+    /** True peak ceiling in dBTP, within [-9, 0] (default: -1.5) */
+    truePeakDb?: number;
+    /** Target loudness range in LU, within [1, 50] (default: 11) */
+    loudnessRange?: number;
+  }
 }
 
 declare class SIMPLEFFMPEG {
@@ -1242,6 +1366,87 @@ declare class SIMPLEFFMPEG {
    * }
    */
   static isWebSafeMp4(info: SIMPLEFFMPEG.MediaInfo): boolean;
+
+  /**
+   * Change audio speed without changing pitch (ffmpeg atempo time-stretch).
+   * Unlike resampling-based speedups (a player's playbackRate), a 1.1x
+   * voiceover keeps its pitch. Range [0.25, 4], chained internally.
+   *
+   * @returns Resolved absolute output path
+   * @throws {SIMPLEFFMPEG.TranscodeError} code NO_AUDIO_STREAM when the input has no audio
+   *
+   * @example
+   * await SIMPLEFFMPEG.audioTempo("./vo.mp3", { outputPath: "./vo-fast.mp3", tempo: 1.1 });
+   */
+  static audioTempo(
+    inputPath: string,
+    options: SIMPLEFFMPEG.AudioTempoOptions
+  ): Promise<string>;
+
+  /**
+   * Detect silences. Analysis only — writes nothing. A file that ends in
+   * silence gets its final interval closed at the file duration.
+   *
+   * @example
+   * const gaps = await SIMPLEFFMPEG.detectSilence("./vo.mp3", { noiseDb: -40 });
+   */
+  static detectSilence(
+    inputPath: string,
+    options?: SIMPLEFFMPEG.DetectSilenceOptions
+  ): Promise<SIMPLEFFMPEG.SilenceInterval[]>;
+
+  /**
+   * Rebuild an audio file from source ranges and inserted silence, with a
+   * micro-fade at every cut so joins never click. Use detectSilence() to
+   * place cuts inside gaps rather than on speech.
+   *
+   * @returns Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.spliceAudio("./vo.mp3", {
+   *   outputPath: "./vo-paced.mp3",
+   *   segments: [{ start: 0, end: 12.4 }, { silence: 0.8 }, { start: 13.1, end: 41 }],
+   * });
+   */
+  static spliceAudio(
+    inputPath: string,
+    options: SIMPLEFFMPEG.SpliceAudioOptions
+  ): Promise<string>;
+
+  /**
+   * Trim leading and/or trailing silence, keeping keepSec of room tone at
+   * each trimmed edge.
+   *
+   * @returns Resolved absolute output path
+   */
+  static trimSilence(
+    inputPath: string,
+    options: SIMPLEFFMPEG.TrimSilenceOptions
+  ): Promise<string>;
+
+  /**
+   * Cap interior silences at maxSilenceSec. Long gaps keep their first
+   * maxSilenceSec of real recorded quiet and each cut lands deep inside the
+   * gap where the level is minimal. Edge silence is trimSilence()'s job.
+   *
+   * @returns Resolved absolute output path
+   */
+  static capSilences(
+    inputPath: string,
+    options: SIMPLEFFMPEG.CapSilencesOptions
+  ): Promise<string>;
+
+  /**
+   * Two-pass EBU R128 loudness normalization to a LUFS target. Defaults
+   * (-16 LUFS, -1.5 dBTP) suit voice for the web.
+   *
+   * @returns Resolved absolute output path
+   * @throws {SIMPLEFFMPEG.TranscodeError} code ANALYSIS_FAILED when the measurement pass can't be parsed
+   */
+  static normalizeLoudness(
+    inputPath: string,
+    options: SIMPLEFFMPEG.NormalizeLoudnessOptions
+  ): Promise<string>;
 
   /**
    * Format validation result as human-readable string

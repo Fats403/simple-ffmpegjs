@@ -17,7 +17,7 @@ Returns the output file path when complete.
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `outputPath` | `string` | `'./output.mp4'` | Output file path |
-| `videoCodec` | `string` | `'libx264'` | Video codec (`libx264`, `libx265`, `libvpx-vp9`, `prores_ks`, hardware codecs) |
+| `videoCodec` | `string` | `'libx264'` | Video codec (`libx264`, `libx265`, `libvpx-vp9`, `prores_ks`, hardware codecs). Validated up front: a typo fails with the list of valid values instead of an ffmpeg stderr dump |
 | `crf` | `number` | `23` | Quality level (0–51, lower = better) |
 | `preset` | `string` | `'medium'` | Encoding speed preset (`ultrafast` … `veryslow`) |
 | `videoBitrate` | `string` | — | Target bitrate (e.g. `'5M'`). Overrides CRF when set. |
@@ -28,7 +28,7 @@ Returns the output file path when complete.
 | `outputWidth` | `number` | — | Scale output width |
 | `outputHeight` | `number` | — | Scale output height |
 | `outputResolution` | `string` | — | Resolution shorthand (`'720p'`, `'1080p'`, `'4k'`) |
-| `audioOnly` | `boolean` | `false` | Export audio only (no video stream) |
+| `audioOnly` | `boolean` | `false` | Export audio only (no video stream). When `audioCodec` is not set, the codec is chosen from the output extension (`.mp3` → `libmp3lame`, `.wav` → `pcm_s16le`, `.flac`, `.ogg`, `.opus`, `.m4a`/`.mp4` → `aac`) |
 | `twoPass` | `boolean` | `false` | Two-pass encoding for better quality at target bitrate |
 | `metadata` | `object` | — | Embed metadata (e.g. `{ title, artist, date }`) |
 | `thumbnail` | `object` | — | Generate a thumbnail image alongside the video |
@@ -37,6 +37,8 @@ Returns the output file path when complete.
 | `onProgress` | `function` | — | Progress callback — see [Progress, Logging, Cancellation](/guides/progress) |
 | `onLog` | `function` | — | Raw FFmpeg log callback |
 | `signal` | `AbortSignal` | — | Cancellation signal from `AbortController` |
+| `timeoutMs` | `number` | — | Hard timeout per ffmpeg run, SIGKILL-backed. No timeout when omitted (renders can legitimately take a long time) |
+| `logLevel` | `string` | — | ffmpeg `-loglevel` (`quiet`…`debug`). Progress callbacks keep working at quiet levels (`-stats` is added automatically) |
 | `watermark` | `object` | — | Watermark overlay — see [Watermarks](/guides/watermarks) |
 | `compensateTransitions` | `boolean` | `true` | Auto-adjust text, subtitle, and audio clip timings for transition overlap |
 

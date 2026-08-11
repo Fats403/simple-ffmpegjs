@@ -1,15 +1,17 @@
 const fsPromises = require("fs").promises;
 const path = require("path");
-const { spawn } = require("child_process");
 const { probeMedia } = require("./media_info");
 const { SimpleffmpegError, TranscodeError } = require("./errors");
+const { runHardened, parseProgressBlock } = require("./run");
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_OUTPUT_BYTES = 500 * 1024 * 1024;
 const DEFAULT_THREADS = 2;
-const STDERR_CAP_BYTES = 16 * 1024;
 
-const SUPPORTED_PRESETS = ["web-mp4"];
+const SUPPORTED_PRESETS = ["web-mp4", "web-audio"];
+
+/** Options that only make sense for a video preset — rejected under web-audio. */
+const VIDEO_ONLY_OPTIONS = ["crf", "videoBitrate", "scale"];
 
 /**
  * Resolve a file path to absolute form and reject anything whose resolved
@@ -219,20 +221,49 @@ function buildWebMp4Args({
 }
 
 /**
- * Parse a single -progress pipe:1 block and return the percent [0..99].
- * ffmpeg emits one block per ~500ms ending with progress=continue or
- * progress=end. Returns null if the block lacks out_time_us or duration
- * is unknown.
+ * Build the argv array for the web-audio preset: first audio stream only,
+ * AAC in an MP4-family container (write to .m4a or .mp4), faststart for
+ * progressive playback, source channel count preserved (a mono voiceover
+ * stays mono). Pure — no side effects.
  */
-function parseProgressBlock(block, totalDuration) {
-  const match = block.match(/out_time_us=(\d+)/);
-  if (!match) return null;
-  const us = parseInt(match[1], 10);
-  if (!Number.isFinite(us) || us < 0) return null;
-  if (!Number.isFinite(totalDuration) || totalDuration <= 0) return null;
-  const seconds = us / 1_000_000;
-  const pct = Math.floor((seconds / totalDuration) * 100);
-  return Math.max(0, Math.min(99, pct));
+function buildWebAudioArgs({
+  inputPath,
+  outputPath,
+  audioBitrate,
+  maxOutputBytes,
+  threads,
+}) {
+  return [
+    "-nostdin",
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-fflags",
+    "+discardcorrupt",
+    "-err_detect",
+    "ignore_err",
+    "-progress",
+    "pipe:1",
+    "-i",
+    inputPath,
+    "-vn",
+    "-map",
+    "0:a:0",
+    "-c:a",
+    "aac",
+    "-b:a",
+    String(audioBitrate ?? "128k"),
+    "-movflags",
+    "+faststart",
+    "-f",
+    "mp4",
+    "-fs",
+    String(maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES),
+    "-threads",
+    String(threads ?? DEFAULT_THREADS),
+    outputPath,
+  ];
 }
 
 /**
@@ -242,187 +273,14 @@ function parseProgressBlock(block, totalDuration) {
 function isWebSafeMp4(info) {
   if (!info || typeof info !== "object") return false;
   if (!info.hasVideo) return false;
+  // Embedded cover art probes as a video stream but isn't playable video
+  if (info.attachedPic) return false;
   if (info.videoCodec !== "h264") return false;
   if (typeof info.format !== "string") return false;
   if (!info.format.includes("mp4")) return false;
   // pixelFormat check — tolerant if missing (older MediaInfo), strict if present
   if (info.pixelFormat != null && info.pixelFormat !== "yuv420p") return false;
   return true;
-}
-
-/**
- * Spawn ffmpeg with the given argv and enforce the hardening wrapper:
- * no shell, stdin ignored, SIGKILL timeout, bounded stderr tail, partial
- * output cleanup on failure, AbortSignal support, stdout progress parsing.
- */
-function runHardened({
-  argv,
-  outputPath,
-  timeoutMs,
-  signal,
-  onProgress,
-  totalDuration,
-}) {
-  return new Promise((resolve, reject) => {
-    if (signal && signal.aborted) {
-      reject(
-        new TranscodeError("transcode() aborted before start", {
-          code: "ABORTED",
-        }),
-      );
-      return;
-    }
-
-    let settled = false;
-    let stderrBuf = "";
-    let stdoutBuf = "";
-    let timedOut = false;
-    let aborted = false;
-
-    const proc = spawn("ffmpeg", argv, {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    const timeoutId = setTimeout(() => {
-      timedOut = true;
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-        /* already dead */
-      }
-    }, timeoutMs);
-
-    const abortHandler = () => {
-      aborted = true;
-      try {
-        proc.kill("SIGKILL");
-      } catch {
-        /* already dead */
-      }
-    };
-    if (signal) signal.addEventListener("abort", abortHandler, { once: true });
-
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      if (signal) signal.removeEventListener("abort", abortHandler);
-    };
-
-    const fail = async (err) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      await fsPromises.unlink(outputPath).catch(() => {});
-      reject(err);
-    };
-
-    const succeed = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      if (onProgress) {
-        try {
-          onProgress(100);
-        } catch {
-          /* user callback error should not fail the transcode */
-        }
-      }
-      resolve();
-    };
-
-    proc.stderr.on("data", (chunk) => {
-      stderrBuf += chunk.toString();
-      if (stderrBuf.length > STDERR_CAP_BYTES * 2) {
-        stderrBuf = stderrBuf.slice(-STDERR_CAP_BYTES);
-      }
-    });
-
-    proc.stdout.on("data", (chunk) => {
-      stdoutBuf += chunk.toString();
-      // Blocks are separated by "progress=continue\n" or "progress=end\n".
-      // Parse complete blocks only; partial trailing text stays buffered.
-      while (true) {
-        const idx = stdoutBuf.indexOf("progress=");
-        if (idx === -1) break;
-        const lineEnd = stdoutBuf.indexOf("\n", idx);
-        if (lineEnd === -1) break;
-        const block = stdoutBuf.slice(0, lineEnd + 1);
-        stdoutBuf = stdoutBuf.slice(lineEnd + 1);
-        if (onProgress) {
-          const pct = parseProgressBlock(block, totalDuration);
-          if (pct !== null) {
-            try {
-              onProgress(pct);
-            } catch {
-              /* swallow */
-            }
-          }
-        }
-      }
-    });
-
-    proc.on("error", (err) => {
-      const stderrTail = stderrBuf.slice(-STDERR_CAP_BYTES);
-      // Distinguish "ffmpeg binary not on PATH" (ENOENT) from generic spawn
-      // failures — surfacing as NONZERO_EXIT for the missing-binary case
-      // would mislead the caller into thinking ffmpeg ran and exited.
-      if (err && err.code === "ENOENT") {
-        fail(
-          new TranscodeError(
-            "transcode() ffmpeg binary not found in PATH — install ffmpeg (e.g. `brew install ffmpeg`)",
-            { code: "FFMPEG_NOT_FOUND", stderr: stderrTail },
-          ),
-        );
-        return;
-      }
-      fail(
-        new TranscodeError(`transcode() process error: ${err.message}`, {
-          code: "NONZERO_EXIT",
-          stderr: stderrTail,
-        }),
-      );
-    });
-
-    proc.on("close", (exitCode, sig) => {
-      const stderrTail = stderrBuf.slice(-STDERR_CAP_BYTES);
-
-      if (aborted) {
-        fail(
-          new TranscodeError("transcode() aborted", {
-            code: "ABORTED",
-            stderr: stderrTail,
-            exitCode,
-            signal: sig,
-          }),
-        );
-        return;
-      }
-
-      if (timedOut) {
-        fail(
-          new TranscodeError(`transcode() timed out after ${timeoutMs}ms`, {
-            code: "TIMEOUT",
-            stderr: stderrTail,
-            exitCode,
-            signal: sig,
-          }),
-        );
-        return;
-      }
-
-      if (exitCode !== 0) {
-        const code = exitCode === null && sig ? "SIGNAL" : "NONZERO_EXIT";
-        fail(
-          new TranscodeError(
-            `transcode() exited with code ${exitCode}${sig ? ` (signal ${sig})` : ""}`,
-            { code, stderr: stderrTail, exitCode, signal: sig },
-          ),
-        );
-        return;
-      }
-
-      succeed();
-    });
-  });
 }
 
 /**
@@ -462,6 +320,21 @@ async function transcode(inputPath, options = {}) {
       `transcode() unknown preset "${options.preset}" — supported: ${SUPPORTED_PRESETS.map((p) => `"${p}"`).join(", ")}`,
     );
   }
+  if (options.preset === "web-audio") {
+    for (const key of VIDEO_ONLY_OPTIONS) {
+      if (options[key] != null) {
+        throw new SimpleffmpegError(
+          `transcode() options.${key} does not apply to the "web-audio" preset`,
+        );
+      }
+    }
+    const ext = path.extname(options.outputPath).toLowerCase();
+    if (ext !== ".m4a" && ext !== ".mp4") {
+      throw new SimpleffmpegError(
+        `transcode() "web-audio" writes AAC in an MP4 container — options.outputPath must end in .m4a or .mp4 (got "${ext || "no extension"}")`,
+      );
+    }
+  }
 
   validateOptions(options);
 
@@ -489,7 +362,7 @@ async function transcode(inputPath, options = {}) {
     // raw "spawn ffprobe ENOENT" string in the message — detect that and
     // surface FFMPEG_NOT_FOUND, since the same install is needed for both.
     const msg = err && err.message ? err.message : "";
-    if (msg.includes("ENOENT") && /ffprobe|ffmpeg/i.test(msg)) {
+    if (err?.code === "FFMPEG_NOT_FOUND" || (msg.includes("ENOENT") && /ffprobe|ffmpeg/i.test(msg))) {
       throw new TranscodeError(
         "transcode() ffmpeg/ffprobe binary not found in PATH — install ffmpeg (e.g. `brew install ffmpeg`)",
         { code: "FFMPEG_NOT_FOUND" },
@@ -501,11 +374,36 @@ async function transcode(inputPath, options = {}) {
     );
   }
 
+  // Pre-flight stream checks so preset misuse fails with a clear code
+  // instead of ffmpeg's cryptic "Stream map '0:v:0' matches no streams".
+  if (options.preset === "web-mp4" && (!info.hasVideo || info.attachedPic)) {
+    throw new TranscodeError(
+      info.hasAudio
+        ? `transcode() input "${inputPath}" has no playable video stream${info.attachedPic ? " (its only video stream is embedded cover art)" : ""} — for audio files use preset "web-audio"`
+        : `transcode() input "${inputPath}" has no playable video stream`,
+      { code: "NO_VIDEO_STREAM" },
+    );
+  }
+  if (options.preset === "web-audio" && !info.hasAudio) {
+    throw new TranscodeError(
+      `transcode() input "${inputPath}" has no audio stream`,
+      { code: "NO_AUDIO_STREAM" },
+    );
+  }
+
   const totalDuration = Number.isFinite(info.duration) ? info.duration : 0;
 
   let ffmpegArgs;
   if (hasCustomArgs) {
     ffmpegArgs = [...options.customArgs];
+  } else if (options.preset === "web-audio") {
+    ffmpegArgs = buildWebAudioArgs({
+      inputPath: resolvedInput,
+      outputPath: resolvedOutput,
+      audioBitrate: options.audioBitrate,
+      maxOutputBytes: options.maxOutputBytes,
+      threads: options.threads,
+    });
   } else {
     ffmpegArgs = buildWebMp4Args({
       inputPath: resolvedInput,
@@ -521,6 +419,7 @@ async function transcode(inputPath, options = {}) {
 
   await runHardened({
     argv: ffmpegArgs,
+    label: "transcode()",
     outputPath: resolvedOutput,
     timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     signal: options.signal,
@@ -536,6 +435,7 @@ module.exports = {
   isWebSafeMp4,
   // Exported for unit tests — not part of the public API
   buildWebMp4Args,
+  buildWebAudioArgs,
   buildScaleFilter,
   validatePath,
   validateOptions,

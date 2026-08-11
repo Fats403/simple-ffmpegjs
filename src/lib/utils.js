@@ -1,4 +1,5 @@
 const { spawn } = require("child_process");
+const fs = require("fs");
 const { FFmpegError, ExportCancelledError } = require("../core/errors");
 
 const formatBytes = (bytes) => {
@@ -69,55 +70,110 @@ function parseFFmpegProgress(line, totalDuration) {
   return progress;
 }
 
+/** Bound on buffered stdout/stderr — onLog still receives every chunk. */
+const OUTPUT_CAP_BYTES = 256 * 1024;
+
+/** Grace period between SIGTERM and SIGKILL on cancellation. */
+const KILL_ESCALATION_MS = 2000;
+
 /**
- * Run FFmpeg command with spawn, supporting progress callbacks and cancellation
+ * Run FFmpeg command with spawn, supporting progress callbacks and cancellation.
+ *
+ * Hardening applied here (shared by export, snapshot, keyframes, thumbnails,
+ * and text passes): stdin ignored, SIGTERM→SIGKILL escalation on abort, an
+ * optional SIGKILL-backed timeout, bounded output buffering, partial-output
+ * cleanup on failure, and ENOENT discrimination so "ffmpeg not installed"
+ * doesn't masquerade as an encode failure.
+ *
  * @param {Object} options
  * @param {string} options.command - The full FFmpeg command string
  * @param {number} options.totalDuration - Expected output duration in seconds (for progress %)
  * @param {Function} options.onProgress - Progress callback
  * @param {AbortSignal} options.signal - AbortSignal for cancellation
  * @param {Function} options.onLog - Log callback receiving { level: "stderr"|"stdout", message: string }
+ * @param {number} [options.timeoutMs] - Hard timeout; SIGKILL on expiry. Omit for no timeout.
+ * @param {string} [options.outputPath] - Output file to unlink when the run fails
  * @returns {Promise<{stdout: string, stderr: string}>}
  */
-function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
+function runFFmpeg({
+  command,
+  totalDuration = 0,
+  onProgress,
+  signal,
+  onLog,
+  timeoutMs,
+  outputPath,
+}) {
   return new Promise((resolve, reject) => {
-    // Parse command into args (simple split, assumes no quoted args with spaces in values)
-    // FFmpeg commands from this library don't have spaces in quoted paths handled this way
-    // We need to handle the command string properly
     const args = parseFFmpegCommand(command);
     const ffmpegPath = args.shift(); // Remove 'ffmpeg' from args
 
+    if (signal && signal.aborted) {
+      reject(new ExportCancelledError());
+      return;
+    }
+
     const proc = spawn(ffmpegPath, args, {
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
     let stdout = "";
     let stderr = "";
     let cancelled = false;
+    let timedOut = false;
+    let killTimer = null;
+    let timeoutTimer = null;
 
-    // Handle cancellation
-    if (signal) {
-      const abortHandler = () => {
-        cancelled = true;
-        proc.kill("SIGTERM");
-      };
-
-      if (signal.aborted) {
-        proc.kill("SIGTERM");
-        reject(new ExportCancelledError());
-        return;
+    const killHard = () => {
+      try {
+        proc.kill("SIGKILL");
+      } catch {
+        /* already dead */
       }
+    };
 
-      signal.addEventListener("abort", abortHandler, { once: true });
+    const killWithEscalation = () => {
+      try {
+        proc.kill("SIGTERM");
+      } catch {
+        /* already dead */
+      }
+      killTimer = setTimeout(killHard, KILL_ESCALATION_MS);
+    };
 
-      proc.on("close", () => {
-        signal.removeEventListener("abort", abortHandler);
-      });
+    if (timeoutMs != null && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+      timeoutTimer = setTimeout(() => {
+        timedOut = true;
+        killHard();
+      }, timeoutMs);
     }
+
+    const abortHandler = () => {
+      cancelled = true;
+      killWithEscalation();
+    };
+    if (signal) signal.addEventListener("abort", abortHandler, { once: true });
+
+    const cleanupHandlers = () => {
+      if (killTimer) clearTimeout(killTimer);
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+      if (signal) signal.removeEventListener("abort", abortHandler);
+    };
+
+    const fail = (err) => {
+      cleanupHandlers();
+      if (outputPath) {
+        fs.unlink(outputPath, () => {});
+      }
+      reject(err);
+    };
 
     proc.stdout.on("data", (data) => {
       const chunk = data.toString();
       stdout += chunk;
+      if (stdout.length > OUTPUT_CAP_BYTES * 2) {
+        stdout = stdout.slice(-OUTPUT_CAP_BYTES);
+      }
       if (onLog && typeof onLog === "function") {
         onLog({ level: "stdout", message: chunk });
       }
@@ -126,6 +182,9 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
     proc.stderr.on("data", (data) => {
       const chunk = data.toString();
       stderr += chunk;
+      if (stderr.length > OUTPUT_CAP_BYTES * 2) {
+        stderr = stderr.slice(-OUTPUT_CAP_BYTES);
+      }
 
       if (onLog && typeof onLog === "function") {
         onLog({ level: "stderr", message: chunk });
@@ -142,7 +201,16 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
     });
 
     proc.on("error", (error) => {
-      reject(
+      if (error && error.code === "ENOENT") {
+        fail(
+          new FFmpegError(
+            "ffmpeg binary not found in PATH — install ffmpeg (e.g. `brew install ffmpeg`)",
+            { stderr, command },
+          ),
+        );
+        return;
+      }
+      fail(
         new FFmpegError(`FFmpeg process error: ${error.message}`, {
           stderr,
           command,
@@ -152,12 +220,23 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
 
     proc.on("close", (code) => {
       if (cancelled) {
-        reject(new ExportCancelledError());
+        fail(new ExportCancelledError());
+        return;
+      }
+
+      if (timedOut) {
+        fail(
+          new FFmpegError(`FFmpeg timed out after ${timeoutMs}ms`, {
+            stderr,
+            command,
+            exitCode: code,
+          }),
+        );
         return;
       }
 
       if (code !== 0) {
-        reject(
+        fail(
           new FFmpegError(`FFmpeg exited with code ${code}`, {
             stderr,
             command,
@@ -167,6 +246,7 @@ function runFFmpeg({ command, totalDuration = 0, onProgress, signal, onLog }) {
         return;
       }
 
+      cleanupHandlers();
       resolve({ stdout, stderr });
     });
   });
@@ -225,10 +305,63 @@ function parseFFmpegCommand(command) {
   return args;
 }
 
+/**
+ * Resolve a clip's ffmpeg input index. Uses the project-level map built in
+ * _prepareExport when available; otherwise builds the same mapping locally
+ * for standalone usage (e.g. unit tests). Flat color clips use the color=
+ * filter source and produce no file input, so they are skipped — a raw
+ * indexOf() here would shift every index after a flat color clip.
+ */
+function getClipInputIndex(project, clip) {
+  if (project._inputIndexMap) {
+    return project._inputIndexMap.get(clip);
+  }
+  let inputIdx = 0;
+  for (const c of project.videoOrAudioClips) {
+    if (c.type === "color" && c._isFlatColor) {
+      continue;
+    }
+    if (c === clip) return inputIdx;
+    inputIdx++;
+  }
+  return project.videoOrAudioClips.indexOf(clip);
+}
+
+/**
+ * Map with bounded concurrency. Results keep input order; the first
+ * rejection propagates after in-flight items settle. Used to keep load()
+ * from spawning one ffprobe (or one full re-encode) per clip all at once.
+ */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  let firstError = null;
+  const workers = Array.from(
+    { length: Math.max(1, Math.min(limit, items.length)) },
+    async () => {
+      while (next < items.length) {
+        const i = next++;
+        try {
+          results[i] = await fn(items[i], i);
+        } catch (err) {
+          if (!firstError) firstError = err;
+          // Drain remaining items without starting new work
+          next = items.length;
+        }
+      }
+    },
+  );
+  await Promise.all(workers);
+  if (firstError) throw firstError;
+  return results;
+}
+
 module.exports = {
   formatBytes,
   parseFFmpegTime,
   parseFFmpegProgress,
   runFFmpeg,
   parseFFmpegCommand,
+  getClipInputIndex,
+  mapWithConcurrency,
 };

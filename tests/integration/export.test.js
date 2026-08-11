@@ -1917,7 +1917,6 @@ Second subtitle
     () => {
       it("should populate error.details when FFmpeg fails", async () => {
         const project = new SIMPLEFFMPEG({ width: 320, height: 240, fps: 30 });
-        const outputPath = path.join(OUTPUT_DIR, "test-error-details.mp4");
 
         await project.load([
           {
@@ -1929,10 +1928,15 @@ Second subtitle
         ]);
 
         try {
-          // Use an invalid codec to force FFmpeg failure
+          // Bad codecs are now rejected by option validation before ffmpeg
+          // runs, so force a genuine runtime failure instead: an output
+          // path inside a directory that does not exist.
           await project.export({
-            outputPath,
-            videoCodec: "nonexistent_codec_xyz",
+            outputPath: path.join(
+              OUTPUT_DIR,
+              "no-such-dir-xyz",
+              "test-error-details.mp4",
+            ),
           });
           // Should not reach here
           expect.unreachable("Expected export to throw FFmpegError");

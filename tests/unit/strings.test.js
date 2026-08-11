@@ -336,20 +336,24 @@ describe("Strings - FFmpeg escaping utilities", () => {
       expect(escapeFilePath("output.mp4")).toBe("output.mp4");
     });
 
-    it("should escape backslashes", () => {
+    it("passes Windows backslash paths through untouched", () => {
+      // The command parser treats characters inside quotes literally, so
+      // doubling backslashes here would hand ffmpeg a mangled path.
       expect(escapeFilePath("C:\\Users\\test\\video.mp4")).toBe(
-        "C:\\\\Users\\\\test\\\\video.mp4",
+        "C:\\Users\\test\\video.mp4",
       );
     });
 
-    it("should escape double quotes", () => {
-      expect(escapeFilePath("my \"video\".mp4")).toBe("my \\\"video\\\".mp4");
-    });
-
-    it("should escape both backslashes and double quotes", () => {
-      expect(escapeFilePath("C:\\path\\\"file\".mp4")).toBe(
-        "C:\\\\path\\\\\\\"file\\\".mp4",
-      );
+    it("rejects paths containing a double quote (argv injection guard)", () => {
+      let caught;
+      try {
+        escapeFilePath("my \"video\".mp4");
+      } catch (err) {
+        caught = err;
+      }
+      expect(caught).toBeDefined();
+      expect(caught.name).toBe("SimpleffmpegError");
+      expect(caught.message).toContain("double quote");
     });
   });
 

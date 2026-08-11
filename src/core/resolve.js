@@ -107,9 +107,33 @@ function resolveClips(clips) {
     if (c.duration != null && c.end == null) {
       if (typeof c.position === "number" && typeof c.duration === "number") {
         c.end = c.position + c.duration;
+        // Remove duration so the rest of the pipeline sees canonical { position, end }
+        delete c.duration;
+      } else {
+        // Deleting duration here would silently discard the field the user
+        // actually set and produce a baffling "end is required" error.
+        errors.push({
+          code: "INVALID_VALUE",
+          path: `${path}.duration`,
+          message:
+            "'duration' needs a numeric 'position' to resolve against. Set 'position' explicitly (this clip type does not auto-sequence), or use 'end' instead.",
+          received: { duration: c.duration, position: c.position },
+        });
       }
-      // Remove duration so the rest of the pipeline sees canonical { position, end }
-      delete c.duration;
+    }
+
+    // ── Transition shorthand ────────────────────────────────────────────
+    // "fade" and { type } without a duration are documented shorthands;
+    // normalize before validation so they are accepted, not rejected.
+    if (VISUAL_TYPES.includes(c.type) && c.transition != null) {
+      if (typeof c.transition === "string") {
+        c.transition = { type: c.transition, duration: 0.5 };
+      } else if (
+        typeof c.transition === "object" &&
+        c.transition.duration == null
+      ) {
+        c.transition = { ...c.transition, duration: 0.5 };
+      }
     }
 
     // ── Track the end of the last clip on each track ────────────────────

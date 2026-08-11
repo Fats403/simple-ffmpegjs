@@ -16,6 +16,13 @@ Core API surfaces:
 - `SIMPLEFFMPEG.probe(filePath)`
 - `SIMPLEFFMPEG.snapshot(filePath, options?)`
 - `SIMPLEFFMPEG.extractKeyframes(filePath, options?)`
+- `SIMPLEFFMPEG.transcode(filePath, options)`
+- `SIMPLEFFMPEG.audioTempo(filePath, options)`
+- `SIMPLEFFMPEG.detectSilence(filePath, options?)`
+- `SIMPLEFFMPEG.spliceAudio(filePath, options)`
+- `SIMPLEFFMPEG.trimSilence(filePath, options)`
+- `SIMPLEFFMPEG.capSilences(filePath, options)`
+- `SIMPLEFFMPEG.normalizeLoudness(filePath, options)`
 
 Use the pages in this section for signatures and detailed behavior:
 
@@ -23,5 +30,6 @@ Use the pages in this section for signatures and detailed behavior:
 - [Methods](/api/methods)
 - [Export Options](/api/export-options)
 - [Static Helpers](/api/static-helpers)
+- [Audio Operations](/api/audio-operations)
 - [Auto-Sequencing & Duration Shorthand](/api/auto-sequencing)
 - [Clip Types](/api/clip-types)

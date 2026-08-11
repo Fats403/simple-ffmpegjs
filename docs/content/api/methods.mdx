@@ -93,9 +93,11 @@ await SIMPLEFFMPEG.snapshot("./video.mp4", {
 | `time` | `number` | `0` | Timestamp in seconds |
 | `width` | `number` | - | Output width (keeps aspect ratio if `height` omitted) |
 | `height` | `number` | - | Output height (keeps aspect ratio if `width` omitted) |
-| `quality` | `number` | `2` | JPEG quality 1-31, lower is better (`.jpg`/`.jpeg` only) |
+| `quality` | `number` | - | JPEG quality 1-31, lower is better (`.jpg`/`.jpeg` only; ffmpeg's default when omitted) |
+| `timeoutMs` | `number` | `300000` | Hard timeout, SIGKILL-backed |
+| `signal` | `AbortSignal` | - | Cancel; rejects with `ExportCancelledError` |
 
-Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`.
+Supported formats: `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`, `.tiff`. Fails with a clear error if `time` is beyond the end of the video (instead of silently returning a path to nothing).
 
 ## `SIMPLEFFMPEG.extractKeyframes(filePath, options)`
 
@@ -111,6 +113,9 @@ Each call with `outputDir` creates a unique `simpleffmpeg-keyframes-XXXXXX` subd
 inside it, so repeat and concurrent calls against the same `outputDir` are fully
 isolated. Always use the returned paths — do not assume frames live directly at
 `${outputDir}/frame-0001.jpg`.
+
+Both modes accept `timeoutMs` (default 5 minutes, SIGKILL-backed) and `signal`
+(AbortSignal) for cancellation.
 
 ```ts
 const frames = await SIMPLEFFMPEG.extractKeyframes("./video.mp4", {
@@ -178,6 +183,8 @@ Build and execute the FFmpeg command to render final output.
 | `onProgress` | `function` | - | Progress callback |
 | `onLog` | `function` | - | FFmpeg log callback |
 | `signal` | `AbortSignal` | - | Cancellation signal |
+| `timeoutMs` | `number` | - | Hard timeout per ffmpeg run (SIGKILL-backed) |
+| `logLevel` | `string` | - | ffmpeg `-loglevel`; progress callbacks keep working |
 | `watermark` | `object` | - | Watermark overlay config |
 | `compensateTransitions` | `boolean` | `true` | Compensate text/subtitle timings for transition overlap |
 
@@ -192,6 +199,11 @@ await project.preview(options?: ExportOptions): Promise<{
 ```
 
 Returns the resolved command details without executing FFmpeg.
+
+Preparing a preview writes the same temp files a real export would (text files,
+ASS subtitles, unrotated video intermediates) and cleans them up afterwards.
+The project is left ready to export: `preview()` followed by `export()`, or
+multiple `export()` calls from one `load()`, all work.
 
 ## Validation and schema methods
 

@@ -39,7 +39,7 @@ const {
   sanitizeFilterComplex,
 } = require("./ffmpeg/command_builder");
 const { runTextPasses } = require("./ffmpeg/text_passes");
-const { formatBytes, runFFmpeg } = require("./lib/utils");
+const { formatBytes, runFFmpeg, mapWithConcurrency } = require("./lib/utils");
 const {
   buildWatermarkFilter,
   validateWatermarkConfig,
@@ -57,6 +57,14 @@ const {
   transcode: transcodeMedia,
   isWebSafeMp4: isWebSafeMp4Fn,
 } = require("./core/transcode");
+const {
+  audioTempo: audioTempoFn,
+  detectSilence: detectSilenceFn,
+  spliceAudio: spliceAudioFn,
+  trimSilence: trimSilenceFn,
+  capSilences: capSilencesFn,
+  normalizeLoudness: normalizeLoudnessFn,
+} = require("./core/audio");
 
 class SIMPLEFFMPEG {
   /**
@@ -143,6 +151,7 @@ class SIMPLEFFMPEG {
     this.subtitleClips = [];
     this.effectClips = [];
     this.filesToClean = [];
+    this.loadFilesToClean = [];
     this._isLoading = false;
     this._isExporting = false;
   }
@@ -200,6 +209,16 @@ class SIMPLEFFMPEG {
         }
       }),
     );
+
+    // Undo prepare-time clip mutations so the project can be exported again:
+    // unrotated temp files were just deleted, so any clip pointing at one
+    // must point back at its original source.
+    for (const clip of this.videoOrAudioClips) {
+      if (clip._originalUrl) {
+        clip.url = clip._originalUrl;
+        delete clip._originalUrl;
+      }
+    }
   }
 
   /**
@@ -311,12 +330,19 @@ class SIMPLEFFMPEG {
     this._isLoading = true;
 
     try {
-      // Clear previous state for idempotent reload
+      // Clear previous state for idempotent reload. Load-lifetime temp files
+      // (gradient PPMs) from a previous load() are deleted here, not after
+      // exports — clips reference them for as long as the load is active.
+      const staleLoadFiles = [...(this.loadFilesToClean ?? [])];
+      await Promise.all(
+        staleLoadFiles.map((f) => fsPromises.unlink(f).catch(() => {})),
+      );
       this.videoOrAudioClips = [];
       this.textClips = [];
       this.subtitleClips = [];
       this.effectClips = [];
       this.filesToClean = [];
+      this.loadFilesToClean = [];
 
       // Resolve shorthand: duration → end, auto-sequential positioning
       const resolved = resolveClips(clipObjs);
@@ -348,59 +374,63 @@ class SIMPLEFFMPEG {
         });
       }
 
-      // Log warnings in warn mode
-      if (
-        this.options.validationMode === "warn" &&
-        result.warnings.length > 0
-      ) {
-        result.warnings.forEach((w) => console.warn(`${w.path}: ${w.message}`));
+      // Warnings: "warn" logs them, "strict" promotes them to errors.
+      // (Historically "strict" only silenced them, the opposite of the docs.)
+      if (result.warnings.length > 0) {
+        if (this.options.validationMode === "strict") {
+          throw new ValidationError(
+            `Validation failed (strict mode promotes warnings to errors):\n${result.warnings.map((w) => `  ${w.path}: ${w.message}`).join("\n")}`,
+            { errors: result.warnings, warnings: [] },
+          );
+        }
+        if (this.options.validationMode === "warn") {
+          result.warnings.forEach((w) => console.warn(`${w.path}: ${w.message}`));
+        }
       }
 
       // Use resolved clips (with position/end computed) for loading
       const resolvedClips = resolved.clips;
 
-      await Promise.all(
-        resolvedClips.map((clipObj) => {
-          if (clipObj.type === "video" || clipObj.type === "audio") {
-            clipObj.volume = clipObj.volume != null ? clipObj.volume : 1;
-            clipObj.cutFrom = clipObj.cutFrom ?? 0;
-          }
-          // Normalize transitions for all visual clip types
-          if (
-            (clipObj.type === "video" || clipObj.type === "image" || clipObj.type === "color") &&
-            clipObj.transition
-          ) {
-            clipObj.transition = {
-              type: clipObj.transition.type || clipObj.transition,
-              duration: clipObj.transition.duration ?? 0.5,
-            };
-          }
-          if (clipObj.type === "video") {
-            return Loaders.loadVideo(this, clipObj);
-          }
-          if (clipObj.type === "audio") {
-            return Loaders.loadAudio(this, clipObj);
-          }
-          if (clipObj.type === "text") {
-            return Loaders.loadText(this, clipObj);
-          }
-          if (clipObj.type === "effect") {
-            return Loaders.loadEffect(this, clipObj);
-          }
-          if (clipObj.type === "image") {
-            return Loaders.loadImage(this, clipObj);
-          }
-          if (clipObj.type === "color") {
-            return Loaders.loadColor(this, clipObj);
-          }
-          if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
-            return Loaders.loadBackgroundAudio(this, clipObj);
-          }
-          if (clipObj.type === "subtitle") {
-            return Loaders.loadSubtitle(this, clipObj);
-          }
-        }),
-      );
+      await mapWithConcurrency(resolvedClips, 8, (clipObj) => {
+        if (clipObj.type === "video" || clipObj.type === "audio") {
+          clipObj.volume = clipObj.volume != null ? clipObj.volume : 1;
+          clipObj.cutFrom = clipObj.cutFrom ?? 0;
+        }
+        // Normalize transitions for all visual clip types
+        if (
+          (clipObj.type === "video" || clipObj.type === "image" || clipObj.type === "color") &&
+          clipObj.transition
+        ) {
+          clipObj.transition = {
+            type: clipObj.transition.type || clipObj.transition,
+            duration: clipObj.transition.duration ?? 0.5,
+          };
+        }
+        if (clipObj.type === "video") {
+          return Loaders.loadVideo(this, clipObj);
+        }
+        if (clipObj.type === "audio") {
+          return Loaders.loadAudio(this, clipObj);
+        }
+        if (clipObj.type === "text") {
+          return Loaders.loadText(this, clipObj);
+        }
+        if (clipObj.type === "effect") {
+          return Loaders.loadEffect(this, clipObj);
+        }
+        if (clipObj.type === "image") {
+          return Loaders.loadImage(this, clipObj);
+        }
+        if (clipObj.type === "color") {
+          return Loaders.loadColor(this, clipObj);
+        }
+        if (clipObj.type === "music" || clipObj.type === "backgroundAudio") {
+          return Loaders.loadBackgroundAudio(this, clipObj);
+        }
+        if (clipObj.type === "subtitle") {
+          return Loaders.loadSubtitle(this, clipObj);
+        }
+      });
     } finally {
       this._isLoading = false;
     }
@@ -411,6 +441,40 @@ class SIMPLEFFMPEG {
    * @private
    */
   async _prepareExport(options = {}) {
+    // A leading-dash basename survives the quoted command string as a bare
+    // argv token and would be parsed by ffmpeg as a flag.
+    if (
+      options.outputPath != null &&
+      (typeof options.outputPath !== "string" ||
+        options.outputPath.length === 0 ||
+        path.basename(options.outputPath).startsWith("-"))
+    ) {
+      throw new SimpleffmpegError(
+        `options.outputPath must be a non-empty string whose basename does not start with "-" (got "${options.outputPath}")`,
+      );
+    }
+
+    // Validate encoding options against the supported lists so typos fail
+    // here with a clear message instead of deep in ffmpeg stderr.
+    const optionChecks = [
+      ["videoCodec", options.videoCodec, C.VIDEO_CODECS],
+      ["audioCodec", options.audioCodec, C.AUDIO_CODECS],
+      ["preset", options.preset, C.VIDEO_PRESETS],
+      ["hwaccel", options.hwaccel, C.HWACCEL_OPTIONS],
+      [
+        "logLevel",
+        options.logLevel,
+        ["quiet", "panic", "fatal", "error", "warning", "info", "verbose", "debug"],
+      ],
+    ];
+    for (const [name, value, allowed] of optionChecks) {
+      if (value != null && !allowed.includes(value)) {
+        throw new SimpleffmpegError(
+          `options.${name} "${value}" is not supported — valid values: ${allowed.join(", ")}`,
+        );
+      }
+    }
+
     const exportOptions = {
       // Output
       outputPath: options.outputPath || "./output.mp4",
@@ -429,13 +493,17 @@ class SIMPLEFFMPEG {
       // Features
       hwaccel: options.hwaccel || "none",
       audioOnly: options.audioOnly || false,
+      // (audioCodec above is corrected for audioOnly exports below)
       twoPass: options.twoPass || false,
       metadata: options.metadata || null,
       thumbnail: options.thumbnail || null,
 
       // Verbose/debug
       verbose: options.verbose || false,
-      logLevel: options.logLevel || "warning",
+      // Only meaningful when the caller sets it; the old "warning" default
+      // was never emitted, and emitting it would silence the stderr stats
+      // lines that drive onProgress.
+      logLevel: options.logLevel || null,
       saveCommand: options.saveCommand || null,
 
       // Output resolution (scale on export)
@@ -466,6 +534,26 @@ class SIMPLEFFMPEG {
           : true, // Default: true
     };
 
+    // audioOnly exports pick the codec from the output extension when the
+    // caller didn't set one — the AAC default in a .wav/.mp3 container was
+    // a wrong-codec-in-wrong-box surprise.
+    if (exportOptions.audioOnly && !options.audioCodec) {
+      const audioCodecByExt = {
+        ".mp3": "libmp3lame",
+        ".wav": "pcm_s16le",
+        ".flac": "flac",
+        ".ogg": "libvorbis",
+        ".opus": "libopus",
+        ".m4a": "aac",
+        ".aac": "aac",
+        ".mp4": "aac",
+      };
+      const outExt = path.extname(exportOptions.outputPath).toLowerCase();
+      if (audioCodecByExt[outExt]) {
+        exportOptions.audioCodec = audioCodecByExt[outExt];
+      }
+    }
+
     // Handle resolution presets
     if (exportOptions.outputResolution) {
       const presets = {
@@ -483,25 +571,28 @@ class SIMPLEFFMPEG {
     }
 
     this.videoOrAudioClips.sort((a, b) => {
-      if (!a.position) return -1;
-      if (!b.position) return 1;
+      if (a.position == null) return -1;
+      if (b.position == null) return 1;
       if (a.position < b.position) return -1;
       if (a.position > b.position) return 1;
       return 0;
     });
 
-    // Handle rotation
-    await Promise.all(
-      this.videoOrAudioClips.map(async (clip) => {
-        if (clip.type === "video" && clip.iphoneRotation !== 0) {
-          const unrotatedUrl = await unrotateVideo(clip.url, {
-            tempDir: this.options.tempDir,
-          });
-          this.filesToClean.push(unrotatedUrl);
-          clip.url = unrotatedUrl;
-        }
-      }),
-    );
+    // Handle rotation. The original url is stashed so _cleanup() can restore
+    // it after the unrotated temp file is deleted — otherwise a second
+    // export() (or preview() then export()) points at a deleted file.
+    // Concurrency-capped: each unrotate is a full re-encode, and a batch of
+    // rotated clips would otherwise spawn that many parallel ffmpeg runs.
+    await mapWithConcurrency(this.videoOrAudioClips, 2, async (clip) => {
+      if (clip.type === "video" && clip.iphoneRotation !== 0 && !clip._originalUrl) {
+        const unrotatedUrl = await unrotateVideo(clip.url, {
+          tempDir: this.options.tempDir,
+        });
+        this.filesToClean.push(unrotatedUrl);
+        clip._originalUrl = clip.url;
+        clip.url = unrotatedUrl;
+      }
+    });
 
     // Build a mapping from clip to its FFmpeg input stream index.
     // Flat color clips use the color= filter source and do not have file inputs,
@@ -732,7 +823,10 @@ class SIMPLEFFMPEG {
             );
           }
           this.filesToClean.push(tempPath);
-          return { ...clip, _textFilePath: tempPath };
+          // _textFilePaths collects per-window files (typewriter prefixes,
+          // word windows) below; the object reference is shared into every
+          // expanded window via the {...clip} spread.
+          return { ...clip, _textFilePath: tempPath, _textFilePaths: {} };
         }
         return clip;
       });
@@ -742,6 +836,33 @@ class SIMPLEFFMPEG {
       textWindows = textWindows
         .filter((w) => typeof w.start === "number" && w.start < projectDuration)
         .map((w) => ({ ...w, end: Math.min(w.end, projectDuration) }));
+
+      // Word/typewriter windows render substrings of the clip text, which
+      // the full-text temp file can't serve. Write one file per distinct
+      // window text so flagged clips never fall back to inline drawtext.
+      let windowFileIdx = 0;
+      for (const win of textWindows) {
+        const winClip = win.clip;
+        if (!winClip || !winClip._textFilePaths) continue;
+        const winText = win.text || "";
+        if (!hasProblematicChars(winText)) continue;
+        const fullText = (winClip.text || "").replace(/\r?\n/g, " ");
+        if (winText === fullText || winClip._textFilePaths[winText]) continue;
+        const winPath = path.join(
+          textTempBase,
+          `.simpleffmpeg_textwin_${windowFileIdx++}_${Date.now()}.txt`,
+        );
+        try {
+          fs.writeFileSync(winPath, winText.replace(/\r?\n/g, " "), "utf-8");
+        } catch (writeError) {
+          throw new SimpleffmpegError(
+            `Failed to write temporary text file "${winPath}": ${writeError.message}`,
+            { cause: writeError },
+          );
+        }
+        this.filesToClean.push(winPath);
+        winClip._textFilePaths[winText] = winPath;
+      }
 
       // Check if we need batching based on node count
       needTextPasses = textWindows.length > exportOptions.textMaxNodesPerPass;
@@ -903,12 +1024,42 @@ class SIMPLEFFMPEG {
       // Validate watermark config
       const wmValidation = validateWatermarkConfig(exportOptions.watermark);
       if (!wmValidation.valid) {
-        throw new Error(
+        throw new ValidationError(
           `Watermark validation failed: ${wmValidation.errors.join(", ")}`,
+          { errors: wmValidation.errors },
         );
       }
 
-      const wmConfig = exportOptions.watermark;
+      let wmConfig = exportOptions.watermark;
+
+      // Text watermarks get the same textfile fallback as text clips: the
+      // characters hasProblematicChars flags cannot be escaped reliably in
+      // filter_complex, and the watermark path previously rendered them
+      // inline regardless.
+      if (
+        wmConfig.type === "text" &&
+        typeof wmConfig.text === "string" &&
+        hasProblematicChars(wmConfig.text)
+      ) {
+        const wmTextPath = path.join(
+          this.options.tempDir || path.dirname(exportOptions.outputPath),
+          `.simpleffmpeg_wmtext_${Date.now()}.txt`,
+        );
+        try {
+          fs.writeFileSync(
+            wmTextPath,
+            wmConfig.text.replace(/\r?\n/g, " "),
+            "utf-8",
+          );
+        } catch (writeError) {
+          throw new SimpleffmpegError(
+            `Failed to write temporary watermark text file "${wmTextPath}": ${writeError.message}`,
+            { cause: writeError },
+          );
+        }
+        this.filesToClean.push(wmTextPath);
+        wmConfig = { ...wmConfig, _textFilePath: wmTextPath };
+      }
 
       // For image watermarks, we need to add an input.
       // Use the actual file input count (from _inputIndexMap) rather than
@@ -976,6 +1127,7 @@ class SIMPLEFFMPEG {
       audioOnly: exportOptions.audioOnly,
       metadata: exportOptions.metadata,
       twoPass: exportOptions.twoPass,
+      logLevel: exportOptions.logLevel,
     });
 
     return {
@@ -992,6 +1144,9 @@ class SIMPLEFFMPEG {
       hasAudio,
       finalVideoLabel,
       finalAudioLabel,
+      // Two-pass commands rebuild their input list; the watermark's -i must
+      // ride along or the filter graph references a nonexistent input.
+      watermarkInputString,
     };
   }
 
@@ -1112,12 +1267,16 @@ class SIMPLEFFMPEG {
         }
 
         const pass1Command = buildMainCommand({
-          inputs: this._getInputStreams(),
+          inputs: this._getInputStreams() + (prepared.watermarkInputString || ""),
           filterComplex: prepared.filterComplex,
           mapVideo: finalVideoLabel,
           mapAudio: finalAudioLabel,
           hasVideo,
-          hasAudio: false, // No audio in first pass
+          // Audio stays mapped in pass 1: the shared filter graph produces an
+          // audio output, and ffmpeg rejects a graph with an unconnected
+          // output. The redundant audio encode is the price of reusing one
+          // graph for both passes.
+          hasAudio,
           videoCodec: exportOptions.videoCodec,
           videoPreset: exportOptions.videoPreset,
           videoCrf: null,
@@ -1131,6 +1290,7 @@ class SIMPLEFFMPEG {
           twoPass: true,
           passNumber: 1,
           passLogFile,
+          logLevel: exportOptions.logLevel,
         });
 
         await runFFmpeg({
@@ -1138,6 +1298,7 @@ class SIMPLEFFMPEG {
           totalDuration,
           signal,
           onLog,
+          timeoutMs: exportOptions.timeoutMs,
         });
 
         // Second pass
@@ -1146,7 +1307,7 @@ class SIMPLEFFMPEG {
         }
 
         const pass2Command = buildMainCommand({
-          inputs: this._getInputStreams(),
+          inputs: this._getInputStreams() + (prepared.watermarkInputString || ""),
           filterComplex: prepared.filterComplex,
           mapVideo: finalVideoLabel,
           mapAudio: finalAudioLabel,
@@ -1167,6 +1328,7 @@ class SIMPLEFFMPEG {
           twoPass: true,
           passNumber: 2,
           passLogFile,
+          logLevel: exportOptions.logLevel,
         });
 
         await runFFmpeg({
@@ -1175,6 +1337,8 @@ class SIMPLEFFMPEG {
           onProgress,
           signal,
           onLog,
+          timeoutMs: exportOptions.timeoutMs,
+          outputPath: exportOptions.outputPath,
         });
 
         // Clean up pass log files
@@ -1190,6 +1354,8 @@ class SIMPLEFFMPEG {
           onProgress,
           signal,
           onLog,
+          timeoutMs: exportOptions.timeoutMs,
+          outputPath: exportOptions.outputPath,
         });
       }
 
@@ -1251,7 +1417,12 @@ class SIMPLEFFMPEG {
           console.log("simple-ffmpeg: Generating thumbnail...");
         }
 
-        await runFFmpeg({ command: thumbCommand, onLog });
+        await runFFmpeg({
+          command: thumbCommand,
+          onLog,
+          signal,
+          outputPath: exportOptions.thumbnail,
+        });
         console.log(`simple-ffmpeg: Thumbnail -> ${thumbOptions.outputPath}`);
       }
 
@@ -1498,6 +1669,14 @@ class SIMPLEFFMPEG {
         "snapshot() requires options.outputPath to be specified",
       );
     }
+    if (
+      path.basename(String(filePath)).startsWith("-") ||
+      path.basename(String(options.outputPath)).startsWith("-")
+    ) {
+      throw new SimpleffmpegError(
+        "snapshot() file basenames cannot start with \"-\" (ffmpeg would parse them as flags)",
+      );
+    }
 
     const {
       outputPath,
@@ -1505,7 +1684,19 @@ class SIMPLEFFMPEG {
       width,
       height,
       quality,
+      signal,
+      timeoutMs = 5 * 60 * 1000,
     } = options;
+
+    const posNum = (v) => typeof v === "number" && Number.isFinite(v) && v > 0;
+    if (typeof time !== "number" || !Number.isFinite(time) || time < 0) {
+      throw new SimpleffmpegError("snapshot() options.time must be a non-negative number");
+    }
+    for (const [name, v] of [["width", width], ["height", height], ["quality", quality]]) {
+      if (v != null && !posNum(v)) {
+        throw new SimpleffmpegError(`snapshot() options.${name} must be a positive number`);
+      }
+    }
 
     const command = buildSnapshotCommand({
       inputPath: filePath,
@@ -1516,7 +1707,13 @@ class SIMPLEFFMPEG {
       quality,
     });
 
-    await runFFmpeg({ command });
+    await runFFmpeg({ command, signal, timeoutMs, outputPath });
+    if (!fs.existsSync(outputPath)) {
+      throw new FFmpegError(
+        `snapshot() produced no output — is ${time}s beyond the end of the video?`,
+        { command },
+      );
+    }
     return outputPath;
   }
 
@@ -1669,7 +1866,11 @@ class SIMPLEFFMPEG {
     });
 
     try {
-      await runFFmpeg({ command });
+      await runFFmpeg({
+        command,
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? 5 * 60 * 1000,
+      });
     } catch (err) {
       // Clean up our mkdtemp'd subdirectory in both paths. The user's outputDir
       // itself is left alone — we only created (and therefore only remove) the
@@ -1708,6 +1909,14 @@ class SIMPLEFFMPEG {
    * The `web-mp4` preset produces H.264 + AAC in an MP4 container with
    * yuv420p, faststart, even dimensions, profile high / level 4.1 — the
    * durable safe default for browser and downstream renderer pipelines.
+   * It requires a playable video stream: audio-only input (or an MP3 whose
+   * only "video" is embedded cover art) rejects with code NO_VIDEO_STREAM.
+   *
+   * The `web-audio` preset produces AAC in an MP4-family container
+   * (outputPath must end in .m4a or .mp4) with faststart, preserving the
+   * source channel count — the audio-side equivalent for uploads that are
+   * podcasts, voiceovers, or music. Video-only options (crf, videoBitrate,
+   * scale) are rejected; input without audio rejects with NO_AUDIO_STREAM.
    *
    * When `customArgs` is provided, the caller owns the full flag set
    * (including `-i`, `-y`, output path) but still benefits from the hardening
@@ -1716,7 +1925,7 @@ class SIMPLEFFMPEG {
    * @param {string} inputPath - Path to the source media file
    * @param {Object} options
    * @param {string} options.outputPath - Output file path
-   * @param {"web-mp4"} [options.preset] - Codec-safety preset. Mutually exclusive with customArgs.
+   * @param {"web-mp4"|"web-audio"} [options.preset] - Codec-safety preset. Mutually exclusive with customArgs.
    * @param {number} [options.crf=23] - libx264 CRF (web-mp4 only)
    * @param {string} [options.videoBitrate] - e.g. "2M" (web-mp4 only)
    * @param {string} [options.audioBitrate="128k"] - e.g. "192k" (web-mp4 only)
@@ -1766,6 +1975,170 @@ class SIMPLEFFMPEG {
    */
   static isWebSafeMp4(mediaInfo) {
     return isWebSafeMp4Fn(mediaInfo);
+  }
+
+  /**
+   * Change audio speed without changing pitch.
+   *
+   * Uses ffmpeg's atempo time-stretch, so a 1.1× voiceover keeps its pitch —
+   * unlike resampling-based speedups (e.g. a player's playbackRate), which
+   * shift speech into chipmunk territory. Values outside a single atempo
+   * stage's [0.5, 2] range are reached by chaining; overall range [0.25, 4].
+   *
+   * The output codec is chosen by the outputPath extension
+   * (.mp3/.m4a/.aac/.wav/.flac/.ogg/.opus).
+   *
+   * @param {string} inputPath - Source audio (or video; audio is extracted)
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {number} options.tempo - Speed factor in [0.25, 4]; 1.1 = 10% faster
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   * @throws {TranscodeError} With `code`: INVALID_PATH | INPUT_MISSING | FFMPEG_NOT_FOUND | NO_AUDIO_STREAM | TIMEOUT | NONZERO_EXIT | SIGNAL | ABORTED
+   *
+   * @example
+   * await SIMPLEFFMPEG.audioTempo("./vo.mp3", {
+   *   outputPath: "./vo-1.1x.mp3",
+   *   tempo: 1.1,
+   * });
+   */
+  static async audioTempo(inputPath, options = {}) {
+    return audioTempoFn(inputPath, options);
+  }
+
+  /**
+   * Detect silences in an audio file. Analysis only — writes nothing.
+   *
+   * Returns intervals where the level stays below noiseDb for at least
+   * minDurationSec. A file that ends in silence gets its final interval
+   * closed at the file duration.
+   *
+   * @param {string} inputPath - Source audio (or video; audio is analyzed)
+   * @param {Object} [options]
+   * @param {number} [options.noiseDb=-35] - Silence threshold in dBFS (negative)
+   * @param {number} [options.minDurationSec=0.3] - Minimum silence length to report
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<{start:number,end:number,duration:number}[]>} Intervals in seconds
+   *
+   * @example
+   * const gaps = await SIMPLEFFMPEG.detectSilence("./vo.mp3", { noiseDb: -40 });
+   * // → [{ start: 8.1, end: 9.4, duration: 1.3 }, ...]
+   */
+  static async detectSilence(inputPath, options = {}) {
+    return detectSilenceFn(inputPath, options);
+  }
+
+  /**
+   * Rebuild an audio file from source ranges and inserted silence.
+   *
+   * Each segment is either `{ start, end }` (seconds in the source) or
+   * `{ silence }` (seconds of generated silence). Every cut gets a micro-fade
+   * (default 5 ms) on both sides so joins never click — cutting a waveform
+   * mid-phoneme without one smears consonants audibly. Use detectSilence()
+   * to place cuts inside gaps rather than on speech.
+   *
+   * @param {string} inputPath - Source audio
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {Array<{start?:number,end?:number,silence?:number}>} options.segments - Output timeline, in order; at least one {start,end}
+   * @param {number} [options.fadeMs=5] - Micro-fade at each cut, in milliseconds
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * // Keep two takes, with a 0.8s pause between them
+   * await SIMPLEFFMPEG.spliceAudio("./vo.mp3", {
+   *   outputPath: "./vo-paced.mp3",
+   *   segments: [
+   *     { start: 0, end: 12.4 },
+   *     { silence: 0.8 },
+   *     { start: 13.1, end: 41.0 },
+   *   ],
+   * });
+   */
+  static async spliceAudio(inputPath, options = {}) {
+    return spliceAudioFn(inputPath, options);
+  }
+
+  /**
+   * Trim leading and/or trailing silence, keeping a hair of room tone.
+   *
+   * @param {string} inputPath - Source audio
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {"both"|"start"|"end"} [options.edges="both"] - Which edges to trim
+   * @param {number} [options.keepSec=0.15] - Room tone kept at each trimmed edge
+   * @param {number} [options.noiseDb=-35] - Silence threshold in dBFS
+   * @param {number} [options.minDurationSec=0.3] - Minimum silence length to count
+   * @param {number} [options.fadeMs=5] - Micro-fade at each cut
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   */
+  static async trimSilence(inputPath, options = {}) {
+    return trimSilenceFn(inputPath, options);
+  }
+
+  /**
+   * Cap interior silences at a maximum length.
+   *
+   * Long gaps keep their first maxSilenceSec of real recorded quiet — room
+   * tone, not synthetic silence — and each cut lands deep inside the gap
+   * where the level is minimal, so joins are inaudible. Edge silence is
+   * trimSilence()'s job and is left alone here.
+   *
+   * @param {string} inputPath - Source audio
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {number} [options.maxSilenceSec=1.0] - Longest gap allowed to survive
+   * @param {number} [options.noiseDb=-35] - Silence threshold in dBFS
+   * @param {number} [options.minDurationSec=0.3] - Minimum silence length to count
+   * @param {number} [options.fadeMs=5] - Micro-fade at each cut
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * // "The pause at 57s is too long — make it 1.2s"
+   * await SIMPLEFFMPEG.capSilences("./vo.mp3", {
+   *   outputPath: "./vo-tight.mp3",
+   *   maxSilenceSec: 1.2,
+   * });
+   */
+  static async capSilences(inputPath, options = {}) {
+    return capSilencesFn(inputPath, options);
+  }
+
+  /**
+   * Two-pass EBU R128 loudness normalization to a LUFS target.
+   *
+   * Pass 1 measures with ffmpeg's loudnorm, pass 2 applies the measured
+   * values linearly — the accurate variant, without single-pass pumping.
+   * Defaults (-16 LUFS, -1.5 dBTP) suit voice for the web. Output is pinned
+   * back to the source sample rate (loudnorm internally runs at 192 kHz).
+   *
+   * @param {string} inputPath - Source audio
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {number} [options.targetLufs=-16] - Integrated loudness target, in [-70, -5]
+   * @param {number} [options.truePeakDb=-1.5] - True peak ceiling, in [-9, 0]
+   * @param {number} [options.loudnessRange=11] - Target loudness range (LU), in [1, 50]
+   * @param {number} [options.timeoutMs=300000] - Hard timeout per pass; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - Progress of the encoding pass
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   * @throws {TranscodeError} code "ANALYSIS_FAILED" when the measurement pass can't be parsed
+   */
+  static async normalizeLoudness(inputPath, options = {}) {
+    return normalizeLoudnessFn(inputPath, options);
   }
 
   /**

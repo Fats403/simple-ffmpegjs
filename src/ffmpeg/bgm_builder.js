@@ -1,3 +1,6 @@
+const { getClipInputIndex } = require("../lib/utils");
+const C = require("../core/constants");
+
 function buildBackgroundMusicMix(
   project,
   backgroundClips,
@@ -33,20 +36,19 @@ function buildBackgroundMusicMix(
   let filter = "";
   const bgLabels = [];
   backgroundClips.forEach((clip, i) => {
-    const inputIndex = project._inputIndexMap
-      ? project._inputIndexMap.get(clip)
-      : project.videoOrAudioClips.indexOf(clip);
+    const inputIndex = getClipInputIndex(project, clip);
     const effectivePosition =
       typeof clip.position === "number" ? clip.position : 0;
     const effectiveEnd =
       typeof clip.end === "number" ? clip.end : projectDuration;
     const effectiveCutFrom =
       typeof clip.cutFrom === "number" ? clip.cutFrom : 0;
-    const effectiveVolume = typeof clip.volume === "number" ? clip.volume : 0.2;
+    const effectiveVolume =
+      typeof clip.volume === "number" ? clip.volume : C.DEFAULT_BGM_VOLUME;
 
-    const adelay = effectivePosition * 1000;
+    const adelay = Math.round(effectivePosition * 1000);
     const trimEnd = effectiveCutFrom + (effectiveEnd - effectivePosition);
-    const outLabel = `[bg${i}]`;
+    const outLabel = `[bgm${i}]`;
     filter += `[${inputIndex}:a]volume=${effectiveVolume},atrim=start=${effectiveCutFrom}:end=${trimEnd},asetpts=PTS-STARTPTS,adelay=${adelay}|${adelay}${outLabel};`;
     bgLabels.push(outLabel);
   });
@@ -60,14 +62,14 @@ function buildBackgroundMusicMix(
       // until that point.
       const anchorDur = Math.max(projectDuration, visualEnd || 0, 0.1);
       const padLabel = "[_bgmpad]";
-      filter += `anullsrc=cl=stereo,atrim=end=${anchorDur}${padLabel};`;
+      filter += `anullsrc=r=44100:cl=stereo,atrim=end=${anchorDur}${padLabel};`;
 
-      // Use normalize=0 with explicit weights so the silence anchor
-      // contributes no audio energy while preserving the same volume
-      // balance as a direct amix of the real inputs.
-      const realCount = bgLabels.length + 1; // bgm tracks + existing audio
-      const w = (1 / realCount).toFixed(6);
-      const weights = ["0", ...Array(realCount).fill(w)].join(" ");
+      // normalize=0 with weight 1 on every real input sums the sources at
+      // their set volumes (the silence anchor contributes nothing). Dividing
+      // by input count here — amix's normalized default — would attenuate
+      // the whole program by 1/n just because a music bed was added; clip
+      // volume props are the mix faders and must pass through unscaled.
+      const weights = ["0", ...Array(bgLabels.length + 1).fill("1")].join(" ");
 
       filter += `${padLabel}${existingAudioLabel}${bgLabels.join("")}amix=inputs=${
         bgLabels.length + 2
@@ -76,7 +78,7 @@ function buildBackgroundMusicMix(
     }
     filter += `${bgLabels.join("")}amix=inputs=${
       bgLabels.length
-    }:duration=longest[finalaudio];`;
+    }:duration=longest:normalize=0[finalaudio];`;
     return { filter, finalAudioLabel: "[finalaudio]", hasAudio: true };
   }
   return {

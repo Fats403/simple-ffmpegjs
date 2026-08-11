@@ -40,8 +40,16 @@ function buildMainCommand({
   twoPass,
   passNumber, // 1 or 2 for two-pass encoding
   passLogFile,
+  logLevel,
 }) {
   let cmd = "ffmpeg -y ";
+
+  // logLevel was accepted and documented for years without being emitted.
+  // -stats keeps the frame=/time= progress lines flowing even at quiet
+  // levels, since onProgress parses them from stderr.
+  if (logLevel) {
+    cmd += `-loglevel ${logLevel} -stats `;
+  }
 
   // Hardware acceleration (input side)
   if (hwaccel && hwaccel !== "none") {
@@ -139,7 +147,7 @@ function buildMainCommand({
   }
 
   // Faststart for MP4 (streaming-friendly)
-  if (faststart && outputPath.endsWith(".mp4")) {
+  if (faststart && outputPath.toLowerCase().endsWith(".mp4")) {
     cmd += "-movflags +faststart ";
   }
 
@@ -160,6 +168,11 @@ function buildMainCommand({
     // Custom metadata
     if (metadata.custom && typeof metadata.custom === "object") {
       for (const [key, value] of Object.entries(metadata.custom)) {
+        if (!isValidMetadataKey(key)) {
+          throw new SimpleffmpegError(
+            `Invalid metadata key "${key}" — keys must match [A-Za-z0-9_.-]+`,
+          );
+        }
         cmd += `-metadata ${key}="${escapeMetadata(String(value))}" `;
       }
     }
@@ -185,9 +198,12 @@ function buildTextBatchCommand({
     intermediateVideoCodec === "libx264"
       ? "-profile:v main -pix_fmt yuv420p "
       : "";
+  const batchGraph = sanitizeFilterComplex(
+    `[0:v]null[invid];${filterString}`,
+  );
   return `ffmpeg -y -i "${escapeFilePath(
     inputPath,
-  )}" -filter_complex "[0:v]null[invid];${filterString}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} ${compatFlags}-preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(
+  )}" -filter_complex "${batchGraph}" -map "[outVideoAndText]" -map 0:a? -c:v ${intermediateVideoCodec} ${compatFlags}-preset ${intermediatePreset} -crf ${intermediateCrf} -c:a copy -movflags +faststart "${escapeFilePath(
     outputPath,
   )}"`;
 }
@@ -250,13 +266,22 @@ function buildSnapshotCommand({
 }
 
 /**
- * Escape metadata value for FFmpeg
+ * Sanitize a metadata value for a double-quoted command-string segment.
+ * The command parser treats characters inside quotes literally, so a double
+ * quote cannot be represented — it is replaced with a single quote rather
+ * than truncating the value and injecting argv entries. Newlines become
+ * spaces (container metadata is single-line).
  */
 function escapeMetadata(value) {
-  return String(value)
-    .replace(/\\/g, "\\\\")
-    .replace(/"/g, "\\\"")
-    .replace(/\n/g, "\\n");
+  return String(value).replace(/"/g, "'").replace(/\r?\n/g, " ");
+}
+
+/**
+ * Custom metadata keys are interpolated unquoted into the command string, so
+ * they must be strict identifiers — anything else becomes extra argv tokens.
+ */
+function isValidMetadataKey(key) {
+  return /^[A-Za-z0-9_.-]+$/.test(key);
 }
 
 /**

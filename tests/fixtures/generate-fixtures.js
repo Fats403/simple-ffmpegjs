@@ -67,6 +67,30 @@ const fixtures = [
     cmd: `ffmpeg -y -f lavfi -i "color=c=red:s=320x240:d=1,format=yuv420p" -t 1 -c:v libx264 -preset ultrafast -crf 28`,
   },
   {
+    name: "test-speech-gaps.wav",
+    // 5.9s "speech rhythm" fixture: 0.8s tone, 1.5s gap, 0.8s tone, 2.0s gap,
+    // 0.8s tone. Known silence positions for detectSilence/capSilences tests.
+    cmd: `ffmpeg -y -f lavfi -i "sine=frequency=440:duration=0.8" -f lavfi -i "anullsrc=r=44100:cl=mono" -filter_complex "[0:a]asplit=3[t1][t2][t3];[1:a]asplit=2[gA0][gB0];[gA0]atrim=end=1.5[gA];[gB0]atrim=end=2[gB];[t1][gA][t2][gB][t3]concat=n=5:v=0:a=1,aformat=sample_rates=44100:channel_layouts=mono[out]" -map "[out]" -c:a pcm_s16le`,
+  },
+  {
+    name: "test-speech-padded.wav",
+    // 3.7s fixture with 1.2s leading and 1.5s trailing silence around a 1s
+    // tone. Known edge-silence positions for trimSilence tests.
+    cmd: `ffmpeg -y -f lavfi -i "sine=frequency=440:duration=1" -f lavfi -i "anullsrc=r=44100:cl=mono" -filter_complex "[1:a]asplit=2[pA0][pB0];[pA0]atrim=end=1.2[pA];[pB0]atrim=end=1.5[pB];[pA][0:a][pB]concat=n=3:v=0:a=1,aformat=sample_rates=44100:channel_layouts=mono[out]" -map "[out]" -c:a pcm_s16le`,
+  },
+  {
+    name: "test-audio-quiet-2s.wav",
+    // 2s sine at very low level (-30 dB) for normalizeLoudness tests.
+    cmd: `ffmpeg -y -f lavfi -i "sine=frequency=440:duration=2" -af "volume=0.03" -c:a pcm_s16le`,
+  },
+  {
+    name: "test-audio-cover-art.mp3",
+    // MP3 whose only "video" stream is embedded cover art (attached_pic) —
+    // exercises attachedPic detection and the web-mp4 NO_VIDEO_STREAM guard.
+    // (1 fps, d=1 → exactly one video frame; -frames:v 1 would truncate audio)
+    cmd: `ffmpeg -y -f lavfi -i "sine=frequency=330:duration=2" -f lavfi -i "color=c=purple:s=64x64:d=1:r=1" -map 0:a -map 1:v -c:a libmp3lame -b:a 64k -c:v png -disposition:v attached_pic -id3v2_version 3`,
+  },
+  {
     name: "test-video-busy-5s.mp4",
     // 5s 1280x720 testsrc pattern (constantly-changing, not compressible)
     // with audio. Used by transcode integration tests where we need:

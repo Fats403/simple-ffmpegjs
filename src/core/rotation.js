@@ -22,20 +22,40 @@ function unrotateVideo(inputUrl, options = {}) {
   const timeoutMs = options.timeoutMs || DEFAULT_UNROTATE_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
     const out = path.join(options.tempDir || os.tmpdir(), `unrotated-${randomUUID()}.mp4`);
-    const args = ["-y", "-i", inputUrl, out];
+    // Explicit encoder settings so the intermediate is visually lossless and
+    // predictable regardless of ffmpeg build defaults; audio and metadata
+    // pass through untouched. The bare default (no -crf/-preset) re-encoded
+    // at whatever the build chose.
+    const args = [
+      "-nostdin",
+      "-y",
+      "-i",
+      inputUrl,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "veryfast",
+      "-crf",
+      "18",
+      "-c:a",
+      "copy",
+      "-map_metadata",
+      "0",
+      out,
+    ];
     let timedOut = false;
 
     const proc = spawn("ffmpeg", args, {
-      stdio: ["pipe", "pipe", "pipe"],
+      stdio: ["ignore", "pipe", "pipe"],
     });
 
-    // Set up timeout
+    // SIGKILL, not SIGTERM: a wedged ffmpeg that ignores SIGTERM would leave
+    // this promise pending forever. Partial output is removed in the close
+    // handler, after the process has actually died.
     const timeoutId = setTimeout(() => {
       timedOut = true;
-      proc.kill("SIGTERM");
-      // Clean up partial output file on timeout
       try {
-        fs.unlinkSync(out);
+        proc.kill("SIGKILL");
       } catch (_) {}
     }, timeoutMs);
 
@@ -43,10 +63,20 @@ function unrotateVideo(inputUrl, options = {}) {
 
     proc.stderr.on("data", (data) => {
       stderr += data.toString();
+      if (stderr.length > 64 * 1024) stderr = stderr.slice(-32 * 1024);
     });
 
     proc.on("error", (error) => {
       clearTimeout(timeoutId);
+      if (error && error.code === "ENOENT") {
+        reject(
+          new FFmpegError(
+            "ffmpeg binary not found in PATH — install ffmpeg (e.g. `brew install ffmpeg`)",
+            { stderr, command: `ffmpeg ${args.join(" ")}` },
+          ),
+        );
+        return;
+      }
       reject(
         new FFmpegError(`ffmpeg process error: ${error.message}`, {
           stderr,
@@ -57,6 +87,13 @@ function unrotateVideo(inputUrl, options = {}) {
 
     proc.on("close", (code) => {
       clearTimeout(timeoutId);
+
+      if (timedOut || code !== 0) {
+        // Clean up partial output file now that the process is dead
+        try {
+          fs.unlinkSync(out);
+        } catch (_) {}
+      }
 
       if (timedOut) {
         reject(
@@ -72,10 +109,6 @@ function unrotateVideo(inputUrl, options = {}) {
       }
 
       if (code !== 0) {
-        // Clean up partial output file on failure
-        try {
-          fs.unlinkSync(out);
-        } catch (_) {}
         reject(
           new FFmpegError(`ffmpeg exited with code ${code}`, {
             stderr,

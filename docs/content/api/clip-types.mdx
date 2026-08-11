@@ -32,14 +32,15 @@ All clips are plain objects with a `type` field. Supported types:
   duration?: number;        // Duration in seconds (alternative to end)
   cutFrom?: number;         // Source file offset in seconds (default: 0)
   volume?: number;          // Audio volume multiplier (default: 1)
-  transition?: {
-    type: string;           // Any xfade transition name (e.g. 'fade', 'wipeleft', 'dissolve')
-    duration: number;       // Transition duration in seconds
-  };
+  transition?:
+    | { type: string; duration?: number }  // duration defaults to 0.5s
+    | string;               // shorthand: "fade" ≡ { type: "fade", duration: 0.5 }
 }
 ```
 
-All [FFmpeg xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported.
+All [FFmpeg xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported, and the
+`type` is validated up front — a typo'd name fails with the list of valid values instead
+of a raw xfade error mid-render.
 
 ---
 
@@ -54,6 +55,9 @@ All [FFmpeg xfade transitions](https://trac.ffmpeg.org/wiki/Xfade) are supported
   duration?: number;        // Duration in seconds (alternative to end)
   width?: number;           // Source image width (skips probe; useful for remote/generated images)
   height?: number;          // Source image height
+  transition?:              // Crossfade INTO this clip, same as video clips
+    | { type: string; duration?: number }
+    | string;
   imageFit?: "cover" | "contain" | "blur-fill";
   blurIntensity?: number;   // Blur strength for blur-fill (default: 40, range: 10–80)
   kenBurns?:

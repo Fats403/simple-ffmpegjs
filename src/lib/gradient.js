@@ -174,12 +174,20 @@ function generateLinearGradient(width, height, colors, direction) {
     dy = Math.sin(rad);
   }
 
+  // Normalize the projection so t spans exactly [0, 1] across the canvas
+  // for any angle. The raw dot product ranges over [min(dx,0)+min(dy,0),
+  // max(dx,0)+max(dy,0)] — without remapping, 45° saturates early and
+  // 180°/270° (negative components) collapse to a flat fill.
+  const tMin = Math.min(dx, 0) + Math.min(dy, 0);
+  const tMax = Math.max(dx, 0) + Math.max(dy, 0);
+  const tRange = tMax - tMin || 1;
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // Project pixel onto gradient axis (normalized 0–1)
+      // Project pixel onto gradient axis, remapped to 0–1
       const nx = width > 1 ? x / (width - 1) : 0.5;
       const ny = height > 1 ? y / (height - 1) : 0.5;
-      const t = nx * dx + ny * dy;
+      const t = (nx * dx + ny * dy - tMin) / tRange;
 
       const [r, g, b] = interpolateColors(colors, t);
       const idx = (y * width + x) * 3;
@@ -242,7 +250,7 @@ function generateGradientPPM(width, height, colorSpec) {
     pixels = generateRadialGradient(width, height, parsedColors);
   } else {
     // linear-gradient (default)
-    const direction = colorSpec.direction || "vertical";
+    const direction = colorSpec.direction ?? "vertical"; // ?? so an explicit 0° angle is not swallowed
     pixels = generateLinearGradient(width, height, parsedColors, direction);
   }
 

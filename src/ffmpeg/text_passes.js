@@ -1,92 +1,10 @@
 const path = require("path");
-const { spawn } = require("child_process");
 const { buildFiltersForWindows } = require("./text_renderer");
 const { buildTextBatchCommand } = require("./command_builder");
-const { FFmpegError, ExportCancelledError } = require("../core/errors");
-const { parseFFmpegCommand } = require("../lib/utils");
+const { runFFmpeg } = require("../lib/utils");
 
-/**
- * Run an FFmpeg command using spawn() to avoid command injection.
- * @param {string} cmd - The full FFmpeg command string
- * @param {Object} [options] - Optional settings
- * @param {Function} [options.onLog] - Log callback receiving { level, message }
- * @param {AbortSignal} [options.signal] - Abort signal to cancel the process
- * @returns {Promise<void>}
- * @throws {FFmpegError} If ffmpeg fails
- * @throws {ExportCancelledError} If aborted via signal
- */
-function runCmd(cmd, { onLog, signal } = {}) {
-  return new Promise((resolve, reject) => {
-    if (signal && signal.aborted) {
-      reject(new ExportCancelledError());
-      return;
-    }
-
-    const args = parseFFmpegCommand(cmd);
-    const ffmpegPath = args.shift(); // Remove 'ffmpeg' from args
-
-    const proc = spawn(ffmpegPath, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-
-    let stderr = "";
-    let cancelled = false;
-
-    if (signal) {
-      const abortHandler = () => {
-        cancelled = true;
-        proc.kill("SIGTERM");
-      };
-      signal.addEventListener("abort", abortHandler, { once: true });
-      proc.on("close", () => {
-        signal.removeEventListener("abort", abortHandler);
-      });
-    }
-
-    proc.stdout.on("data", (data) => {
-      const chunk = data.toString();
-      if (onLog && typeof onLog === "function") {
-        onLog({ level: "stdout", message: chunk });
-      }
-    });
-
-    proc.stderr.on("data", (data) => {
-      const chunk = data.toString();
-      stderr += chunk;
-      if (onLog && typeof onLog === "function") {
-        onLog({ level: "stderr", message: chunk });
-      }
-    });
-
-    proc.on("error", (error) => {
-      reject(
-        new FFmpegError(`FFmpeg text batch process error: ${error.message}`, {
-          stderr,
-          command: cmd,
-        }),
-      );
-    });
-
-    proc.on("close", (code) => {
-      if (cancelled) {
-        reject(new ExportCancelledError());
-        return;
-      }
-      if (code !== 0) {
-        console.error("FFmpeg text batch stderr:", stderr);
-        reject(
-          new FFmpegError(`FFmpeg text batch exited with code ${code}`, {
-            stderr,
-            command: cmd,
-            exitCode: code,
-          }),
-        );
-        return;
-      }
-      resolve();
-    });
-  });
-}
+/** Each batch is a full re-encode of the video; give it real headroom. */
+const TEXT_PASS_TIMEOUT_MS = 15 * 60 * 1000;
 
 async function runTextPasses({
   baseOutputPath,
@@ -129,7 +47,15 @@ async function runTextPasses({
       intermediateCrf,
       outputPath: batchOutput,
     });
-    await runCmd(cmd, { onLog, signal });
+    // The shared hardened runner: SIGTERM→SIGKILL abort escalation, bounded
+    // output buffering, ENOENT discrimination, partial-output cleanup.
+    await runFFmpeg({
+      command: cmd,
+      onLog,
+      signal,
+      timeoutMs: TEXT_PASS_TIMEOUT_MS,
+      outputPath: batchOutput,
+    });
     currentInput = batchOutput;
     passes += 1;
   }

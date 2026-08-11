@@ -1,3 +1,5 @@
+const { getClipInputIndex } = require("../lib/utils");
+
 /**
  * Build audio filter chain for video clips.
  *
@@ -11,16 +13,15 @@ function buildAudioForVideoClips(project, videoClips, transitionOffsets) {
 
   videoClips.forEach((clip) => {
     if (!clip.hasAudio) return;
-    const inputIndex = project._inputIndexMap
-      ? project._inputIndexMap.get(clip)
-      : project.videoOrAudioClips.indexOf(clip);
+    const inputIndex = getClipInputIndex(project, clip);
+    const cutFrom = typeof clip.cutFrom === "number" ? clip.cutFrom : 0;
     const requestedDuration = Math.max(
       0,
       (clip.end || 0) - (clip.position || 0),
     );
     const maxAvailable =
-      typeof clip.mediaDuration === "number" && typeof clip.cutFrom === "number"
-        ? Math.max(0, clip.mediaDuration - clip.cutFrom)
+      typeof clip.mediaDuration === "number"
+        ? Math.max(0, clip.mediaDuration - cutFrom)
         : requestedDuration;
     const clipDuration = Math.max(0, Math.min(requestedDuration, maxAvailable));
 
@@ -28,7 +29,7 @@ function buildAudioForVideoClips(project, videoClips, transitionOffsets) {
     const adelayMs = Math.round(Math.max(0, (clip.position || 0) - offset) * 1000);
     const vol = clip.volume != null ? clip.volume : 1;
     const out = `[va${inputIndex}]`;
-    audioFilter += `[${inputIndex}:a]volume=${vol},atrim=start=${clip.cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS,adelay=${adelayMs}|${adelayMs}${out};`;
+    audioFilter += `[${inputIndex}:a]volume=${vol},atrim=start=${cutFrom}:duration=${clipDuration},asetpts=PTS-STARTPTS,adelay=${adelayMs}|${adelayMs}${out};`;
     labels.push(out);
   });
 

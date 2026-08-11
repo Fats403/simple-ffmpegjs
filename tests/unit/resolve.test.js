@@ -160,7 +160,11 @@ describe("resolveClips", () => {
         { type: "video", url: "./b.mp4", duration: 3 },
       ]);
 
-      expect(errors).toHaveLength(0);
+      // The effect clip's duration can't resolve without a position — that's
+      // now reported at resolution time, naming the field the user set.
+      expect(errors).toHaveLength(1);
+      expect(errors[0].path).toBe("clips[1].duration");
+      expect(errors[0].message).toContain("position");
       expect(clips[0]).toMatchObject({ position: 0, end: 5 });
       expect(clips[1].position).toBeUndefined();
       expect(clips[1].end).toBeUndefined();
@@ -187,9 +191,12 @@ describe("resolveClips", () => {
         { type: "text", text: "Hello", duration: 3 },
       ]);
 
-      // Position should remain undefined — validation will catch it
-      expect(errors).toHaveLength(0);
+      // Position stays undefined, and the unresolvable duration is reported
+      // by name instead of being silently deleted.
+      expect(errors).toHaveLength(1);
+      expect(errors[0].path).toBe("clips[0].duration");
       expect(clips[0].position).toBeUndefined();
+      expect(clips[0].duration).toBe(3);
     });
 
     it("should NOT auto-sequence music clips", () => {

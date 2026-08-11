@@ -1,3 +1,5 @@
+const { getClipInputIndex } = require("../lib/utils");
+
 /**
  * Build audio filter chain for standalone audio clips (sound effects, voiceovers, etc.).
  *
@@ -42,17 +44,17 @@ function buildStandaloneAudioMix(
     // Use the original clip for input index lookup since
     // _inputIndexMap keys are the original clip objects.
     const originalClip = audioClips[idx];
-    const inputIndex = project._inputIndexMap
-      ? project._inputIndexMap.get(originalClip)
-      : project.videoOrAudioClips.indexOf(originalClip);
+    const inputIndex = getClipInputIndex(project, originalClip);
 
-    const adelay = Math.round(Math.max(0, (clip.position || 0) * 1000));
+    const vol = typeof clip.volume === "number" ? clip.volume : 1;
+    const cutFrom = typeof clip.cutFrom === "number" ? clip.cutFrom : 0;
+    const position = typeof clip.position === "number" ? clip.position : 0;
+    const end = typeof clip.end === "number" ? clip.end : position;
+    const adelay = Math.round(Math.max(0, position * 1000));
     const label = `[a${inputIndex}]`;
-    filter += `[${inputIndex}:a]volume=${clip.volume},atrim=start=${
-      clip.cutFrom
-    }:end=${
-      clip.cutFrom + (clip.end - clip.position)
-    },adelay=${adelay}|${adelay},asetpts=PTS-STARTPTS${label};`;
+    filter += `[${inputIndex}:a]volume=${vol},atrim=start=${cutFrom}:end=${
+      cutFrom + Math.max(0, end - position)
+    },asetpts=PTS-STARTPTS,adelay=${adelay}|${adelay}${label};`;
     labels.push(label);
   });
 

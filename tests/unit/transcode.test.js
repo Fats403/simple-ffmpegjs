@@ -3,12 +3,14 @@ import path from "path";
 
 const {
   buildWebMp4Args,
+  buildWebAudioArgs,
   buildScaleFilter,
   validatePath,
   validateOptions,
   validateCustomArgsOutput,
   parseProgressBlock,
   isWebSafeMp4,
+  SUPPORTED_PRESETS,
   DEFAULT_MAX_OUTPUT_BYTES,
   DEFAULT_THREADS,
 } = await import("../../src/core/transcode.js");
@@ -388,5 +390,70 @@ describe("transcode — isWebSafeMp4", () => {
     const withoutPixFmt = { ...base };
     delete withoutPixFmt.pixelFormat;
     expect(isWebSafeMp4(withoutPixFmt)).toBe(true);
+  });
+});
+
+describe("transcode — buildWebAudioArgs", () => {
+  const IN = "/abs/in.mp3";
+  const OUT = "/abs/out.m4a";
+
+  it("emits the expected flag order and defaults", () => {
+    const args = buildWebAudioArgs({ inputPath: IN, outputPath: OUT });
+    const joined = args.join(" ");
+    expect(joined).toBe(
+      [
+        "-nostdin -y -hide_banner -loglevel error",
+        "-fflags +discardcorrupt -err_detect ignore_err",
+        "-progress pipe:1",
+        `-i ${IN}`,
+        "-vn -map 0:a:0",
+        "-c:a aac -b:a 128k",
+        "-movflags +faststart -f mp4",
+        `-fs ${DEFAULT_MAX_OUTPUT_BYTES}`,
+        `-threads ${DEFAULT_THREADS}`,
+        OUT,
+      ].join(" "),
+    );
+  });
+
+  it("does not force a channel count (mono sources stay mono)", () => {
+    const args = buildWebAudioArgs({ inputPath: IN, outputPath: OUT });
+    expect(args).not.toContain("-ac");
+  });
+
+  it("honors audioBitrate, maxOutputBytes, and threads overrides", () => {
+    const args = buildWebAudioArgs({
+      inputPath: IN,
+      outputPath: OUT,
+      audioBitrate: "192k",
+      maxOutputBytes: 1024,
+      threads: 4,
+    });
+    const joined = args.join(" ");
+    expect(joined).toContain("-b:a 192k");
+    expect(joined).toContain("-fs 1024");
+    expect(joined).toContain("-threads 4");
+  });
+
+  it("is registered as a supported preset", () => {
+    expect(SUPPORTED_PRESETS).toContain("web-audio");
+  });
+});
+
+describe("transcode — isWebSafeMp4 attachedPic", () => {
+  const base = {
+    hasVideo: true,
+    videoCodec: "h264",
+    format: "mov,mp4,m4a,3gp,3g2,mj2",
+    pixelFormat: "yuv420p",
+  };
+
+  it("returns false when the video stream is embedded cover art", () => {
+    expect(isWebSafeMp4({ ...base, attachedPic: true })).toBe(false);
+  });
+
+  it("stays true when attachedPic is false or absent", () => {
+    expect(isWebSafeMp4({ ...base, attachedPic: false })).toBe(true);
+    expect(isWebSafeMp4(base)).toBe(true);
   });
 });

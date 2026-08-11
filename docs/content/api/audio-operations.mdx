@@ -1,0 +1,173 @@
+---
+title: Audio Operations
+---
+
+import { Callout } from 'nextra/components'
+
+# Audio Operations
+
+Six static methods for editing narration and other audio files directly — the edits that go wrong when done naively at the composition layer. All are static: no project instance required.
+
+Why these exist:
+
+- **Speeding audio up by resampling shifts its pitch.** `audioTempo()` uses ffmpeg's `atempo` time-stretch, so a 1.1× voiceover keeps its pitch instead of drifting toward chipmunk.
+- **Cutting a waveform mid-phoneme smears consonants and clicks at the joins.** `spliceAudio()` puts a micro-fade on every cut, and the silence-aware helpers only ever cut inside detected silence.
+- **Takes from different sources play at different loudness.** `normalizeLoudness()` is a proper two-pass EBU R128 normalize.
+
+Every operation runs under the same hardening as [`transcode()`](/api/static-helpers#simpleffmpegtranscodeinputpath-options): spawn with no shell, SIGKILL-backed timeout, `AbortSignal` support, and partial-output cleanup on failure. Failures throw `TranscodeError` with the same `code` discriminators (plus `NO_AUDIO_STREAM` and `ANALYSIS_FAILED`).
+
+The output codec is chosen by the `outputPath` extension: `.mp3`, `.m4a`, `.aac`, `.wav`, `.flac`, `.ogg`, `.opus`.
+
+---
+
+## `SIMPLEFFMPEG.audioTempo(inputPath, options)`
+
+Change audio speed without changing pitch. Accepts `tempo` in `[0.25, 4]`; values beyond a single `atempo` stage's `[0.5, 2]` range are chained internally.
+
+```ts
+await SIMPLEFFMPEG.audioTempo("./voiceover.mp3", {
+  outputPath: "./voiceover-1.1x.mp3",
+  tempo: 1.1, // 10% faster, same pitch
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `outputPath` | `string` | — | Output file; extension picks the codec |
+| `tempo` | `number` | — | Speed factor in `[0.25, 4]` |
+| `timeoutMs` | `number` | `300000` | Hard timeout, SIGKILL-backed |
+| `threads` | `number` | `2` | Maps to ffmpeg `-threads` |
+| `onProgress` | `(pct) => void` | — | 0–99 during encode, 100 on success |
+| `signal` | `AbortSignal` | — | Cancel; rejects with code `"ABORTED"` |
+
+<Callout type="info">
+For speech, stay within roughly `0.85–1.15` — beyond that, time-stretch artifacts become audible even though pitch stays correct. If you need a bigger change, re-record at the right pace instead.
+</Callout>
+
+---
+
+## `SIMPLEFFMPEG.detectSilence(inputPath, options?)`
+
+Detect silences. Analysis only — writes nothing. Returns intervals where the level stays below `noiseDb` for at least `minDurationSec`. A file that ends in silence gets its final interval closed at the file duration.
+
+```ts
+const gaps = await SIMPLEFFMPEG.detectSilence("./voiceover.mp3", {
+  noiseDb: -40,
+});
+// → [{ start: 8.12, end: 9.4, duration: 1.28 }, ...]
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `noiseDb` | `number` | `-35` | Silence threshold in dBFS (negative) |
+| `minDurationSec` | `number` | `0.3` | Minimum silence length to report |
+| `timeoutMs` | `number` | `300000` | Hard timeout |
+| `signal` | `AbortSignal` | — | Cancel |
+
+---
+
+## `SIMPLEFFMPEG.spliceAudio(inputPath, options)`
+
+Rebuild an audio file from source ranges and inserted silence. Each segment is either `{ start, end }` (seconds in the source) or `{ silence }` (seconds of generated silence). Every cut gets a micro-fade (default 5 ms) on both sides so joins never click.
+
+```ts
+// Keep two sections with a 0.8s pause between them
+await SIMPLEFFMPEG.spliceAudio("./voiceover.mp3", {
+  outputPath: "./voiceover-paced.mp3",
+  segments: [
+    { start: 0, end: 12.4 },
+    { silence: 0.8 },
+    { start: 13.1, end: 41.0 },
+  ],
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `outputPath` | `string` | — | Output file; extension picks the codec |
+| `segments` | `Array` | — | Output timeline in order; at least one `{start,end}` |
+| `fadeMs` | `number` | `5` | Micro-fade at each cut; `0` disables |
+| `timeoutMs` / `threads` / `onProgress` / `signal` | | | As above |
+
+<Callout type="warning">
+Place cuts inside silence, not on speech — use `detectSilence()` to find the gaps. Cutting mid-word smears consonants no matter how good the fade is.
+</Callout>
+
+---
+
+## `SIMPLEFFMPEG.trimSilence(inputPath, options)`
+
+Trim leading and/or trailing silence, keeping a hair of room tone (default 0.15 s) at each trimmed edge.
+
+```ts
+await SIMPLEFFMPEG.trimSilence("./take.mp3", {
+  outputPath: "./take-tight.mp3",
+  edges: "both", // "both" | "start" | "end"
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `edges` | `string` | `"both"` | Which edges to trim |
+| `keepSec` | `number` | `0.15` | Room tone kept at each trimmed edge |
+| `noiseDb` / `minDurationSec` | | `-35` / `0.3` | Silence detection thresholds |
+| `fadeMs` / `timeoutMs` / `signal` | | | As above |
+
+---
+
+## `SIMPLEFFMPEG.capSilences(inputPath, options)`
+
+Cap interior silences at a maximum length. Long gaps keep their first `maxSilenceSec` of real recorded quiet — room tone, not synthetic silence — and each cut lands deep inside the gap where the level is minimal, so joins are inaudible. Edge silence is `trimSilence()`'s job and is left alone.
+
+```ts
+// "That pause at 57s is too long — make it at most 1.2s"
+await SIMPLEFFMPEG.capSilences("./voiceover.mp3", {
+  outputPath: "./voiceover-tight.mp3",
+  maxSilenceSec: 1.2,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maxSilenceSec` | `number` | `1.0` | Longest interior gap allowed to survive |
+| `noiseDb` / `minDurationSec` | | `-35` / `0.3` | Silence detection thresholds |
+| `fadeMs` / `timeoutMs` / `signal` | | | As above |
+
+---
+
+## `SIMPLEFFMPEG.normalizeLoudness(inputPath, options)`
+
+Two-pass EBU R128 loudness normalization to a LUFS target: pass 1 measures with ffmpeg's `loudnorm`, pass 2 applies the measured values linearly — the accurate variant, without single-pass pumping. Defaults (−16 LUFS, −1.5 dBTP) suit voice for the web. Output is pinned back to the source sample rate.
+
+```ts
+await SIMPLEFFMPEG.normalizeLoudness("./voiceover.mp3", {
+  outputPath: "./voiceover-leveled.mp3",
+  targetLufs: -16,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `targetLufs` | `number` | `-16` | Integrated loudness target, in `[-70, -5]` |
+| `truePeakDb` | `number` | `-1.5` | True peak ceiling, in `[-9, 0]` |
+| `loudnessRange` | `number` | `11` | Target loudness range (LU), in `[1, 50]` |
+| `timeoutMs` / `threads` / `onProgress` / `signal` | | | As above (per pass) |
+
+Throws `TranscodeError` with `code: "ANALYSIS_FAILED"` if the measurement pass can't be parsed.
+
+---
+
+## Composing a normalization chain
+
+A typical narration cleanup, in the order that keeps every step accurate — tempo before silence editing, loudness last:
+
+```ts
+await SIMPLEFFMPEG.audioTempo("./take.mp3", { outputPath: "./t1.wav", tempo: 1.05 });
+await SIMPLEFFMPEG.capSilences("./t1.wav", { outputPath: "./t2.wav", maxSilenceSec: 1.2 });
+await SIMPLEFFMPEG.trimSilence("./t2.wav", { outputPath: "./t3.wav" });
+await SIMPLEFFMPEG.normalizeLoudness("./t3.wav", { outputPath: "./final.mp3" });
+```
+
+<Callout type="info">
+Run `audioTempo()` **before** silence edits — a tempo pass applied afterwards compresses the pauses you just set (a 1.2 s pause at 1.1× becomes 1.09 s).
+</Callout>

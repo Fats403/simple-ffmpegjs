@@ -241,8 +241,9 @@ async function loadColor(project, clipObj) {
     );
     fs.writeFileSync(tempPath, ppmBuffer);
 
-    // Register for cleanup
-    project.filesToClean.push(tempPath);
+    // Load-lifetime temp file: clips reference this PPM for every subsequent
+    // export, so it is cleaned on the next load(), not after an export.
+    (project.loadFilesToClean ?? project.filesToClean).push(tempPath);
 
     project.videoOrAudioClips.push({
       ...clipObj,

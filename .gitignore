@@ -21,3 +21,12 @@ examples/media/
 tests/fixtures/*
 !tests/fixtures/generate-fixtures.js
 tests/output/
+# Editor/agent local state
+.claude/
+.idea/
+
+# Logs and env
+*.log
+npm-debug.log*
+.env
+.env.*

@@ -40,9 +40,18 @@ title: Features
 
 ## Analysis and extraction
 
-- **`probe()`** — full media metadata via ffprobe (duration, codec, fps, rotation, and more)
+- **`probe()`** — full media metadata via ffprobe (duration, codec, fps, rotation, cover-art detection, and more)
 - **`snapshot()`** — capture a single frame to `.jpg`, `.png`, `.webp`, `.bmp`, or `.tiff`
 - **`extractKeyframes()`** — scene-change detection or fixed-interval frame sampling, returning `Buffer[]` or file paths
+- **`transcode()`** — hardened one-shot ingestion to web-safe H.264/MP4 (`web-mp4`) or AAC/M4A (`web-audio`)
+
+## Audio operations
+
+- **`audioTempo()`** — speed change that keeps pitch (real time-stretch, not resampling)
+- **`detectSilence()`** — silence intervals with tunable threshold and minimum length
+- **`spliceAudio()`** — rebuild audio from source ranges and inserted silence, with click-free micro-faded cuts
+- **`trimSilence()` / `capSilences()`** — trim edge silence, cap long interior pauses; cuts land inside silence, never on speech
+- **`normalizeLoudness()`** — two-pass EBU R128 normalization to a LUFS target
 
 ## Developer experience
 

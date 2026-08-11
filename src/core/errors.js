@@ -2,8 +2,9 @@
  * Base error class for all simple-ffmpeg errors
  */
 class SimpleffmpegError extends Error {
-  constructor(message) {
-    super(message);
+  constructor(message, options) {
+    // Forward `cause` so wrapped fs/spawn errors aren't silently dropped
+    super(message, options && options.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = "SimpleffmpegError";
     Error.captureStackTrace?.(this, this.constructor);
   }
@@ -70,12 +71,13 @@ class ExportCancelledError extends SimpleffmpegError {
 }
 
 /**
- * Thrown when SIMPLEFFMPEG.transcode() fails.
+ * Thrown when SIMPLEFFMPEG.transcode() or an audio operation
+ * (audioTempo, detectSilence, spliceAudio, ...) fails.
  *
  * The `code` field discriminates the cause so callers can branch
  * (retry on transient, reject on content).
  *
- * @property {"INVALID_PATH"|"INPUT_MISSING"|"FFMPEG_NOT_FOUND"|"TIMEOUT"|"NONZERO_EXIT"|"SIGNAL"|"ABORTED"} code
+ * @property {"INVALID_PATH"|"INPUT_MISSING"|"FFMPEG_NOT_FOUND"|"TIMEOUT"|"NONZERO_EXIT"|"SIGNAL"|"ABORTED"|"NO_VIDEO_STREAM"|"NO_AUDIO_STREAM"|"ANALYSIS_FAILED"} code
  * @property {string} stderr - Tail of ffmpeg stderr, capped at 16 KB
  * @property {number|null} exitCode
  * @property {string|null} signal

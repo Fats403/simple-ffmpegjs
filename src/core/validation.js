@@ -1,6 +1,7 @@
 const fs = require("fs");
 const nodePath = require("path");
 const { detectVisualGaps } = require("./gaps");
+const C = require("./constants");
 
 // ========================================================================
 // FFmpeg named colors (X11/CSS color names accepted by libavutil)
@@ -1202,18 +1203,10 @@ function validateClip(clip, index, options = {}) {
             warnings.push(issue);
           }
         }
-      } else if (!skipFileChecks && clip.url) {
-        // We could check file dimensions here, but that's expensive
-        // Instead, add a warning that dimensions should be verified
-        warnings.push(
-          createIssue(
-            ValidationCodes.INVALID_VALUE,
-            `${path}`,
-            `Ken Burns effect on image - ensure source image is at least ${projectWidth}x${projectHeight}px for best quality (smaller images will be upscaled).`,
-            clip.url,
-          ),
-        );
       }
+      // No warning when dimensions are unknown: it fired for every Ken Burns
+      // image regardless of actual size, which is noise, and load() probes
+      // the real dimensions moments later anyway.
     }
   }
 
@@ -1306,6 +1299,19 @@ function validateClip(clip, index, options = {}) {
   // Visual clip transition validation (video, image, color)
   const visualTypes = ["video", "image", "color"];
   if (visualTypes.includes(clip.type) && clip.transition) {
+    if (
+      clip.transition.type != null &&
+      !C.TRANSITION_TYPES.includes(clip.transition.type)
+    ) {
+      errors.push(
+        createIssue(
+          ValidationCodes.INVALID_VALUE,
+          `${path}.transition.type`,
+          `Invalid transition type "${clip.transition.type}". Valid types: ${C.TRANSITION_TYPES.join(", ")}`,
+          clip.transition.type,
+        ),
+      );
+    }
     if (typeof clip.transition.duration !== "number") {
       errors.push(
         createIssue(

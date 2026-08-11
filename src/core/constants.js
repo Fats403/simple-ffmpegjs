@@ -41,6 +41,19 @@ module.exports = {
 
   // Transitions
   DEFAULT_TRANSITION_DURATION: 0.5,
+  TRANSITION_TYPES: [
+    "fade", "fadeblack", "fadewhite", "distance",
+    "wipeleft", "wiperight", "wipeup", "wipedown",
+    "slideleft", "slideright", "slideup", "slidedown",
+    "smoothleft", "smoothright", "smoothup", "smoothdown",
+    "circlecrop", "circleclose", "circleopen",
+    "horzclose", "horzopen", "vertclose", "vertopen",
+    "diagbl", "diagbr", "diagtl", "diagtr",
+    "hlslice", "hrslice", "vuslice", "vdslice",
+    "dissolve", "pixelize", "radial", "hblur",
+    "wipetl", "wipetr", "wipebl", "wipebr",
+    "squeezeh", "squeezev",
+  ],
 
   // Hardware acceleration options
   HWACCEL_OPTIONS: ["auto", "videotoolbox", "nvenc", "vaapi", "qsv", "none"],

@@ -331,21 +331,22 @@ describe("Command Builder", () => {
   });
 
   describe("escapeMetadata", () => {
-    it("should escape backslashes", () => {
-      expect(escapeMetadata("path\\to\\file")).toBe("path\\\\to\\\\file");
+    it("passes backslashes through untouched (the command parser is literal)", () => {
+      expect(escapeMetadata("path\\to\\file")).toBe("path\\to\\file");
     });
 
-    it("should escape double quotes", () => {
-      expect(escapeMetadata("say \"hello\"")).toBe("say \\\"hello\\\"");
+    it("replaces double quotes with single quotes (unrepresentable in the command string)", () => {
+      expect(escapeMetadata("say \"hello\"")).toBe("say 'hello'");
     });
 
-    it("should escape newlines", () => {
-      expect(escapeMetadata("line1\nline2")).toBe("line1\\nline2");
+    it("flattens newlines to spaces (container metadata is single-line)", () => {
+      expect(escapeMetadata("line1\nline2")).toBe("line1 line2");
+      expect(escapeMetadata("a\r\nb")).toBe("a b");
     });
 
-    it("should handle mixed escapes", () => {
+    it("handles mixed content", () => {
       expect(escapeMetadata("test\\path\n\"quoted\"")).toBe(
-        "test\\\\path\\n\\\"quoted\\\"",
+        "test\\path 'quoted'",
       );
     });
   });
