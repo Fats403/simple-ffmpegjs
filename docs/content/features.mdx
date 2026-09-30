@@ -51,7 +51,19 @@ title: Features
 - **`detectSilence()`** — silence intervals with tunable threshold and minimum length
 - **`spliceAudio()`** — rebuild audio from source ranges and inserted silence, with click-free micro-faded cuts
 - **`trimSilence()` / `capSilences()`** — trim edge silence, cap long interior pauses; cuts land inside silence, never on speech
-- **`normalizeLoudness()`** — two-pass EBU R128 normalization to a LUFS target
+- **`normalizeLoudness()`** — two-pass EBU R128 normalization to a LUFS target; `keepVideo` levels a video's sound and keeps its picture
+- **`fadeAudio()`** — fade in and/or out
+
+## Media operations
+
+Each writes a new web-safe file and leaves the input alone; rotated phone video is measured as displayed.
+
+- **`trim()`** — frame-accurate cut of a video, or just its sound to an audio file
+- **`changeSpeed()`** — speed a video up or down, with its audio at the same pitch
+- **`reverse()`** — play backwards, audio too, with an up-front memory limit instead of an out-of-memory crash
+- **`toGif()`** — looping GIF with a palette built from the clip
+- **`crop()` / `rotate()`** — rectangle crops and quarter/half turns
+- **`mute()`** — take the sound out, stream-copying the picture when it is already web-safe
 
 ## Developer experience
 

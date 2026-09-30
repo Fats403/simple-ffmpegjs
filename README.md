@@ -127,7 +127,8 @@ await project.export({
 - **Pre-validation** — structured error codes before rendering; integrates cleanly into data pipelines and AI workflows
 - **Schema export** — machine-readable clip specification for docs, code generation, and LLM context
 - **Static helpers** — `probe()`, `snapshot()`, `extractKeyframes()`, `transcode()` (hardened one-shot ingestion — H.264/MP4 or AAC/M4A in one line)
-- **Audio tools** — `audioTempo()` (speed change that keeps pitch), `detectSilence()`, `spliceAudio()` (click-free cuts with micro-fades), `trimSilence()`, `capSilences()`, `normalizeLoudness()` (two-pass EBU R128)
+- **Audio tools** — `audioTempo()` (speed change that keeps pitch), `detectSilence()`, `spliceAudio()` (click-free cuts with micro-fades), `trimSilence()`, `capSilences()`, `normalizeLoudness()` (two-pass EBU R128, optionally keeping a video's picture), `fadeAudio()`
+- **Media edits** — `trim()`, `changeSpeed()`, `reverse()`, `toGif()`, `crop()`, `rotate()`, `mute()`: one call each, a new web-safe file every time
 - **TypeScript** — full type definitions included
 - **Zero runtime dependencies** — only requires FFmpeg on your system
 

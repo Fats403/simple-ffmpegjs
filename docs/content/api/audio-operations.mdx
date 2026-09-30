@@ -6,7 +6,7 @@ import { Callout } from 'nextra/components'
 
 # Audio Operations
 
-Six static methods for editing narration and other audio files directly — the edits that go wrong when done naively at the composition layer. All are static: no project instance required.
+Seven static methods for editing narration and other audio files directly — the edits that go wrong when done naively at the composition layer. All are static: no project instance required.
 
 Why these exist:
 
@@ -151,9 +151,33 @@ await SIMPLEFFMPEG.normalizeLoudness("./voiceover.mp3", {
 | `targetLufs` | `number` | `-16` | Integrated loudness target, in `[-70, -5]` |
 | `truePeakDb` | `number` | `-1.5` | True peak ceiling, in `[-9, 0]` |
 | `loudnessRange` | `number` | `11` | Target loudness range (LU), in `[1, 50]` |
+| `keepVideo` | `boolean` | `false` | For a video input: write an MP4 with the picture untouched (stream copy when already web-safe) and only the audio leveled. `outputPath` must end in `.mp4` |
+| `maxOutputBytes` | `number` | `524288000` | `keepVideo` only: maps to ffmpeg `-fs` |
 | `timeoutMs` / `threads` / `onProgress` / `signal` | | | As above (per pass) |
 
-Throws `TranscodeError` with `code: "ANALYSIS_FAILED"` if the measurement pass can't be parsed.
+Throws `TranscodeError` with `code: "ANALYSIS_FAILED"` if the measurement pass can't be parsed, and `code: "NO_VIDEO_STREAM"` when `keepVideo` is set on an audio-only input.
+
+---
+
+## `SIMPLEFFMPEG.fadeAudio(inputPath, options)`
+
+Fade audio in and/or out. The fade-out ends at the end of the file.
+
+```ts
+await SIMPLEFFMPEG.fadeAudio("./music.mp3", {
+  outputPath: "./music-faded.mp3",
+  fadeInSec: 1,
+  fadeOutSec: 3,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `fadeInSec` | `number` | `0` | Fade-in length from the start |
+| `fadeOutSec` | `number` | `0` | Fade-out length ending at the end |
+| `timeoutMs` / `threads` / `onProgress` / `signal` | | | As above |
+
+At least one fade must be above 0, and together they must fit the file.
 
 ---
 

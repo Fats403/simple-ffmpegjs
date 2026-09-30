@@ -44,6 +44,8 @@ export default function globalSetup() {
     "test-speech-padded.wav",
     "test-audio-quiet-2s.wav",
     "test-audio-cover-art.mp3",
+    "test-video-multiscene-6s.mp4",
+    "test-video-tone-2s.mp4",
   ];
   const missing = sentinels.filter(
     (f) => !fs.existsSync(path.join(FIXTURES_DIR, f)),

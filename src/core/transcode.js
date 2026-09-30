@@ -138,6 +138,81 @@ function buildScaleFilter(scale) {
 }
 
 /**
+ * The leading flags every hardened re-encode shares: no stdin, overwrite,
+ * errors only, tolerate corrupt packets, machine-readable progress on stdout.
+ */
+const ENCODE_INPUT_FLAGS = [
+  "-nostdin",
+  "-y",
+  "-hide_banner",
+  "-loglevel",
+  "error",
+  "-fflags",
+  "+discardcorrupt",
+  "-err_detect",
+  "ignore_err",
+  "-progress",
+  "pipe:1",
+];
+
+/** Retags HDR sources (bt2020/HLG/PQ) as SDR bt709 in the libx264 VUI. */
+const COLOR_TAG =
+  "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709";
+
+/** Rounds odd dimensions down to even, which libx264's yuv420p requires. */
+const EVEN_TRUNC = "scale='trunc(iw/2)*2':'trunc(ih/2)*2'";
+
+/**
+ * A web-safe video filter chain around the caller's own filters: the SDR
+ * retag first, the even-dimension truncation last, so every operation's
+ * output is libx264-safe whatever it did in between. Pure.
+ */
+function webVideoChain(...filters) {
+  return [COLOR_TAG, ...filters.filter(Boolean), EVEN_TRUNC].join(",");
+}
+
+/**
+ * The output half of a web-safe mp4 encode (h264 high/4.1 yuv420p, AAC
+ * stereo or no audio, +faststart, -fs cap), ending in the output path.
+ * Pure. The same settings as the web-mp4 preset.
+ */
+function buildWebMp4OutputArgs({
+  outputPath,
+  withAudio,
+  crf,
+  audioBitrate,
+  maxOutputBytes,
+  threads,
+}) {
+  return [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    String(crf ?? 23),
+    "-pix_fmt",
+    "yuv420p",
+    "-profile:v",
+    "high",
+    "-level",
+    "4.1",
+    ...(withAudio
+      ? ["-c:a", "aac", "-b:a", String(audioBitrate ?? "128k"), "-ac", "2"]
+      : ["-an"]),
+    "-movflags",
+    "+faststart",
+    "-f",
+    "mp4",
+    "-fs",
+    String(maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES),
+    "-threads",
+    String(threads ?? DEFAULT_THREADS),
+    outputPath,
+  ];
+}
+
+/**
  * Build the argv array for the web-mp4 preset. Pure — no side effects.
  * Input and output paths must already be resolved to absolute.
  */
@@ -188,14 +263,7 @@ function buildWebMp4Args({
   // flags get overridden by source side-data, but setparams reaches the
   // bitstream. Then user scale (if any), then even-dim trunc last so odd
   // inputs become libx264-safe regardless of what the user requested.
-  const colorTag =
-    "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709";
-  const evenTrunc = "scale='trunc(iw/2)*2':'trunc(ih/2)*2'";
-  const userScale = buildScaleFilter(scale);
-  const vfChain = userScale
-    ? `${colorTag},${userScale},${evenTrunc}`
-    : `${colorTag},${evenTrunc}`;
-  args.push("-vf", vfChain);
+  args.push("-vf", webVideoChain(buildScaleFilter(scale)));
 
   if (videoBitrate) args.push("-b:v", String(videoBitrate));
 
@@ -433,6 +501,12 @@ async function transcode(inputPath, options = {}) {
 module.exports = {
   transcode,
   isWebSafeMp4,
+  // Shared with the audio and media-edit operations
+  ENCODE_INPUT_FLAGS,
+  COLOR_TAG,
+  EVEN_TRUNC,
+  webVideoChain,
+  buildWebMp4OutputArgs,
   // Exported for unit tests — not part of the public API
   buildWebMp4Args,
   buildWebAudioArgs,

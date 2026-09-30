@@ -1,8 +1,8 @@
 {
   "name": "simple-ffmpegjs",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "type": "commonjs",
-  "description": "Declarative video composition for Node.js \u2014 define clips, transitions, text, and audio as simple objects, and let FFmpeg handle the rest.",
+  "description": "Declarative video composition for Node.js — define clips, transitions, text, and audio as simple objects, and let FFmpeg handle the rest.",
   "author": "Brayden Blackwell <braydenblackwell21@gmail.com> (https://github.com/Fats403)",
   "license": "MIT",
   "repository": {

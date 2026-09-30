@@ -5,6 +5,7 @@ export default {
   "export-options": "Export Options",
   "static-helpers": "Static Helpers",
   "audio-operations": "Audio Operations",
+  "media-operations": "Media Operations",
   "auto-sequencing": "Auto-Sequencing & Duration Shorthand",
   "clip-types": "Clip Types",
 };

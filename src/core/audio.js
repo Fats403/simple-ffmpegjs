@@ -3,6 +3,13 @@ const path = require("path");
 const { probeMedia } = require("./media_info");
 const { SimpleffmpegError, TranscodeError } = require("./errors");
 const { runHardened } = require("./run");
+const {
+  ENCODE_INPUT_FLAGS,
+  webVideoChain,
+  buildWebMp4OutputArgs,
+  isWebSafeMp4,
+  DEFAULT_MAX_OUTPUT_BYTES,
+} = require("./transcode");
 
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_THREADS = 2;
@@ -199,6 +206,17 @@ function buildSpliceFilter({ segments, sampleRate, channels, fadeMs }) {
 
 /** Shared per-operation input validation: paths, probe, audio presence. */
 async function prepareAudioOp(inputPath, options, label) {
+  const prepared = await prepareInput(inputPath, options, label);
+  if (!prepared.info.hasAudio) {
+    throw new TranscodeError(`${label} input "${inputPath}" has no audio stream`, {
+      code: "NO_AUDIO_STREAM",
+    });
+  }
+  return prepared;
+}
+
+/** Shared per-operation input validation for any media: paths and probe. */
+async function prepareInput(inputPath, options, label) {
   if (!inputPath || typeof inputPath !== "string") {
     throw new SimpleffmpegError(`${label} requires inputPath as the first argument`);
   }
@@ -236,12 +254,6 @@ async function prepareAudioOp(inputPath, options, label) {
     }
     throw new TranscodeError(`${label} could not probe input "${inputPath}": ${msg}`, {
       code: "INPUT_MISSING",
-    });
-  }
-
-  if (!info.hasAudio) {
-    throw new TranscodeError(`${label} input "${inputPath}" has no audio stream`, {
-      code: "NO_AUDIO_STREAM",
     });
   }
 
@@ -644,6 +656,153 @@ function parseLoudnormJson(stderr) {
 }
 
 /**
+ * Pass-2 argv for normalizeLoudness({ keepVideo: true }): the picture comes
+ * through untouched (stream copy when it is already web-safe, otherwise the
+ * web-mp4 re-encode) and only the audio is leveled. Pure.
+ */
+function buildKeepVideoLoudnessArgs({
+  inputPath,
+  outputPath,
+  audioFilter,
+  sampleRate,
+  copyVideo,
+  maxOutputBytes,
+  threads,
+}) {
+  const head = [
+    ...ENCODE_INPUT_FLAGS,
+    "-i",
+    inputPath,
+    "-map",
+    "0:v:0",
+    "-map",
+    "0:a:0",
+    "-af",
+    audioFilter,
+    "-ar",
+    String(sampleRate),
+  ];
+  if (!copyVideo) {
+    return [
+      ...head,
+      "-vf",
+      webVideoChain(),
+      ...buildWebMp4OutputArgs({
+        outputPath,
+        withAudio: true,
+        audioBitrate: "192k",
+        maxOutputBytes,
+        threads,
+      }),
+    ];
+  }
+  return [
+    ...head,
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-movflags",
+    "+faststart",
+    "-f",
+    "mp4",
+    "-fs",
+    String(maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES),
+    "-threads",
+    String(threads ?? DEFAULT_THREADS),
+    outputPath,
+  ];
+}
+
+/**
+ * The afade chain for fadeAudio(). Pure. A fade of 0 is left out; the
+ * fade-out starts fadeOutSec before the end of the file.
+ */
+function buildFadeFilter({ fadeInSec, fadeOutSec, duration }) {
+  const stages = [];
+  if (fadeInSec > 0) stages.push(`afade=t=in:st=0:d=${fadeInSec}`);
+  if (fadeOutSec > 0) {
+    stages.push(
+      `afade=t=out:st=${+(duration - fadeOutSec).toFixed(6)}:d=${fadeOutSec}`,
+    );
+  }
+  return stages.join(",");
+}
+
+/**
+ * Fade audio in and/or out. See SIMPLEFFMPEG.fadeAudio for full option docs.
+ */
+async function fadeAudio(inputPath, options = {}) {
+  const label = "fadeAudio()";
+  const fadeInSec = options.fadeInSec ?? 0;
+  const fadeOutSec = options.fadeOutSec ?? 0;
+  for (const [name, v] of [
+    ["fadeInSec", fadeInSec],
+    ["fadeOutSec", fadeOutSec],
+  ]) {
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0) {
+      throw new SimpleffmpegError(
+        `${label} options.${name} must be a non-negative number of seconds`,
+      );
+    }
+  }
+  if (fadeInSec === 0 && fadeOutSec === 0) {
+    throw new SimpleffmpegError(
+      `${label} needs options.fadeInSec or options.fadeOutSec above 0`,
+    );
+  }
+
+  const { resolvedInput, info } = await prepareAudioOp(inputPath, options, label);
+  const resolvedOutput = prepareOutputPath(options, label);
+  const codec = audioCodecArgs(resolvedOutput, label);
+  const duration = info.duration;
+  if (!Number.isFinite(duration) || duration <= 0) {
+    throw new TranscodeError(
+      `${label} could not determine the duration of "${inputPath}"`,
+      { code: "ANALYSIS_FAILED" },
+    );
+  }
+  if (fadeInSec + fadeOutSec > duration) {
+    throw new SimpleffmpegError(
+      `${label} fades of ${fadeInSec}s + ${fadeOutSec}s are longer than the ${duration}s input`,
+    );
+  }
+
+  const argv = [
+    "-nostdin",
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-progress",
+    "pipe:1",
+    "-i",
+    resolvedInput,
+    "-vn",
+    "-af",
+    buildFadeFilter({ fadeInSec, fadeOutSec, duration }),
+    ...codec,
+    "-threads",
+    String(options.threads ?? DEFAULT_THREADS),
+    resolvedOutput,
+  ];
+
+  await runHardened({
+    argv,
+    label,
+    outputPath: resolvedOutput,
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    signal: options.signal,
+    onProgress: options.onProgress,
+    totalDuration: duration,
+  });
+
+  return resolvedOutput;
+}
+
+/**
  * Two-pass EBU R128 loudness normalization to a LUFS target.
  * See SIMPLEFFMPEG.normalizeLoudness for full option docs.
  */
@@ -683,9 +842,31 @@ async function normalizeLoudness(inputPath, options = {}) {
     );
   }
 
+  if (options.keepVideo != null && typeof options.keepVideo !== "boolean") {
+    throw new SimpleffmpegError(`${label} options.keepVideo must be a boolean`);
+  }
+  const keepVideo = options.keepVideo === true;
+
   const { resolvedInput, info } = await prepareAudioOp(inputPath, options, label);
   const resolvedOutput = prepareOutputPath(options, label);
-  const codec = audioCodecArgs(resolvedOutput, label);
+  // keepVideo writes the picture back out with the leveled audio, so the
+  // output is an mp4 rather than an audio file picked by extension.
+  let codec = null;
+  if (keepVideo) {
+    if (!info.hasVideo || info.attachedPic) {
+      throw new TranscodeError(
+        `${label} options.keepVideo needs a video input, and "${inputPath}" has no playable video stream`,
+        { code: "NO_VIDEO_STREAM" },
+      );
+    }
+    if (path.extname(resolvedOutput).toLowerCase() !== ".mp4") {
+      throw new SimpleffmpegError(
+        `${label} options.keepVideo writes an mp4 — options.outputPath must end in .mp4`,
+      );
+    }
+  } else {
+    codec = audioCodecArgs(resolvedOutput, label);
+  }
 
   const targetSpec = `I=${targetLufs}:TP=${truePeakDb}:LRA=${loudnessRange}`;
 
@@ -720,26 +901,38 @@ async function normalizeLoudness(inputPath, options = {}) {
   // Pass 2 — apply linearly using the measured values. loudnorm resamples
   // internally to 192 kHz, so pin the output back to the source rate.
   const sampleRate = info.sampleRate ?? 44100;
-  const argv = [
-    "-nostdin",
-    "-y",
-    "-hide_banner",
-    "-loglevel",
-    "error",
-    "-progress",
-    "pipe:1",
-    "-i",
-    resolvedInput,
-    "-vn",
-    "-af",
-    `loudnorm=${targetSpec}:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:offset=${measured.target_offset}:linear=true`,
-    "-ar",
-    String(sampleRate),
-    ...codec,
-    "-threads",
-    String(options.threads ?? DEFAULT_THREADS),
-    resolvedOutput,
-  ];
+  const loudnormApply = `loudnorm=${targetSpec}:measured_I=${measured.input_i}:measured_TP=${measured.input_tp}:measured_LRA=${measured.input_lra}:measured_thresh=${measured.input_thresh}:offset=${measured.target_offset}:linear=true`;
+  const threads = String(options.threads ?? DEFAULT_THREADS);
+  const argv = keepVideo
+    ? buildKeepVideoLoudnessArgs({
+        inputPath: resolvedInput,
+        outputPath: resolvedOutput,
+        audioFilter: loudnormApply,
+        sampleRate,
+        copyVideo: isWebSafeMp4(info),
+        maxOutputBytes: options.maxOutputBytes,
+        threads: options.threads,
+      })
+    : [
+        "-nostdin",
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-progress",
+        "pipe:1",
+        "-i",
+        resolvedInput,
+        "-vn",
+        "-af",
+        loudnormApply,
+        "-ar",
+        String(sampleRate),
+        ...codec,
+        "-threads",
+        threads,
+        resolvedOutput,
+      ];
 
   await runHardened({
     argv,
@@ -760,8 +953,15 @@ module.exports = {
   spliceAudio,
   trimSilence,
   capSilences,
+  fadeAudio,
   normalizeLoudness,
+  // Shared with the media-edit operations
+  prepareInput,
+  prepareOutputPath,
+  AUDIO_OUTPUT_EXTENSIONS: Object.keys(CODEC_BY_EXT),
   // Exported for unit tests — not part of the public API
+  buildFadeFilter,
+  buildKeepVideoLoudnessArgs,
   buildAtempoChain,
   parseSilenceDetect,
   buildSpliceFilter,

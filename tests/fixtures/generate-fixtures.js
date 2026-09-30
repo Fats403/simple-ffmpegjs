@@ -99,6 +99,13 @@ const fixtures = [
     // testsrc + medium preset at 720p meets both conditions.
     cmd: `ffmpeg -y -f lavfi -i "testsrc=size=1280x720:duration=5:rate=30" -f lavfi -i "anullsrc=r=44100:cl=stereo" -t 5 -c:v libx264 -preset ultrafast -crf 18 -c:a aac -b:a 64k`,
   },
+  {
+    name: "test-video-tone-2s.mp4",
+    // 2s video with an audible but quiet (-26 dB) 440 Hz tone, for the
+    // operations that need real sound in a video: normalizeLoudness
+    // keepVideo (loudnorm cannot measure digital silence) and fades.
+    cmd: `ffmpeg -y -f lavfi -i "color=c=purple:s=320x240:d=2,format=yuv420p" -f lavfi -i "sine=frequency=440:duration=2" -af "volume=0.05" -t 2 -c:v libx264 -preset ultrafast -crf 28 -c:a aac -b:a 64k`,
+  },
 ];
 
 // Text-based fixtures (subtitles)

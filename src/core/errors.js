@@ -71,13 +71,14 @@ class ExportCancelledError extends SimpleffmpegError {
 }
 
 /**
- * Thrown when SIMPLEFFMPEG.transcode() or an audio operation
- * (audioTempo, detectSilence, spliceAudio, ...) fails.
+ * Thrown when SIMPLEFFMPEG.transcode(), an audio operation
+ * (audioTempo, detectSilence, spliceAudio, ...) or a media edit operation
+ * (trim, changeSpeed, reverse, toGif, crop, rotate, mute) fails.
  *
  * The `code` field discriminates the cause so callers can branch
  * (retry on transient, reject on content).
  *
- * @property {"INVALID_PATH"|"INPUT_MISSING"|"FFMPEG_NOT_FOUND"|"TIMEOUT"|"NONZERO_EXIT"|"SIGNAL"|"ABORTED"|"NO_VIDEO_STREAM"|"NO_AUDIO_STREAM"|"ANALYSIS_FAILED"} code
+ * @property {"INVALID_PATH"|"INPUT_MISSING"|"FFMPEG_NOT_FOUND"|"TIMEOUT"|"NONZERO_EXIT"|"SIGNAL"|"ABORTED"|"NO_VIDEO_STREAM"|"NO_AUDIO_STREAM"|"ANALYSIS_FAILED"|"INPUT_TOO_LONG"} code
  * @property {string} stderr - Tail of ffmpeg stderr, capped at 16 KB
  * @property {number|null} exitCode
  * @property {string|null} signal

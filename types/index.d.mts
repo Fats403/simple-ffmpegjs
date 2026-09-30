@@ -38,7 +38,7 @@ declare namespace SIMPLEFFMPEG {
     name: "ExportCancelledError";
   }
 
-  /** Discriminator for SIMPLEFFMPEG.transcode() and audio-operation failure modes */
+  /** Discriminator for SIMPLEFFMPEG.transcode(), audio-operation and media-edit failure modes */
   type TranscodeErrorCode =
     | "INVALID_PATH"
     | "INPUT_MISSING"
@@ -49,7 +49,8 @@ declare namespace SIMPLEFFMPEG {
     | "ABORTED"
     | "NO_VIDEO_STREAM"
     | "NO_AUDIO_STREAM"
-    | "ANALYSIS_FAILED";
+    | "ANALYSIS_FAILED"
+    | "INPUT_TOO_LONG";
 
   /** Thrown when SIMPLEFFMPEG.transcode() fails */
   class TranscodeError extends SimpleffmpegError {
@@ -1124,7 +1125,101 @@ declare namespace SIMPLEFFMPEG {
     truePeakDb?: number;
     /** Target loudness range in LU, within [1, 50] (default: 11) */
     loudnessRange?: number;
+    /**
+     * For a video input: write an mp4 with the picture untouched (stream copy
+     * when already web-safe) and only the audio leveled. outputPath must end
+     * in .mp4. (default: false)
+     */
+    keepVideo?: boolean;
+    /** keepVideo only: maps to ffmpeg -fs (default: 524288000 = 500 MB) */
+    maxOutputBytes?: number;
   }
+
+  /** Options for SIMPLEFFMPEG.fadeAudio(). At least one fade must be above 0. */
+  interface FadeAudioOptions extends AudioOutputOptions {
+    /** Fade-in length from the start, in seconds (default: 0) */
+    fadeInSec?: number;
+    /** Fade-out length ending at the end, in seconds (default: 0) */
+    fadeOutSec?: number;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Media edit operations
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /** Options shared by the media edit operations (trim, changeSpeed, reverse, toGif, crop, rotate, mute) */
+  interface MediaEditOptions extends AudioBaseOptions {
+    /** Output file path: .mp4 for video operations, .gif for toGif, an audio extension for an audio trim */
+    outputPath: string;
+    /** x264 quality for video output, integer in [0, 51] (default: 23) */
+    crf?: number;
+    /** Maps to ffmpeg -fs (default: 524288000 = 500 MB) */
+    maxOutputBytes?: number;
+    /** Maps to ffmpeg -threads (default: 2) */
+    threads?: number;
+    /** Called with 0..99 during encode, 100 on success */
+    onProgress?: (percent: number) => void;
+  }
+
+  /** Options for SIMPLEFFMPEG.trim() */
+  interface TrimOptions extends MediaEditOptions {
+    /** Start, in seconds */
+    start: number;
+    /** End, in seconds; clamped to the input's length */
+    end: number;
+    /** Audio output only: micro-fade at each cut, in milliseconds (default: 5) */
+    fadeMs?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.changeSpeed() */
+  interface ChangeSpeedOptions extends MediaEditOptions {
+    /** Factor in [0.25, 4]; 2 = twice as fast. Audio keeps its pitch. */
+    speed: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.reverse() */
+  interface ReverseOptions extends MediaEditOptions {
+    /**
+     * Refuse clips whose decoded frames are estimated above this, with code
+     * INPUT_TOO_LONG (default: 1073741824 = 1 GiB, about 11 s of 1080p30)
+     */
+    maxMemoryBytes?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.toGif() */
+  interface ToGifOptions extends MediaEditOptions {
+    /** Start, in seconds (default: 0) */
+    start?: number;
+    /** Length in seconds (default: to the end) */
+    duration?: number;
+    /** Frame rate, in (0, 50] (default: 12) */
+    fps?: number;
+    /** Output width; never upscales; height keeps the aspect (default: 480) */
+    width?: number;
+    /** Longer segments are refused with code INPUT_TOO_LONG (default: 30) */
+    maxDurationSec?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.crop(). Measured on the picture as displayed. */
+  interface CropOptions extends MediaEditOptions {
+    /** Crop width in pixels */
+    width: number;
+    /** Crop height in pixels */
+    height: number;
+    /** Left edge in pixels (default: centered) */
+    x?: number;
+    /** Top edge in pixels (default: centered) */
+    y?: number;
+  }
+
+  /** Options for SIMPLEFFMPEG.rotate() */
+  interface RotateOptions extends MediaEditOptions {
+    /** Clockwise; -90 is a quarter turn counter-clockwise */
+    degrees: 90 | 180 | 270 | -90;
+  }
+
+  /** Options for SIMPLEFFMPEG.mute() */
+  interface MuteOptions extends MediaEditOptions {}
 }
 
 declare class SIMPLEFFMPEG {
@@ -1446,6 +1541,94 @@ declare class SIMPLEFFMPEG {
   static normalizeLoudness(
     inputPath: string,
     options: SIMPLEFFMPEG.NormalizeLoudnessOptions
+  ): Promise<string>;
+
+  /**
+   * Fade audio in and/or out. The output codec is chosen by the outputPath
+   * extension.
+   *
+   * @returns Resolved absolute output path
+   */
+  static fadeAudio(
+    inputPath: string,
+    options: SIMPLEFFMPEG.FadeAudioOptions
+  ): Promise<string>;
+
+  /**
+   * Keep [start, end] of a file. A .mp4 output is a frame-accurate re-encode
+   * to the web-safe mp4; an audio output trims the sound only, with a
+   * micro-fade at each cut.
+   *
+   * @returns Resolved absolute output path
+   */
+  static trim(
+    inputPath: string,
+    options: SIMPLEFFMPEG.TrimOptions
+  ): Promise<string>;
+
+  /**
+   * Speed a video up or slow it down, with its audio (pitch preserved).
+   *
+   * @returns Resolved absolute output path
+   */
+  static changeSpeed(
+    inputPath: string,
+    options: SIMPLEFFMPEG.ChangeSpeedOptions
+  ): Promise<string>;
+
+  /**
+   * Play a video backwards, audio included. Refused with code
+   * INPUT_TOO_LONG when its decoded frames would pass maxMemoryBytes.
+   *
+   * @returns Resolved absolute output path
+   */
+  static reverse(
+    inputPath: string,
+    options: SIMPLEFFMPEG.ReverseOptions
+  ): Promise<string>;
+
+  /**
+   * Make an animated, looping GIF from a video segment, with a palette
+   * built from the clip.
+   *
+   * @returns Resolved absolute output path
+   */
+  static toGif(
+    inputPath: string,
+    options: SIMPLEFFMPEG.ToGifOptions
+  ): Promise<string>;
+
+  /**
+   * Crop a video to a rectangle of the picture as displayed. Centered unless
+   * x/y are given.
+   *
+   * @returns Resolved absolute output path
+   */
+  static crop(
+    inputPath: string,
+    options: SIMPLEFFMPEG.CropOptions
+  ): Promise<string>;
+
+  /**
+   * Rotate a video clockwise by 90, 180 or 270 degrees (-90 for
+   * counter-clockwise), relative to how it is displayed.
+   *
+   * @returns Resolved absolute output path
+   */
+  static rotate(
+    inputPath: string,
+    options: SIMPLEFFMPEG.RotateOptions
+  ): Promise<string>;
+
+  /**
+   * Remove a video's sound. A web-safe input keeps its picture byte for
+   * byte (stream copy).
+   *
+   * @returns Resolved absolute output path
+   */
+  static mute(
+    inputPath: string,
+    options: SIMPLEFFMPEG.MuteOptions
   ): Promise<string>;
 
   /**

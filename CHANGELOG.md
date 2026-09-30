@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - 2026-09-30
+
+### Added
+
+- **Media operations** — seven new statics for the everyday changes to a single file. Each writes a new file and leaves the input alone; video output is the same web-safe MP4 as the `web-mp4` preset, and every run goes through the hardened runner (no shell, SIGKILL timeout, `AbortSignal`, `-fs` cap, partial-output cleanup):
+  - `SIMPLEFFMPEG.trim(inputPath, { outputPath, start, end })` — frame-accurate re-encode to `.mp4`, or, with an audio `outputPath`, the sound only (from an audio file or a video's soundtrack) with micro-faded cuts.
+  - `SIMPLEFFMPEG.changeSpeed(inputPath, { outputPath, speed })` — video and audio together, `[0.25, 4]`; audio keeps its pitch (`atempo`).
+  - `SIMPLEFFMPEG.reverse(inputPath, { outputPath, maxMemoryBytes? })` — video and audio backwards. The `reverse` filter holds every decoded frame in memory, so clips estimated past `maxMemoryBytes` (default 1 GiB, about 11 s of 1080p30) are refused up front with the new `INPUT_TOO_LONG` code, naming the longest length that fits.
+  - `SIMPLEFFMPEG.toGif(inputPath, { outputPath, start?, duration?, fps?, width? })` — looping GIF with a palette generated from the clip; never upscales; segments past `maxDurationSec` (default 30) refused with `INPUT_TOO_LONG`.
+  - `SIMPLEFFMPEG.crop(inputPath, { outputPath, width, height, x?, y? })` — centered by default; rectangles that do not fit throw before ffmpeg runs; odd sizes rounded down to even.
+  - `SIMPLEFFMPEG.rotate(inputPath, { outputPath, degrees })` — 90, 180, 270 or -90, clockwise.
+  - `SIMPLEFFMPEG.mute(inputPath, { outputPath })` — stream-copies a web-safe picture (lossless, near-instant), re-encodes anything else.
+  - Rotated phone video is turned upright before any filter runs, so crop rectangles and rotations are measured on the picture as displayed, and outputs carry no rotation flag.
+- `SIMPLEFFMPEG.fadeAudio(inputPath, { outputPath, fadeInSec?, fadeOutSec? })` — fade in and/or out; the output codec follows the extension like the other audio operations.
+- `normalizeLoudness()` **`keepVideo`** — levels a video's audio and writes an MP4 with the picture untouched (stream copy when already web-safe, the `web-mp4` re-encode otherwise). Previously the only output was audio (`-vn`), so a video's sound could not be leveled in place.
+- New `TranscodeError` code `INPUT_TOO_LONG`.
+
 ## [0.7.0] - 2026-08-10
 
 ### Added

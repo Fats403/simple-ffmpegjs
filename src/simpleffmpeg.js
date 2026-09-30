@@ -63,8 +63,18 @@ const {
   spliceAudio: spliceAudioFn,
   trimSilence: trimSilenceFn,
   capSilences: capSilencesFn,
+  fadeAudio: fadeAudioFn,
   normalizeLoudness: normalizeLoudnessFn,
 } = require("./core/audio");
+const {
+  trim: trimFn,
+  changeSpeed: changeSpeedFn,
+  reverse: reverseFn,
+  toGif: toGifFn,
+  crop: cropFn,
+  rotate: rotateFn,
+  mute: muteFn,
+} = require("./core/edit");
 
 class SIMPLEFFMPEG {
   /**
@@ -2130,15 +2140,227 @@ class SIMPLEFFMPEG {
    * @param {number} [options.targetLufs=-16] - Integrated loudness target, in [-70, -5]
    * @param {number} [options.truePeakDb=-1.5] - True peak ceiling, in [-9, 0]
    * @param {number} [options.loudnessRange=11] - Target loudness range (LU), in [1, 50]
+   * @param {boolean} [options.keepVideo=false] - For a video input: write an mp4 with the picture untouched (stream copy when already web-safe) and only the audio leveled. outputPath must end in .mp4.
+   * @param {number} [options.maxOutputBytes=524288000] - keepVideo only: maps to ffmpeg -fs
    * @param {number} [options.timeoutMs=300000] - Hard timeout per pass; SIGKILL-backed
    * @param {number} [options.threads=2] - Maps to ffmpeg -threads
    * @param {(percent:number)=>void} [options.onProgress] - Progress of the encoding pass
    * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
    * @returns {Promise<string>} Resolved absolute output path
-   * @throws {TranscodeError} code "ANALYSIS_FAILED" when the measurement pass can't be parsed
+   * @throws {TranscodeError} code "ANALYSIS_FAILED" when the measurement pass can't be parsed; "NO_VIDEO_STREAM" when keepVideo is set on an audio-only input
+   *
+   * @example
+   * // Even out a talking-head clip's sound, keeping the picture
+   * await SIMPLEFFMPEG.normalizeLoudness("./interview.mp4", {
+   *   outputPath: "./interview-leveled.mp4",
+   *   keepVideo: true,
+   * });
    */
   static async normalizeLoudness(inputPath, options = {}) {
     return normalizeLoudnessFn(inputPath, options);
+  }
+
+  /**
+   * Fade audio in and/or out.
+   *
+   * @param {string} inputPath - Source audio (or video; audio is extracted)
+   * @param {Object} options
+   * @param {string} options.outputPath - Output file path; extension picks the codec
+   * @param {number} [options.fadeInSec=0] - Fade-in length from the start
+   * @param {number} [options.fadeOutSec=0] - Fade-out length ending at the end. At least one fade must be above 0, and together they must fit the file.
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.fadeAudio("./music.mp3", {
+   *   outputPath: "./music-faded.mp3",
+   *   fadeInSec: 1,
+   *   fadeOutSec: 3,
+   * });
+   */
+  static async fadeAudio(inputPath, options = {}) {
+    return fadeAudioFn(inputPath, options);
+  }
+
+  /**
+   * Keep [start, end] of a file.
+   *
+   * A video output (.mp4) is re-encoded, so the cut is frame-accurate, into
+   * the same web-safe mp4 the "web-mp4" preset writes. An audio output
+   * (.mp3/.m4a/.aac/.wav/.flac/.ogg/.opus) trims the sound only, from an
+   * audio file or a video's soundtrack, with a micro-fade at each cut.
+   *
+   * @param {string} inputPath - Source video or audio
+   * @param {Object} options
+   * @param {string} options.outputPath - .mp4 for video, or an audio extension
+   * @param {number} options.start - Start, in seconds
+   * @param {number} options.end - End, in seconds; clamped to the input's length
+   * @param {number} [options.fadeMs=5] - Audio output only: micro-fade at each cut
+   * @param {number} [options.crf=23] - Video output only: x264 quality
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.trim("./clip.mp4", { outputPath: "./middle.mp4", start: 2, end: 9.5 });
+   */
+  static async trim(inputPath, options = {}) {
+    return trimFn(inputPath, options);
+  }
+
+  /**
+   * Speed a video up or slow it down, with its audio. The audio uses the
+   * atempo time-stretch, so voices keep their pitch.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .mp4
+   * @param {number} options.speed - Factor in [0.25, 4]; 2 = twice as fast
+   * @param {number} [options.crf=23] - x264 quality
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.changeSpeed("./clip.mp4", { outputPath: "./slowmo.mp4", speed: 0.5 });
+   */
+  static async changeSpeed(inputPath, options = {}) {
+    return changeSpeedFn(inputPath, options);
+  }
+
+  /**
+   * Play a video backwards, with its audio reversed too.
+   *
+   * ffmpeg's reverse filter holds every decoded frame in memory, so the
+   * clip is refused up front (code "INPUT_TOO_LONG", naming the longest
+   * length that fits) when its estimated size passes maxMemoryBytes. At the
+   * 1 GiB default that is about 11 s of 1080p30, or 25 s of 720p30.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .mp4
+   * @param {number} [options.maxMemoryBytes=1073741824] - Refuse clips estimated above this
+   * @param {number} [options.crf=23] - x264 quality
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.reverse("./splash.mp4", { outputPath: "./splash-rewind.mp4" });
+   */
+  static async reverse(inputPath, options = {}) {
+    return reverseFn(inputPath, options);
+  }
+
+  /**
+   * Make an animated, looping GIF from a video segment, with a palette
+   * built from the clip itself so the colours hold up.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .gif
+   * @param {number} [options.start=0] - Start, in seconds
+   * @param {number} [options.duration] - Length in seconds (default: to the end)
+   * @param {number} [options.fps=12] - Frame rate, in (0, 50]
+   * @param {number} [options.width=480] - Output width; never upscales; height keeps the aspect
+   * @param {number} [options.maxDurationSec=30] - Longer segments are refused with code "INPUT_TOO_LONG"
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.toGif("./clip.mp4", { outputPath: "./reaction.gif", start: 1.5, duration: 3 });
+   */
+  static async toGif(inputPath, options = {}) {
+    return toGifFn(inputPath, options);
+  }
+
+  /**
+   * Crop a video to a rectangle of the picture as it is displayed (a
+   * rotated phone video is measured upright). Centered unless x/y are
+   * given. Odd sizes are rounded down to even for the encoder.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .mp4
+   * @param {number} options.width - Crop width in pixels
+   * @param {number} options.height - Crop height in pixels
+   * @param {number} [options.x] - Left edge (default: centered)
+   * @param {number} [options.y] - Top edge (default: centered)
+   * @param {number} [options.crf=23] - x264 quality
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * // A centered 9:16 slice of a 1920x1080 clip
+   * await SIMPLEFFMPEG.crop("./wide.mp4", { outputPath: "./tall.mp4", width: 608, height: 1080 });
+   */
+  static async crop(inputPath, options = {}) {
+    return cropFn(inputPath, options);
+  }
+
+  /**
+   * Rotate a video clockwise by a quarter or half turn, relative to how it
+   * is displayed.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .mp4
+   * @param {90|180|270|-90} options.degrees - Clockwise; -90 is a quarter turn counter-clockwise
+   * @param {number} [options.crf=23] - x264 quality
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.rotate("./sideways.mp4", { outputPath: "./upright.mp4", degrees: 90 });
+   */
+  static async rotate(inputPath, options = {}) {
+    return rotateFn(inputPath, options);
+  }
+
+  /**
+   * Remove a video's sound. A web-safe input keeps its picture byte for
+   * byte (stream copy); anything else is re-encoded to the web-safe mp4.
+   *
+   * @param {string} inputPath - Source video
+   * @param {Object} options
+   * @param {string} options.outputPath - Must end in .mp4
+   * @param {number} [options.crf=23] - x264 quality, when a re-encode is needed
+   * @param {number} [options.maxOutputBytes=524288000] - Maps to ffmpeg -fs
+   * @param {number} [options.timeoutMs=300000] - Hard timeout; SIGKILL-backed
+   * @param {number} [options.threads=2] - Maps to ffmpeg -threads
+   * @param {(percent:number)=>void} [options.onProgress] - 0..99 during encode, 100 on success
+   * @param {AbortSignal} [options.signal] - Cancel; rejects with code "ABORTED"
+   * @returns {Promise<string>} Resolved absolute output path
+   *
+   * @example
+   * await SIMPLEFFMPEG.mute("./clip.mp4", { outputPath: "./clip-silent.mp4" });
+   */
+  static async mute(inputPath, options = {}) {
+    return muteFn(inputPath, options);
   }
 
   /**

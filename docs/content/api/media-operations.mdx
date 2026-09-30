@@ -1,0 +1,173 @@
+---
+title: Media Operations
+---
+
+import { Callout } from 'nextra/components'
+
+# Media Operations
+
+Seven static methods for the everyday changes to a single file: trim it, speed it up, play it backwards, make a GIF, crop it, rotate it, take the sound out. All are static: no project instance required.
+
+Every operation writes a **new** file and leaves the input alone. Video output is always the same web-safe MP4 the [`transcode()`](/api/static-helpers#simpleffmpegtranscodeinputpath-options) `web-mp4` preset writes: H.264 high/4.1, `yuv420p`, even dimensions, HDR retagged as SDR, AAC stereo, `+faststart`.
+
+Every operation runs under the same hardening as `transcode()`: spawn with no shell, SIGKILL-backed timeout, `AbortSignal` support, an output size cap, and partial-output cleanup on failure. Failures throw `TranscodeError` with the same `code` discriminators, plus `INPUT_TOO_LONG` where an operation has a length limit.
+
+<Callout type="info">
+Rotated phone video (a 1080×1920 portrait clip stored as 1920×1080 with a rotation flag) is turned upright before any filter runs. Crop rectangles and rotations are measured on the picture **as it is displayed**, and the output carries no rotation flag.
+</Callout>
+
+These options are shared by every operation below:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `outputPath` | `string` | — | `.mp4` for video operations (`.gif` for `toGif()`) |
+| `crf` | `number` | `23` | x264 quality, integer in `[0, 51]` |
+| `maxOutputBytes` | `number` | `524288000` | Maps to ffmpeg `-fs` (500 MB) |
+| `timeoutMs` | `number` | `300000` | Hard timeout, SIGKILL-backed |
+| `threads` | `number` | `2` | Maps to ffmpeg `-threads` |
+| `onProgress` | `(pct) => void` | — | 0–99 during encode, 100 on success |
+| `signal` | `AbortSignal` | — | Cancel; rejects with `code: "ABORTED"` |
+
+---
+
+## `SIMPLEFFMPEG.trim(inputPath, options)`
+
+Keep `[start, end]` of a file. A `.mp4` output is re-encoded, so the cut is frame-accurate. An audio output (`.mp3`, `.m4a`, `.aac`, `.wav`, `.flac`, `.ogg`, `.opus`) trims the sound only, from an audio file or a video's soundtrack, with a micro-fade at each cut so it never clicks.
+
+```ts
+await SIMPLEFFMPEG.trim("./interview.mp4", {
+  outputPath: "./answer.mp4",
+  start: 12.4,
+  end: 31,
+});
+
+// Just the soundtrack of the same range
+await SIMPLEFFMPEG.trim("./interview.mp4", {
+  outputPath: "./answer.m4a",
+  start: 12.4,
+  end: 31,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `start` | `number` | — | Start, in seconds |
+| `end` | `number` | — | End, in seconds; clamped to the input's length |
+| `fadeMs` | `number` | `5` | Audio output only: micro-fade at each cut |
+
+---
+
+## `SIMPLEFFMPEG.changeSpeed(inputPath, options)`
+
+Speed a video up or slow it down, with its audio. The audio uses the same `atempo` time-stretch as [`audioTempo()`](/api/audio-operations), so voices keep their pitch.
+
+```ts
+await SIMPLEFFMPEG.changeSpeed("./pour.mp4", {
+  outputPath: "./pour-slowmo.mp4",
+  speed: 0.5,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `speed` | `number` | — | Factor in `[0.25, 4]`; `2` is twice as fast |
+
+---
+
+## `SIMPLEFFMPEG.reverse(inputPath, options)`
+
+Play a video backwards, with its audio reversed too.
+
+```ts
+await SIMPLEFFMPEG.reverse("./splash.mp4", { outputPath: "./splash-rewind.mp4" });
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `maxMemoryBytes` | `number` | `1073741824` | Refuse clips whose decoded frames are estimated above this |
+
+<Callout type="warning">
+ffmpeg's `reverse` filter holds every decoded frame in memory. A clip past `maxMemoryBytes` is refused up front with `code: "INPUT_TOO_LONG"`, and the message names the longest length that fits at that size. At the 1 GiB default that is about 11 s of 1080p30, or 25 s of 720p30. Trim first for longer clips.
+</Callout>
+
+---
+
+## `SIMPLEFFMPEG.toGif(inputPath, options)`
+
+Make an animated, looping GIF from a video segment. The palette is built from the clip itself, so the colours hold up instead of collapsing into the default 256-colour dither.
+
+```ts
+await SIMPLEFFMPEG.toGif("./clip.mp4", {
+  outputPath: "./reaction.gif",
+  start: 1.5,
+  duration: 3,
+  width: 360,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `start` | `number` | `0` | Start, in seconds |
+| `duration` | `number` | to the end | Length, in seconds |
+| `fps` | `number` | `12` | Frame rate, in `(0, 50]` |
+| `width` | `number` | `480` | Output width; never upscales; height keeps the aspect |
+| `maxDurationSec` | `number` | `30` | Longer segments are refused with `code: "INPUT_TOO_LONG"` |
+
+---
+
+## `SIMPLEFFMPEG.crop(inputPath, options)`
+
+Crop a video to a rectangle. Centered unless `x`/`y` are given. Odd sizes are rounded down to even for the encoder.
+
+```ts
+// A centered 9:16 slice of a 1920x1080 clip
+await SIMPLEFFMPEG.crop("./wide.mp4", {
+  outputPath: "./tall.mp4",
+  width: 608,
+  height: 1080,
+});
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `width` / `height` | `number` | — | Crop size in pixels |
+| `x` / `y` | `number` | centered | Top-left corner in pixels |
+
+A rectangle that does not fit the picture throws `SimpleffmpegError` before ffmpeg runs.
+
+---
+
+## `SIMPLEFFMPEG.rotate(inputPath, options)`
+
+Rotate a video clockwise by a quarter or half turn, relative to how it is displayed.
+
+```ts
+await SIMPLEFFMPEG.rotate("./sideways.mp4", { outputPath: "./upright.mp4", degrees: 90 });
+```
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `degrees` | `90 \| 180 \| 270 \| -90` | — | Clockwise; `-90` is a quarter turn counter-clockwise |
+
+---
+
+## `SIMPLEFFMPEG.mute(inputPath, options)`
+
+Remove a video's sound. A web-safe input keeps its picture byte for byte (stream copy, near-instant); anything else is re-encoded to the web-safe MP4.
+
+```ts
+await SIMPLEFFMPEG.mute("./clip.mp4", { outputPath: "./clip-silent.mp4" });
+```
+
+---
+
+## Leveling a video's sound
+
+[`normalizeLoudness()`](/api/audio-operations#simpleffmpegnormalizeloudnessinputpath-options) takes `keepVideo: true` to level a video's audio and keep its picture, writing an MP4:
+
+```ts
+await SIMPLEFFMPEG.normalizeLoudness("./interview.mp4", {
+  outputPath: "./interview-leveled.mp4",
+  keepVideo: true,
+});
+```
