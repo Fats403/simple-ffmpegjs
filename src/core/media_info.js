@@ -84,6 +84,22 @@ function parseFraction(fraction) {
 }
 
 /**
+ * The display-matrix rotation from a stream's side data, wherever it sits
+ * in the list. HDR iPhone video (Dolby Vision) lists its DOVI configuration
+ * record BEFORE the display matrix, so reading only the first entry called
+ * a portrait HDR clip unrotated. 0 when no entry carries a rotation.
+ * @param {Array<Object>|undefined} sideDataList
+ * @returns {number}
+ */
+function rotationFromSideData(sideDataList) {
+  if (!Array.isArray(sideDataList)) return 0;
+  const entry = sideDataList.find(
+    (d) => d && d.rotation != null && Number.isFinite(Number(d.rotation)),
+  );
+  return entry ? Number(entry.rotation) : 0;
+}
+
+/**
  * Probe a media file and return comprehensive metadata.
  *
  * Returns a flat, user-friendly object with duration, dimensions, codecs,
@@ -189,9 +205,7 @@ async function probeMedia(filePath) {
     null;
 
   // ── Rotation ────────────────────────────────────────────────────────────
-  const rotation = videoStream?.side_data_list?.[0]?.rotation
-    ? videoStream.side_data_list[0].rotation
-    : 0;
+  const rotation = rotationFromSideData(videoStream?.side_data_list);
 
   // ── Size & bitrate ─────────────────────────────────────────────────────
   const size = format.size ? parseInt(format.size, 10) : null;
@@ -226,4 +240,8 @@ async function probeMedia(filePath) {
   };
 }
 
-module.exports = { probeMedia };
+module.exports = {
+  probeMedia,
+  // Exported for unit tests — not part of the public API
+  rotationFromSideData,
+};

@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 - `normalizeLoudness()` **`keepVideo`** — levels a video's audio and writes an MP4 with the picture untouched (stream copy when already web-safe, the `web-mp4` re-encode otherwise). Previously the only output was audio (`-vn`), so a video's sound could not be leveled in place.
 - New `TranscodeError` code `INPUT_TOO_LONG`.
 
+### Fixed
+
+- **`probe()` finds the rotation wherever it sits in a stream's side data.** It read only the first entry, and HDR iPhone video (Dolby Vision) lists its DOVI configuration record before the display matrix, so a portrait HDR clip probed as `rotation: 0` and `export()` skipped turning it upright.
+
 ## [0.7.0] - 2026-08-10
 
 ### Added

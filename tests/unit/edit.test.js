@@ -17,6 +17,7 @@ const { buildFadeFilter, buildKeepVideoLoudnessArgs, fadeAudio, normalizeLoudnes
   await import("../../src/core/audio.js");
 const { webVideoChain, buildWebMp4OutputArgs, COLOR_TAG, EVEN_TRUNC } =
   await import("../../src/core/transcode.js");
+const { rotationFromSideData } = await import("../../src/core/media_info.js");
 
 // See tests/unit/transcode.test.js for why we assert err.name instead of
 // importing the error classes (dual ESM/CJS class identities under vitest).
@@ -276,5 +277,26 @@ describe("edit — argument validation before any ffmpeg run", () => {
       normalizeLoudness("/nope.mp4", { outputPath: "/o.mp4", keepVideo: "yes" }),
       "SimpleffmpegError",
     );
+  });
+});
+
+describe("probe — rotationFromSideData", () => {
+  it("finds the display matrix after a Dolby Vision record (HDR iPhone video)", () => {
+    expect(
+      rotationFromSideData([
+        { side_data_type: "DOVI configuration record", dv_profile: 8 },
+        { side_data_type: "Display Matrix", rotation: -90 },
+      ]),
+    ).toBe(-90);
+  });
+
+  it("still reads a display matrix listed first", () => {
+    expect(rotationFromSideData([{ side_data_type: "Display Matrix", rotation: 90 }])).toBe(90);
+  });
+
+  it("is 0 when nothing carries a rotation", () => {
+    expect(rotationFromSideData(undefined)).toBe(0);
+    expect(rotationFromSideData([])).toBe(0);
+    expect(rotationFromSideData([{ side_data_type: "DOVI configuration record" }])).toBe(0);
   });
 });
